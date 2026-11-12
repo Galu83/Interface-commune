@@ -1,0 +1,6 @@
+target/
+.cargo/
+.claude/mots-prives-local.txt
+.claude/phrases-permises-local.txt
+.claude/historique-accepte.txt
+.claude/fichiers-acceptes.txt

@@ -1,0 +1,54 @@
+[package]
+name = "interface-commune"
+description = "L'interface commune des logiciels du même propriétaire : thème Windows 11, icône près de l'horloge, volet, petit menu et squelette des Paramètres (egui)"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+# Jamais publiée sur crates.io (tout reste privé) : les projets la prennent par Git, figée
+# sur un commit (voir README.md).
+publish = false
+
+[lib]
+name = "interface_commune"
+
+[dependencies]
+# Le dessin (cartes, lignes, interrupteurs…) : egui seul, sans ses polices (licences OFL et
+# UFL hors liste) : Segoe UI Variable et Segoe Fluent Icons de Windows, lues sur le PC.
+egui = { version = "0.37", default-features = false }
+# Lecture des polices de Windows pour le contrôle « chaque caractère existe » (déjà dans
+# l'arbre d'egui, même version).
+skrifa = { version = "0.44", default-features = false, features = ["std"] }
+
+[target.'cfg(windows)'.dependencies]
+# Les fenêtres : egui dessiné par OpenGL (glow).
+eframe = { version = "0.37", default-features = false, features = ["glow"] }
+# Déjà utilisées par eframe : ouvrir les fenêtres depuis un fil à part (winit), retrouver
+# la fenêtre Windows d'egui (raw-window-handle).
+winit = { version = "0.30", default-features = false }
+raw-window-handle = "0.6"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_Security",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+proptest = { version = "1", default-features = false, features = ["std"] }
+
+[lints.rust]
+# Pas d'`unsafe` hors des deux modules qui appellent Windows (`systeme`, `horloge`).
+unsafe_code = "deny"
+
+[lints.clippy]
+# Rien de ce que le logiciel passe à la bibliothèque ne doit pouvoir la faire planter.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

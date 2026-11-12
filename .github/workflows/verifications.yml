@@ -1,0 +1,87 @@
+name: Vérifications
+
+# Économe (règle commune) : seulement sur un envoi vers main et sur les pull requests, et
+# rien quand seuls des documents changent.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+# Un nouvel envoi sur la même branche arrête la vérification précédente.
+concurrency:
+  group: verifications-${{ github.ref }}
+  cancel-in-progress: true
+
+# Sécurité, point 11 des règles : lecture seule par défaut.
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Mise en forme, contrôle et tests
+    # La bibliothèque parle à Windows (icône, fenêtres, polices) : vérifiée sous Windows, où
+    # tout son code se compile et où les polices de Windows sont là pour les tests.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      # v5.1.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+      # Actions de tiers épinglées par leur numéro de commit (ici : v2.9.3).
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          workspaces: .
+      - name: Mise en forme
+        run: cargo fmt -- --check
+      - name: Contrôle du code
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test
+      - name: L'exemple se compile
+        run: cargo build --examples
+
+  dependances:
+    name: Failles connues et licences des dépendances (cargo-deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # v5.1.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      # v2.1.1
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
+        with:
+          command: check
+          manifest-path: Cargo.toml
+
+  secrets:
+    name: Recherche de secrets (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # v5.1.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gitleaks 8.30.1, empreinte vérifiée
+        run: |
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git . --no-banner --redact --exit-code 1

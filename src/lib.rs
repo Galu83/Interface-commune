@@ -1,0 +1,215 @@
+//! L'interface commune des logiciels du même propriétaire, à la façon de Windows 11
+//! (règles générales : `interface-windows11.md`, points 1 à 10) :
+//!
+//! - le thème de Windows suivi en direct (clair ou sombre, accent), la palette Fluent, les
+//!   polices Segoe UI Variable et Segoe Fluent Icons, les durées d'animation communes
+//!   ([`theme`], [`apparence`], [`polices`]) ;
+//! - l'icône près de l'horloge : clic gauche, le volet ; clic droit, le petit menu ;
+//!   double-clic, les Paramètres ; clavier ([`clics`], et `horloge` sous Windows) ;
+//! - le volet et le petit menu, dans une seule fenêtre préparée au repos et animée
+//!   ([`fenetres`], [`surface`], [`menu`], et `volet` sous Windows) ;
+//! - le squelette des Paramètres ([`parametres`]) : en-tête, navigation, pages Général,
+//!   Mise à jour et À propos, cartes, interrupteurs, effet immédiat avec « Annuler »,
+//!   bandeau de redémarrage, taille retenue, `--parametres <page>`.
+//!
+//! Rien n'y est propre à un logiciel : le nom, la version, l'icône, les pages propres, les
+//! actions du petit menu, les réglages rapides du volet et les textes viennent du logiciel,
+//! par le trait [`Logiciel`].
+
+pub mod apparence;
+pub mod clics;
+pub mod dessin;
+pub mod fenetres;
+pub mod icones;
+pub mod menu;
+pub mod parametres;
+pub mod place;
+pub mod polices;
+pub mod surface;
+pub mod theme;
+pub mod verification;
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod horloge;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod systeme;
+#[cfg(windows)]
+pub mod volet;
+
+pub use parametres::modele::{Page, Valeur};
+pub use theme::{Palette, Rgb};
+
+/// Qui est le logiciel.
+#[derive(Debug, Clone)]
+pub struct Identite {
+    /// Son nom (« KVMSoft ») : aussi l'éditeur, jamais un nom de personne.
+    pub nom: String,
+    /// Sa version, « x.y.z ».
+    pub version: String,
+    /// Sa licence, pour la page « À propos » (« MIT », « GPL-3.0 »…).
+    pub licence: String,
+    /// Une phrase qui dit ce qu'il fait (page « À propos »).
+    pub description: String,
+    /// Son icône près de l'horloge, dessinée : `taille` × `taille` pixels en BGRA (alpha non
+    /// prémultiplié), lignes de haut en bas ; `barre_sombre` : la barre des tâches est
+    /// sombre. Aussi l'icône des Paramètres (barre des tâches, Alt+Tab).
+    pub icone: fn(taille: u32, barre_sombre: bool) -> Vec<u8>,
+    /// Le glyphe de Segoe Fluent Icons montré à côté du nom, en haut de la navigation.
+    pub glyphe: char,
+}
+
+/// L'état montré en haut du volet, en gros et en couleur (règles : point 6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenreEtat {
+    /// Vert.
+    Pret,
+    /// Orange : en cours.
+    EnCours,
+    /// Orange : à regarder.
+    Attention,
+    /// Rouge.
+    Probleme,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Etat {
+    pub genre: GenreEtat,
+    /// Le gros titre du volet (« Prêt », le nom de la disposition active…).
+    pub titre: String,
+    /// Une ligne d'état en couleur sous le titre (« Prêt », « Changement en cours… »).
+    pub ligne: String,
+    /// Une explication plus longue, en texte secondaire, s'il y en a une.
+    pub detail: Option<String>,
+}
+
+/// L'état de la mise à jour (page « Mise à jour »).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum EtatMiseAJour {
+    #[default]
+    Inconnu,
+    AJour,
+    Recherche,
+    /// Une version plus récente est prête : son numéro.
+    Prete(String),
+    /// La recherche a échoué : pourquoi, en mots simples.
+    Erreur(String),
+}
+
+/// Une pièce empruntée, pour les crédits de la page « À propos ».
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Credit {
+    pub nom: String,
+    pub licence: String,
+}
+
+/// Ce que montrent les trois pages communes. Un réglage à `None` n'est pas montré (par
+/// exemple « Notifications » pour un logiciel qui n'en envoie pas).
+#[derive(Debug, Clone, Default)]
+pub struct Communs {
+    /// « Démarrer avec Windows » (clé `general.demarrage`).
+    pub demarrage: Option<bool>,
+    /// « Langue » : la langue choisie et celles proposées (clé `general.langue`).
+    pub langue: Option<(String, Vec<String>)>,
+    /// « Notifications » (clé `general.notifications`).
+    pub notifications: Option<bool>,
+    pub mise_a_jour: EtatMiseAJour,
+    /// Le dossier des installateurs, tel qu'il s'affiche (raccourci, sans le profil).
+    pub dossier_installateurs: String,
+    /// Les nouveautés de la version prête, une par ligne.
+    pub nouveautes: Vec<String>,
+    pub credits: Vec<Credit>,
+}
+
+/// Les clés des réglages et des actions communs, rendues au logiciel.
+pub mod cles {
+    pub const DEMARRAGE: &str = "general.demarrage";
+    pub const LANGUE: &str = "general.langue";
+    pub const NOTIFICATIONS: &str = "general.notifications";
+    /// « Ouvrir le journal » (page Général et petit menu).
+    pub const JOURNAL: &str = "journal";
+    /// « Rétablir les réglages par défaut », après confirmation.
+    pub const RETABLIR: &str = "retablir";
+    /// « Choisir… » le dossier des installateurs.
+    pub const DOSSIER: &str = "mise_a_jour.dossier";
+    /// « Installer maintenant ».
+    pub const INSTALLER: &str = "mise_a_jour.installer";
+    /// « Redémarrer maintenant » (bandeau de redémarrage).
+    pub const REDEMARRER: &str = "redemarrer";
+}
+
+/// Ce qu'un logiciel donne à l'interface commune. Toutes les méthodes sont appelées sur le
+/// fil des fenêtres, à chaque image pour celles qui décrivent : elles rendent ce que le
+/// logiciel a déjà en mémoire, sans disque, réseau ni attente. Celles qui agissent
+/// (`action`, `changer`…) envoient l'ordre au logiciel et rendent la main tout de suite.
+pub trait Logiciel: Send + Sync + 'static {
+    fn identite(&self) -> &Identite;
+
+    /// L'état, en haut du volet.
+    fn etat(&self) -> Etat;
+
+    /// Les réglages rapides du volet (lignes de [`dessin::ligne`], tuiles…), sous l'état.
+    /// Rend la clé d'une action qui ferme le volet (faite une fois la fenêtre cachée,
+    /// par [`Logiciel::action`]) ; un réglage qui ne ferme pas le volet se change ici.
+    fn dessiner_rapides(&self, _ui: &mut egui::Ui, _p: &Palette) -> Option<String> {
+        None
+    }
+
+    /// La largeur qu'il faut aux réglages rapides pour tenir sans couper (points).
+    fn largeur_rapides(&self, _ui: &egui::Ui) -> f32 {
+        0.0
+    }
+
+    /// Les une ou deux actions propres du petit menu.
+    fn actions_menu(&self) -> Vec<menu::Action> {
+        Vec::new()
+    }
+
+    /// Les lignes communes de plus du petit menu, placées avant « Quitter ».
+    fn lignes_en_plus(&self) -> Vec<menu::Action> {
+        vec![menu::Action::ouvrir_le_journal()]
+    }
+
+    /// Une action choisie : du petit menu, du volet, ou une action commune ([`cles`]).
+    fn action(&self, cle: &str);
+
+    /// « Rechercher une mise à jour » : la recherche part sur un fil à part ; sa réponse
+    /// arrive dans [`Communs::mise_a_jour`].
+    fn rechercher_mise_a_jour(&self);
+
+    /// « Quitter » : le logiciel se ferme (il appelle [`fenetres::Liens::tout_fermer`]).
+    fn quitter(&self);
+
+    /// La page « Accueil » (le résumé de l'état) est-elle voulue ?
+    fn accueil(&self) -> bool {
+        false
+    }
+
+    /// Les pages propres au logiciel, dans l'ordre de la navigation.
+    fn pages(&self) -> Vec<Page> {
+        Vec::new()
+    }
+
+    /// Dessine une page propre (ou l'Accueil), sous son titre.
+    fn dessiner_page(&self, _cle: &str, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// Ce que montrent les pages communes.
+    fn communs(&self) -> Communs;
+
+    /// Un réglage changé : à appliquer et enregistrer tout de suite (aussi quand
+    /// « Annuler » remet la valeur d'avant).
+    fn changer(&self, cle: &str, valeur: Valeur);
+
+    /// La place des Paramètres retenue (gauche, haut, largeur, hauteur, en pixels).
+    fn place_parametres(&self) -> Option<place::Place> {
+        None
+    }
+
+    /// La place des Paramètres à retenir, à leur fermeture.
+    fn retenir_place(&self, _place: place::Place) {}
+
+    /// Une ligne pour le journal du logiciel. Appelée depuis un fil à part : le fil des
+    /// fenêtres ne touche jamais au disque pendant une ouverture.
+    fn noter(&self, ligne: String);
+}

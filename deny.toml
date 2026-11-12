@@ -1,0 +1,44 @@
+# Contrôle des dépendances par cargo-deny (règles de sécurité, point 9, et de licences).
+# Lancé par la vérification GitHub à chaque envoi ; en local : `cargo deny check`.
+
+[graph]
+all-features = true
+
+[advisories]
+# Failles connues (base RustSec) : toute faille bloque, une crate retirée aussi.
+version = 2
+yanked = "deny"
+
+[licenses]
+# Seulement du vert dans ce qui est livré (règles du projet).
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "Unlicense",
+]
+confidence-threshold = 0.9
+# La liste est celle des règles : une licence pas encore rencontrée n'est pas une erreur.
+unused-allowed-license = "allow"
+
+[licenses.private]
+# Nos propres crates ne sont pas publiées : leur licence n'a pas à être contrôlée.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+# Sources officielles seulement : crates.io, aucun dépôt Git ni autre registre.
+unknown-registry = "deny"
+unknown-git = "deny"
