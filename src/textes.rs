@@ -76,6 +76,10 @@ pub struct Textes {
     pub reglages: &'static str,
     pub dossier_installateurs: &'static str,
     pub choisir: &'static str,
+    /// Le bouton d'un champ de raccourci clavier.
+    pub changer_raccourci: &'static str,
+    /// Pendant la saisie d'un raccourci.
+    pub appuyer_touches: &'static str,
 
     // Page À propos
     pub licence: &'static str,
@@ -130,6 +134,8 @@ pub const FRANCAIS: Textes = Textes {
     reglages: "Réglages",
     dossier_installateurs: "Dossier des installateurs",
     choisir: "Choisir…",
+    changer_raccourci: "Changer…",
+    appuyer_touches: "Appuyez sur les touches… (Échap : annuler)",
     licence: "Licence",
     sous_licence: "{} est sous licence {}.",
     credits: "Crédits",
@@ -181,6 +187,8 @@ pub const ANGLAIS: Textes = Textes {
     reglages: "Settings",
     dossier_installateurs: "Folder of installers",
     choisir: "Choose…",
+    changer_raccourci: "Change…",
+    appuyer_touches: "Press the keys… (Esc: cancel)",
     licence: "Licence",
     sous_licence: "{} is under the {} licence.",
     credits: "Credits",
@@ -284,6 +292,8 @@ mod tests {
                 t.reglages,
                 t.dossier_installateurs,
                 t.choisir,
+                t.changer_raccourci,
+                t.appuyer_touches,
                 t.licence,
                 t.sous_licence,
                 t.credits,

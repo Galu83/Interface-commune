@@ -50,6 +50,8 @@ const MARGE_NAVIGATION: [i8; 4] = [10, 6, 18, 12];
 /// Une ligne de la navigation (points) : sa hauteur, où commence son texte, la place gardée
 /// à droite pour le point d'alerte.
 pub const LIGNE_NAVIGATION: f32 = 38.0;
+/// Rayon du point d'alerte d'une ligne de navigation (à 16 points du bord droit).
+pub const RAYON_ALERTE: f32 = 4.0;
 const NAVIGATION_TEXTE_X: f32 = 46.0;
 const NAVIGATION_DROITE: f32 = 32.0;
 /// Le logo, le nom et la version en haut de la navigation (points).
@@ -352,6 +354,14 @@ impl Parametres {
                 FontId::proportional(14.0),
                 couleur(p.texte),
             );
+            if l.alerte(&self.pages[i].cle) {
+                // Le point d'alerte de PowerPeek : à droite de la ligne, couleur d'accent.
+                ui.painter().circle_filled(
+                    pos2(rect.right() - 16.0, rect.center().y),
+                    RAYON_ALERTE,
+                    couleur(p.accent),
+                );
+            }
             r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, choisie, &nom));
             dessin::focus(ui, p, &r, 5);
             if r.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
@@ -408,30 +418,41 @@ impl Parametres {
             modele::GENERAL => self.page_general(ui, p, l, &communs),
             modele::MISE_A_JOUR => page_mise_a_jour(ui, p, &t, l, &communs),
             modele::A_PROPOS => self.page_a_propos(ui, p, l, &communs),
-            cle => {
-                let mut c = Contexte {
-                    palette: p,
-                    textes: &t,
-                    sous_page: self.sous_page.clone(),
-                    sous_page_voulue: None,
-                    changements: Vec::new(),
-                    redemarrage: None,
-                    aller_a: None,
-                };
-                l.dessiner_page(cle, ui, &mut c);
-                for (cle, titre, avant, apres) in c.changements {
-                    self.changer(l, &cle, &titre, avant, apres);
-                }
-                if let Some(r) = c.redemarrage {
-                    self.redemarrage = Some(r);
-                }
-                if let Some(s) = c.sous_page_voulue {
-                    self.sous_page = s;
-                }
-                if let Some(a) = c.aller_a {
-                    self.aller_a(&a);
-                }
-            }
+            cle => self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_page(cle, ui, c)),
+        }
+    }
+
+    /// Fait dessiner le logiciel (une page propre, ses cartes de Général), puis applique ce
+    /// qu'il a demandé : changements, redémarrage, sous-page, autre page.
+    fn avec_contexte(
+        &mut self,
+        ui: &mut egui::Ui,
+        p: &Palette,
+        l: &dyn Reglages,
+        dessin: impl FnOnce(&dyn Reglages, &mut egui::Ui, &mut Contexte<'_>),
+    ) {
+        let t = self.textes.clone();
+        let mut c = Contexte {
+            palette: p,
+            textes: &t,
+            sous_page: self.sous_page.clone(),
+            sous_page_voulue: None,
+            changements: Vec::new(),
+            redemarrage: None,
+            aller_a: None,
+        };
+        dessin(l, ui, &mut c);
+        for (cle, titre, avant, apres) in c.changements {
+            self.changer(l, &cle, &titre, avant, apres);
+        }
+        if let Some(r) = c.redemarrage {
+            self.redemarrage = Some(r);
+        }
+        if let Some(s) = c.sous_page_voulue {
+            self.sous_page = s;
+        }
+        if let Some(a) = c.aller_a {
+            self.aller_a(&a);
         }
     }
 
@@ -533,6 +554,8 @@ impl Parametres {
                 );
             }
         }
+        // Les cartes propres au logiciel, avant le journal.
+        self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_general(ui, c));
         carte(ui, p, icones::JOURNAL, t.journal, t.journal_explication, |ui| {
             if bouton(ui, p, None, t.ouvrir_le_journal, Genre::Normal).clicked() {
                 l.action(cles::JOURNAL);
@@ -690,7 +713,7 @@ fn page_mise_a_jour(ui: &mut egui::Ui, p: &Palette, t: &Textes, l: &dyn Reglages
         &c.dossier_installateurs,
         120.0,
         |ui| {
-            if bouton(ui, p, None, t.choisir, Genre::Normal).clicked() {
+            if !c.dossier_fixe && bouton(ui, p, None, t.choisir, Genre::Normal).clicked() {
                 l.action(cles::DOSSIER);
             }
         },

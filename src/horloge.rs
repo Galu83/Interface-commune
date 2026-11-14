@@ -47,11 +47,11 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
-    DestroyMenu, DestroyWindow, DispatchMessageW, FindWindowW, GetCursorPos, GetMessageW, HICON, ICONINFO,
-    MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW, RegisterWindowMessageW,
-    SM_CXSMICON, SetForegroundWindow, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_SETTINGCHANGE,
-    WNDCLASSW, WS_OVERLAPPED,
+    DestroyMenu, DestroyWindow, DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW,
+    GetWindowLongPtrW, HICON, ICONINFO, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
+    RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetWindowLongPtrW,
+    TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE,
+    WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_SETTINGCHANGE, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -152,11 +152,27 @@ enum Commande {
     Notifier {
         texte: String,
         probleme: bool,
-        page: Option<String>,
+        au_clic: AuClic,
     },
     Infobulle(String),
     Icone,
     Quitter,
+}
+
+/// Ce que fait un clic sur une notification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuClic {
+    /// Ouvre les Paramètres (à cette page).
+    Parametres(Option<String>),
+    /// Rend cette action au logiciel (`Reglages::action`) : par exemple, montrer sa propre
+    /// fenêtre.
+    Action(String),
+}
+
+impl Default for AuClic {
+    fn default() -> Self {
+        AuClic::Parametres(None)
+    }
 }
 
 /// De quoi parler à l'icône depuis n'importe quel fil (à cloner et garder par le logiciel).
@@ -188,7 +204,17 @@ impl Poste {
         self.envoyer(Commande::Notifier {
             texte: texte.into(),
             probleme,
-            page: page.map(str::to_string),
+            au_clic: AuClic::Parametres(page.map(str::to_string)),
+        });
+    }
+
+    /// Une notification près de l'horloge ; un clic dessus rend cette action au logiciel
+    /// (`Reglages::action`), pour revenir à sa propre fenêtre par exemple.
+    pub fn notifier_action(&self, texte: &str, probleme: bool, action: &str) {
+        self.envoyer(Commande::Notifier {
+            texte: texte.into(),
+            probleme,
+            au_clic: AuClic::Action(action.into()),
         });
     }
 
@@ -458,13 +484,13 @@ struct Principal {
     barre_sombre: bool,
     infobulle: String,
     clics: Clics,
-    /// La page des Paramètres de la dernière notification (un clic dessus l'ouvre).
-    page_bulle: Option<String>,
+    /// Ce que fait un clic sur la dernière notification.
+    au_clic: AuClic,
 }
 
-thread_local! {
-    static PRINCIPAL: RefCell<Option<Principal>> = const { RefCell::new(None) };
-}
+/// L'état du fil principal, rangé dans la fenêtre cachée (`GWLP_USERDATA`) : aucune
+/// variable globale. Vide pendant la création de la fenêtre.
+type Etat = RefCell<Option<Principal>>;
 
 impl Principal {
     fn liens(&self) -> &Liens {
@@ -521,9 +547,9 @@ impl Principal {
                 Commande::Notifier {
                     texte,
                     probleme,
-                    page,
+                    au_clic,
                 } => {
-                    self.page_bulle = page;
+                    self.au_clic = au_clic;
                     let mut d = donnees_icone(self.fenetre);
                     d.uFlags = NIF_INFO;
                     copier(&mut d.szInfoTitle, &self.logiciel.identite().nom);
@@ -606,6 +632,14 @@ impl Principal {
         self.liens().montrer_page(&self.poste.demandes, page);
     }
 
+    /// Un clic sur la dernière notification.
+    fn clic_bulle(&self) {
+        match self.au_clic.clone() {
+            AuClic::Parametres(page) => self.ouvrir_parametres(page),
+            AuClic::Action(cle) => self.logiciel.action(&cle),
+        }
+    }
+
     /// Le menu gris de Windows : seulement en secours, si le menu moderne ne peut pas
     /// s'ouvrir (carte graphique sans OpenGL, polices absentes). Les mêmes lignes, dans le
     /// même ordre.
@@ -663,16 +697,20 @@ impl Principal {
                 let _ = DestroyIcon(i);
             }
             let _ = DestroyWindow(self.fenetre);
-            // WM_DESTROY arrive pendant que `PRINCIPAL` est emprunté : finir ici.
+            // WM_DESTROY arrive pendant que l'état est emprunté : finir ici.
             PostQuitMessage(0);
         }
     }
 }
 
 extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    // Les messages arrivent sur le fil principal, où vit `PRINCIPAL`. Pendant la création
-    // de la fenêtre, `PRINCIPAL` est encore vide : traitement par défaut.
-    let traite = PRINCIPAL.with(|p| {
+    // L'état est rangé dans la fenêtre ; pendant sa création, il n'y est pas encore (ou
+    // encore vide) : traitement par défaut.
+    // SAFETY: la valeur rangée est 0 ou l'adresse de l'état de `boucle`, qui vit jusqu'à ce
+    // que `boucle` la remette à 0 ; les messages arrivent sur ce même fil.
+    let etat = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } as *const Etat;
+    // SAFETY: voir ci-dessus.
+    let traite = unsafe { etat.as_ref() }.is_some_and(|p| {
         let Ok(mut p) = p.try_borrow_mut() else {
             return false;
         };
@@ -684,8 +722,7 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
         match msg {
             WM_ICONE => {
                 if (lp.0 as u32) & 0xFFFF == NIN_BALLOONUSERCLICK {
-                    let page = p.page_bulle.clone();
-                    p.ouvrir_parametres(page);
+                    p.clic_bulle();
                 } else if let Some(e) = evenement(lp.0) {
                     // Avec NOTIFYICON_VERSION_4, `wparam` porte le point du geste (x, y).
                     let ancre = [
@@ -795,11 +832,14 @@ fn boucle(nom: &str, logiciel: Arc<dyn Logiciel>, poste: Poste) -> Result<(), St
         barre_sombre: choix_windows().barre_sombre,
         infobulle: nom.into(),
         clics: Clics::default(),
-        page_bulle: None,
+        au_clic: AuClic::default(),
     };
     p.icone = fabriquer_icone(&*logiciel, p.barre_sombre);
     p.ajouter_icone();
-    PRINCIPAL.with(|c| *c.borrow_mut() = Some(p));
+    let etat: Box<Etat> = Box::new(RefCell::new(Some(p)));
+    // SAFETY: la fenêtre est celle de ce fil ; l'adresse reste valable jusqu'à la remise à
+    // 0 ci-dessous, avant que `etat` disparaisse.
+    unsafe { SetWindowLongPtrW(fenetre, GWLP_USERDATA, &*etat as *const Etat as isize) };
     let mut m = MSG::default();
     // SAFETY: boucle des messages classique de ce fil, sur un MSG local.
     unsafe {
@@ -808,6 +848,40 @@ fn boucle(nom: &str, logiciel: Arc<dyn Logiciel>, poste: Poste) -> Result<(), St
             DispatchMessageW(&m);
         }
     }
-    PRINCIPAL.with(|c| c.borrow_mut().take());
+    // SAFETY: plus aucun message ne lira l'état (fenêtre détruite, ou sans état désormais).
+    unsafe { SetWindowLongPtrW(fenetre, GWLP_USERDATA, 0) };
+    drop(etat);
     Ok(())
+}
+
+#[cfg(test)]
+mod essais {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    /// Une notification ouvre les Paramètres à sa page, ou rend une action au logiciel.
+    #[test]
+    fn clic_sur_une_notification() {
+        let h = Horloge::new("essai-notification");
+        let p = h.poste();
+        p.notifier("Mise à jour prête.", false, Some("mise_a_jour"));
+        p.notifier_action("Lecture finie.", false, "montrer");
+        let clics: Vec<AuClic> = p
+            .file
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|c| match c {
+                Commande::Notifier { au_clic, .. } => Some(au_clic.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            clics,
+            vec![
+                AuClic::Parametres(Some("mise_a_jour".into())),
+                AuClic::Action("montrer".into())
+            ]
+        );
+    }
 }

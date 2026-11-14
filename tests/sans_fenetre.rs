@@ -89,6 +89,17 @@ impl Reglages for Demo {
         page.redemarrage_necessaire("Le changement de carte graphique demande un redémarrage.");
     }
 
+    fn dessiner_general(&self, ui: &mut egui::Ui, page: &mut Contexte) {
+        dessin::carte(
+            ui,
+            page.palette,
+            '\u{E7F4}',
+            "Carte propre",
+            "Un réglage inventé du logiciel.",
+            |_| {},
+        );
+    }
+
     fn communs(&self) -> Communs {
         Communs {
             demarrage: Some(true),
@@ -96,6 +107,7 @@ impl Reglages for Demo {
             notifications: Some(false),
             mise_a_jour: EtatMiseAJour::Prete("1.3.0".into()),
             dossier_installateurs: "D:\\Logiciels\\Installateurs".into(),
+            dossier_fixe: false,
             nouveautes: vec!["Une nouveauté inventée.".into()],
             credits: vec![interface_commune::Credit {
                 nom: "egui".into(),
@@ -317,6 +329,8 @@ enum Dessine {
         taille: f32,
     },
     Image(egui::Rect),
+    /// Un rond plein (centre, rayon).
+    Rond(egui::Pos2, f32),
 }
 
 fn dessins(s: &egui::Shape, v: &mut Vec<Dessine>) {
@@ -335,6 +349,7 @@ fn dessins(s: &egui::Shape, v: &mut Vec<Dessine>) {
         egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
             v.push(Dessine::Image(m.calc_bounds()))
         }
+        egui::Shape::Circle(c) => v.push(Dessine::Rond(c.center, c.radius)),
         _ => {}
     }
 }
@@ -393,7 +408,7 @@ fn parametres_seuls_en_anglais() {
             .iter()
             .filter_map(|d| match d {
                 Dessine::Texte { texte, .. } => Some(texte.as_str()),
-                Dessine::Image(_) => None,
+                _ => None,
             })
             .collect();
         for francais in [
@@ -426,7 +441,7 @@ fn entete_et_navigation_comme_powerpeek() {
         .iter()
         .find_map(|d| match d {
             Dessine::Image(r) => Some(*r),
-            Dessine::Texte { .. } => None,
+            _ => None,
         })
         .expect("le logo est une image");
     assert!(
@@ -519,4 +534,108 @@ fn la_langue_change_en_direct() {
     assert_eq!(s.cle(), "a_propos");
     assert_eq!(s.pages[s.page].titre, "About");
     assert_eq!(Parametres::titre_fenetre(&demo), "Démo Settings");
+}
+
+/// La page Général montre les cartes propres du logiciel, après les réglages communs et
+/// avant « Journal » ; un dossier fixe n'a pas de bouton « Choisir… ».
+#[test]
+fn carte_propre_dans_general_et_dossier_fixe() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let demo = Demo::new();
+    let mut s = Parametres::new(&demo, Some("general"));
+    let v = image_parametres(&mut s, &demo);
+    let y = |t: &str| texte(&v, t).expect(t).0.center().y;
+    assert!(y("Notifications") < y("Carte propre"));
+    assert!(y("Carte propre") < y("Journal"));
+    s.aller_a("mise_a_jour");
+    let v = image_parametres(&mut s, &demo);
+    assert!(texte(&v, "Choisir…").is_some());
+    let fixe = DossierFixe(Demo::new());
+    let mut s = Parametres::new(&fixe, Some("mise_a_jour"));
+    let v = image_parametres(&mut s, &fixe);
+    assert!(texte(&v, "Dossier des installateurs").is_some());
+    assert!(texte(&v, "Choisir…").is_none());
+}
+
+/// Un logiciel dont le dossier des installateurs ne se choisit pas.
+struct DossierFixe(Demo);
+
+impl Reglages for DossierFixe {
+    fn identite(&self) -> &Identite {
+        &self.0.identite
+    }
+
+    fn action(&self, _: &str) {}
+
+    fn rechercher_mise_a_jour(&self) {}
+
+    fn communs(&self) -> Communs {
+        Communs {
+            dossier_fixe: true,
+            ..self.0.communs()
+        }
+    }
+
+    fn changer(&self, _: &str, _: Valeur) {}
+}
+
+/// Un point d'alerte sur la ligne « Mise à jour » quand une version est prête (par défaut),
+/// sur une page propre quand le logiciel le demande, nulle part ailleurs.
+#[test]
+fn point_d_alerte_dans_la_navigation() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let ronds = |l: &dyn Reglages| {
+        let mut s = Parametres::new(l, None);
+        let v = image_parametres(&mut s, l);
+        let lignes: Vec<(String, f32)> = ["Écrans", "Dispositions", "Général", "Mise à jour", "À propos"]
+            .iter()
+            .map(|t| (t.to_string(), texte(&v, t).expect(t).0.center().y))
+            .collect();
+        v.iter()
+            .filter_map(|d| match d {
+                Dessine::Rond(c, r) if (*r - interface_commune::parametres::RAYON_ALERTE).abs() < 0.01 => {
+                    lignes
+                        .iter()
+                        .find(|(_, y)| (c.y - y).abs() < 4.0)
+                        .map(|(t, _)| t.clone())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let demo = Demo::new();
+    assert_eq!(ronds(&demo), ["Mise à jour"]);
+    let alerte = Alerte(Demo::new());
+    assert_eq!(ronds(&alerte), ["Dispositions"]);
+}
+
+/// Un logiciel qui signale une de ses pages (et pas la mise à jour).
+struct Alerte(Demo);
+
+impl Reglages for Alerte {
+    fn identite(&self) -> &Identite {
+        &self.0.identite
+    }
+
+    fn action(&self, _: &str) {}
+
+    fn rechercher_mise_a_jour(&self) {}
+
+    fn pages(&self) -> Vec<Page> {
+        self.0.pages()
+    }
+
+    fn communs(&self) -> Communs {
+        self.0.communs()
+    }
+
+    fn alerte(&self, cle: &str) -> bool {
+        cle == "dispositions"
+    }
+
+    fn changer(&self, _: &str, _: Valeur) {}
 }

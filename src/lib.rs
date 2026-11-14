@@ -153,6 +153,8 @@ pub struct Communs {
     pub mise_a_jour: EtatMiseAJour,
     /// Le dossier des installateurs, tel qu'il s'affiche (raccourci, sans le profil).
     pub dossier_installateurs: String,
+    /// Le dossier des installateurs ne se choisit pas (le bouton « Choisir… » est caché).
+    pub dossier_fixe: bool,
     /// Les nouveautés de la version prête, une par ligne.
     pub nouveautes: Vec<String>,
     pub credits: Vec<Credit>,
@@ -207,6 +209,17 @@ pub trait Reglages: Send + Sync + 'static {
 
     /// Dessine une page propre (ou l'Accueil), sous son titre.
     fn dessiner_page(&self, _cle: &str, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// Les cartes propres au logiciel dans la page Général, après les réglages communs et
+    /// avant « Journal » (`dessin::carte`…).
+    fn dessiner_general(&self, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// Un point d'alerte sur cette page dans la navigation (quelque chose attend
+    /// l'utilisateur). Par défaut : la page Mise à jour, quand une version est prête.
+    fn alerte(&self, cle: &str) -> bool {
+        cle == parametres::modele::MISE_A_JOUR
+            && matches!(self.communs().mise_a_jour, EtatMiseAJour::Prete(_))
+    }
 
     /// Ce que montrent les pages communes.
     fn communs(&self) -> Communs;

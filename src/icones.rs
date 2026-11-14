@@ -50,8 +50,11 @@ pub const RETOUR: char = '\u{E72B}';
 /// La licence et les crédits.
 pub const LICENCE: char = '\u{E8D7}';
 
+/// Un raccourci clavier.
+pub const CLAVIER: char = '\u{E765}';
+
 /// Toutes les icônes communes, pour le contrôle des polices.
-pub const TOUTES: [char; 21] = [
+pub const TOUTES: [char; 22] = [
     REGLAGES,
     MISE_A_JOUR,
     A_PROPOS,
@@ -73,4 +76,5 @@ pub const TOUTES: [char; 21] = [
     CHEVRON,
     RETOUR,
     LICENCE,
+    CLAVIER,
 ];
