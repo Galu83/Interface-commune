@@ -94,6 +94,11 @@ pub struct Textes {
     pub recherches_dossier: &'static str,
     pub automatique: &'static str,
     pub maj_coupee: &'static str,
+    /// La fenêtre « <Logiciel> x.y.z est prête » : son titre (le nom, la version), sa phrase,
+    /// et le bouton qui la ferme.
+    pub prete_titre: &'static str,
+    pub prete_explication: &'static str,
+    pub plus_tard: &'static str,
 }
 
 pub const FRANCAIS: Textes = Textes {
@@ -153,6 +158,9 @@ pub const FRANCAIS: Textes = Textes {
     recherches_dossier: "Dans le dossier des installateurs choisi plus bas.",
     automatique: "Automatique",
     maj_coupee: "Recherche des mises à jour coupée",
+    prete_titre: "{} {} est prête",
+    prete_explication: "L'installation prend quelques secondes ; le logiciel se rouvre tout seul.",
+    plus_tard: "Plus tard",
     credits: "Crédits",
 };
 
@@ -213,6 +221,9 @@ pub const ANGLAIS: Textes = Textes {
     recherches_dossier: "In the folder of installers chosen below.",
     automatique: "Automatic",
     maj_coupee: "Update checks are off",
+    prete_titre: "{} {} is ready",
+    prete_explication: "Installing takes a few seconds; the app opens again by itself.",
+    plus_tard: "Later",
     credits: "Credits",
 };
 
@@ -319,6 +330,16 @@ mod tests {
                 t.licence,
                 t.sous_licence,
                 t.credits,
+                t.voir_licences,
+                t.chercher_mises_a_jour,
+                t.recherches_coupees,
+                t.recherches_automatique,
+                t.recherches_dossier,
+                t.automatique,
+                t.maj_coupee,
+                t.prete_titre,
+                t.prete_explication,
+                t.plus_tard,
             ]
         };
         let (fr, en) = (champs(&FRANCAIS), champs(&ANGLAIS));

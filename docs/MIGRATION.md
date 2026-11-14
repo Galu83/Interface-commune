@@ -45,6 +45,28 @@ de travail par projet, sur sa branche.
   « Choisir… » ; un `Communs { … }` écrit en entier doit l'ajouter) ;
   `Poste::notifier_action` (un clic sur la notification rend une action au logiciel) ;
   `dessin::champ_raccourci` (saisie d'un raccourci clavier).
+- **Nouveau dans les pages communes (point 7)**, tout facultatif :
+  - cartes propres dans Mise à jour et À propos : `Reglages::dessiner_mise_a_jour`,
+    `Reglages::dessiner_a_propos` ;
+  - `Communs::demarrage_bloque` : « Démarrer avec Windows » grisé, la raison à la place de
+    l'explication ;
+  - `Communs::recherches` (interrupteur « Chercher les mises à jour », clé
+    `cles::RECHERCHES`) et `Communs::dossier_automatique` (bouton « Automatique », action
+    `cles::DOSSIER_AUTO`) ; les états `EtatMiseAJour::Coupee` et `Information(texte)` se
+    montrent comme des informations (dossier introuvable, refusé…), pas comme des erreurs ;
+  - `Reglages::retablir_explication` : la phrase de la confirmation de « Rétablir » ;
+  - `Communs::fichier_licences` : bouton « Voir les licences » (action `cles::LICENCES`) ;
+    les crédits passent à la ligne ;
+  - `Contexte::changer_groupe` : plusieurs réglages changés d'un geste, une seule bulle
+    « Annuler » qui les remet tous (`Annulation::annuler` rend maintenant une liste) ;
+  - `Simple::version_prete` : la fenêtre « <Logiciel> x.y.z est prête » (« Plus tard »,
+    « Installer maintenant ») à ouvrir avec `ouvrir_simple` ;
+  - déjà dans la bibliothèque : l'anti-rebond du clic sur l'icône (`fenetres::ANTI_REBOND`,
+    400 ms), le menu de secours sans OpenGL, le journal des temps d'ouverture (première
+    ouverture et ouverture lente, au-delà de 150 ms), « Ouvrir le journal » dans le petit
+    menu par défaut.
+  Un `Communs { … }` écrit en entier doit ajouter les nouveaux champs (ou finir par
+  `..Default::default()`).
 - **Même volet et même petit menu pour tous** (point 6). Le volet se décrit par des briques
   (`Logiciel::briques`, module `briques`) que la bibliothèque dessine : interrupteur, choix
   coché avec raccourci à droite, choix segmenté, appareil (icône, nom, %, barre, sous-ligne),
@@ -84,6 +106,12 @@ de travail par projet, sur sa branche.
   placement de KVMSoft peuvent partir (ils sont dans la bibliothèque).
 - Depuis 0.1.0 : couper son `impl Logiciel` en `Reglages` + `Logiciel` ; `logo` à la place de
   `glyphe` ; la saisie de ses raccourcis dans ses pages peut prendre `dessin::champ_raccourci`.
+- Ses manques sont couverts (point 7) : sa carte « Chercher les mises à jour » et son bouton
+  « Automatique » deviennent `Communs::recherches` et `Communs::dossier_automatique` ; ses états
+  « coupée » et « introuvable » deviennent `EtatMiseAJour::Coupee` et `Information(…)` (plus
+  `Erreur`) ; son volet devient des briques (`Logiciel::briques`) ; sa fenêtre de version
+  prête devient `Simple::version_prete` ; ses messages Windows (`WM_HOTKEY`…) passent par
+  `Horloge::recevoir_messages`.
 
 ## Vocalis
 

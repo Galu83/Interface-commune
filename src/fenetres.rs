@@ -95,14 +95,14 @@ impl Liens {
         }
     }
 
-    /// `surface` s'est fermée il y a moins de 400 ms (le clic sur l'icône qui l'a fermée
-    /// en lui prenant le focus ne doit pas la rouvrir aussitôt).
+    /// `surface` s'est fermée il y a moins d'[`ANTI_REBOND`] (le clic sur l'icône qui l'a
+    /// fermée en lui prenant le focus ne doit pas la rouvrir aussitôt).
     pub fn juste_fermee(&self, surface: Surface) -> bool {
         self.ferme_a
             .lock()
             .ok()
             .and_then(|f| *f)
-            .is_some_and(|(t, s)| s == surface && t.elapsed() < Duration::from_millis(400))
+            .is_some_and(|(t, s)| s == surface && t.elapsed() < ANTI_REBOND)
     }
 
     /// Redessine les fenêtres ouvertes : à appeler quand l'état du logiciel change (le volet,
@@ -373,6 +373,10 @@ pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: 
 
 // ---------------------------------------------------------------------------------------
 // Ce que la fenêtre du volet fait d'une demande, sa garde et la mesure de son ouverture
+
+/// Après la fermeture du volet ou du petit menu, un clic sur l'icône ne le rouvre pas
+/// pendant ce temps (ce clic est celui qui l'a fermé).
+pub const ANTI_REBOND: Duration = Duration::from_millis(400);
 
 /// Une ouverture plus longue que ce temps est notée au journal, avec le détail.
 pub const LENTE: Duration = Duration::from_millis(150);

@@ -14,7 +14,13 @@
   - les petits manques de Vocalis : cartes propres dans Général, « Choisir… » masquable,
     point d'alerte, champ de raccourci, notification qui rend une action, icône sans variable
     globale ;
-  - les avis MIT des crates sans fichier de licence (`docs/LICENCES.md`).
+  - les avis MIT des crates sans fichier de licence (`docs/LICENCES.md`) ;
+  - le même volet et le même petit menu pour tous : briques toutes faites, mesures communes
+    (`mesures`) ;
+  - les manques de KVMSoft : messages Windows sur la boucle commune, notifications à trois
+    niveaux, icône selon l'état, pages communes plus complètes (cartes propres partout,
+    démarrage grisé, recherches coupées, « Automatique », licences, « Annuler » en groupe),
+    fenêtre « est prête » toute faite.
   - tests, clippy, cargo deny verts sur le PC, sans aucune fenêtre ouverte.
 - **Pas vérifié** : l'affichage dans de vraies fenêtres (interdit pendant les essais
   automatiques). À essayer à la main avec l'exemple (`cargo run --example demo`, petit menu :
