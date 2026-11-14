@@ -40,6 +40,8 @@ pub struct Textes {
     pub modifie: &'static str,
     pub annuler: &'static str,
     pub fermer: &'static str,
+    /// Le bouton d'une action qui demande confirmation, au second temps.
+    pub confirmer: &'static str,
     pub redemarrer_maintenant: &'static str,
     pub retour: &'static str,
 
@@ -99,6 +101,7 @@ pub const FRANCAIS: Textes = Textes {
     modifie: "« {} » modifié.",
     annuler: "Annuler",
     fermer: "Fermer",
+    confirmer: "Confirmer",
     redemarrer_maintenant: "Redémarrer maintenant",
     retour: "Retour",
     demarrer_avec_windows: "Démarrer avec Windows",
@@ -149,6 +152,7 @@ pub const ANGLAIS: Textes = Textes {
     modifie: "“{}” changed.",
     annuler: "Undo",
     fermer: "Close",
+    confirmer: "Confirm",
     redemarrer_maintenant: "Restart now",
     retour: "Back",
     demarrer_avec_windows: "Start with Windows",
@@ -251,6 +255,7 @@ mod tests {
                 t.modifie,
                 t.annuler,
                 t.fermer,
+                t.confirmer,
                 t.redemarrer_maintenant,
                 t.retour,
                 t.demarrer_avec_windows,

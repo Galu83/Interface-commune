@@ -505,21 +505,24 @@ impl AutresFenetres {
     }
 }
 
+/// Le faux moteur de fenêtres des essais (partagé : egui n'en garde qu'un pour tout le
+/// programme).
 #[cfg(test)]
-mod tests {
-    #![allow(clippy::expect_used, clippy::unwrap_used)]
+pub(crate) mod essais {
     use super::*;
     use std::cell::RefCell;
 
     thread_local! {
         /// Les fenêtres que le faux moteur a dessinées à la dernière image.
-        static DESSINEES: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };
+        pub(crate) static DESSINEES: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };
         /// Les fenêtres dont la croix est cliquée à la prochaine image.
-        static CROIX: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };
+        pub(crate) static CROIX: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };
+        /// Les ordres que les fenêtres ont donnés (taille, titre…), depuis le début.
+        pub(crate) static ORDRES: RefCell<Vec<(ViewportId, ViewportCommand)>> = const { RefCell::new(Vec::new()) };
     }
 
     /// Un faux moteur de fenêtres : egui croit avoir de vraies fenêtres, rien ne s'ouvre.
-    fn contexte() -> egui::Context {
+    pub(crate) fn contexte() -> egui::Context {
         let ctx = egui::Context::default();
         ctx.set_embed_viewports(false);
         egui::Context::set_immediate_viewport_renderer(|ctx, mut vp| {
@@ -541,11 +544,16 @@ mod tests {
 
     /// Une image de la fenêtre principale ; rend les fenêtres dessinées et celles qu'egui
     /// garde.
-    fn image(ctx: &egui::Context, f: &AutresFenetres) -> (Vec<ViewportId>, Vec<ViewportId>) {
+    pub(crate) fn image(ctx: &egui::Context, f: &AutresFenetres) -> (Vec<ViewportId>, Vec<ViewportId>) {
         DESSINEES.with(|d| d.borrow_mut().clear());
         let p = Palette::de(&crate::theme::ChoixWindows::default());
         let mut sortie = ctx.run_ui(egui::RawInput::default(), |ui| f.montrer(ui.ctx(), &p));
         sortie.textures_delta.clear();
+        ORDRES.with(|o| {
+            for (id, v) in &sortie.viewport_output {
+                o.borrow_mut().extend(v.commands.iter().map(|c| (*id, c.clone())));
+            }
+        });
         let dessinees = DESSINEES.with(|d| d.borrow().clone());
         let gardees = sortie
             .viewport_output
@@ -555,6 +563,13 @@ mod tests {
             .collect();
         (dessinees, gardees)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+    use super::essais::{CROIX, contexte, image};
+    use super::*;
 
     #[derive(Clone, Default)]
     struct Trace(Arc<Mutex<Vec<String>>>);

@@ -36,6 +36,7 @@ pub mod polices;
 pub mod surface;
 pub mod textes;
 pub mod theme;
+pub mod toutes_faites;
 pub mod verification;
 
 #[cfg(windows)]

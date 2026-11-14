@@ -8,14 +8,15 @@
 
 #[cfg(windows)]
 mod demo {
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
 
     use interface_commune::apparence::couleur;
     use interface_commune::autres_fenetres::{Cadre, Contenu, Ouverture};
     use interface_commune::horloge::{Horloge, Poste, instance_unique};
     use interface_commune::parametres::Contexte;
     use interface_commune::theme::couverture;
+    use interface_commune::toutes_faites::{self, Bouton, Champ, Lecture, ReponseLecture, Simple, Ton};
     use interface_commune::{
         Communs, Etat, EtatMiseAJour, GenreEtat, Identite, Logiciel, Page, Palette, Reglages, Valeur, dessin,
         menu, parametres,
@@ -92,6 +93,8 @@ mod demo {
             vec![
                 menu::Action::new("bonjour", '\u{E8BD}', "Dire bonjour"),
                 menu::Action::new("fenetre", '\u{E737}', "Ouvrir une fenêtre"),
+                menu::Action::new("simple", '\u{E8A5}', "Fenêtre simple"),
+                menu::Action::new("lecture", '\u{E8D6}', "Fenêtre de lecture"),
             ]
         }
 
@@ -120,6 +123,59 @@ mod demo {
                 "fenetre" => {
                     p.fenetres()
                         .ouvrir("bonjour", Ouverture::new("Bonjour", [360.0, 160.0]), Bonjour);
+                }
+                // Les fenêtres toutes faites.
+                "simple" => {
+                    let simple = Simple {
+                        titre: "Garder comme action".into(),
+                        sous_titre: "Un exemple de fenêtre simple.".into(),
+                        statut: "Prêt.".into(),
+                        ton: Ton::Bon,
+                        barre: Some(0.6),
+                        champ: Some(Champ {
+                            cle: "nom".into(),
+                            libelle: "Nom".into(),
+                            valeur: "Mon action".into(),
+                        }),
+                        boutons: vec![
+                            Bouton::new("annuler", "Annuler"),
+                            Bouton::new("garder", "Garder").accent(),
+                        ],
+                        ..Default::default()
+                    };
+                    let _ = toutes_faites::ouvrir_simple(
+                        &p.fenetres(),
+                        "simple",
+                        Ouverture::new("Exemple", [0.0, 0.0]),
+                        self.textes(),
+                        simple,
+                        |_| {},
+                    );
+                }
+                "lecture" => {
+                    let texte = "Un texte inventé, lu à voix haute.\nCliquer sur un mot le surligne.";
+                    let mut l = Lecture::de(texte);
+                    l.mot = Some(0);
+                    let poignee: Arc<Mutex<Option<toutes_faites::FenetreLecture>>> = Arc::default();
+                    let p2 = poignee.clone();
+                    let ouverte = toutes_faites::ouvrir_lecture(
+                        &p.fenetres(),
+                        "lecture",
+                        Ouverture::new("Lecture", [520.0, 360.0]),
+                        l,
+                        None,
+                        move |r| {
+                            if let ReponseLecture::Mot(m) = r
+                                && let Ok(g) = p2.lock()
+                                && let Some(f) = g.as_ref()
+                            {
+                                f.changer(|l| l.mot = Some(m));
+                            }
+                        },
+                    );
+                    if let Ok(mut g) = poignee.lock() {
+                        *g = ouverte;
+                    }
                 }
                 _ => {}
             }
