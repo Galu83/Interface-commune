@@ -1,4 +1,5 @@
 # Avis de licence des crates publiées sans fichier de licence
+
 Ces crates sont compilées dans chaque exe qui utilise la bibliothèque, mais leur paquet
 publié ne contient pas de fichier de licence (il renvoie au dépôt de leur projet). Elles sont
 toutes sous « MIT OR Apache-2.0 » : on prend MIT, et on livre ici son texte type avec leurs

@@ -17,15 +17,26 @@ l'horloge de Windows : la même allure Windows 11, le même comportement, écrit
   reconstruisent rien), avec ses animations ; **le petit menu** au style Windows 11, toujours
   dans le même ordre : actions du logiciel, Paramètres (E713), Rechercher une mise à jour (E895),
   lignes en plus (Ouvrir le journal…), Quitter. Sans OpenGL : le menu de secours de Windows.
-- **Les Paramètres** (`parametres`), squelette du point 7 : en-tête avec le nom et « Version
-  x.y.z », navigation à gauche (recherche dès 7 pages), pages Général, Mise à jour et À propos,
-  cartes, interrupteurs, effet immédiat avec la bulle « Annuler » (6 s), bandeau « Redémarrer
-  maintenant », taille et place de la fenêtre retenues, `--parametres <page>`.
+- **Les Paramètres** (`parametres`), squelette du point 7, au dessin de PowerPeek : en-tête
+  avec le vrai logo, le nom et « Version x.y.z », navigation à gauche (lignes de 38 points,
+  colonne qui s'élargit pour un long nom, recherche dès 7 pages, point d'alerte), pages
+  Général, Mise à jour et À propos juste après celles du logiciel, cartes, interrupteurs,
+  effet immédiat avec la bulle « Annuler » (6 s), bandeau « Redémarrer maintenant », taille et
+  place de la fenêtre retenues, `--parametres <page>`. Utilisables seuls (trait `Reglages`),
+  sans l'icône ni le volet.
+- **Français ou anglais** (`textes`) : chaque mot écrit par la bibliothèque, dans la langue
+  du logiciel, changeable en direct.
+- **Plusieurs fenêtres dans une seule boucle** (`autres_fenetres`) : les Paramètres et les
+  fenêtres du logiciel s'ouvrent et se ferment à côté du volet, depuis n'importe quel fil.
+- **Des fenêtres toutes faites** (`toutes_faites`), reprises de Vocalis : la fenêtre simple
+  (texte, barre d'avancement, champ, choix, boutons ; hauteur qui suit le contenu) et la
+  fenêtre de lecture (mot lu surligné et suivi).
 - **Des contrôles pour les tests** (`verification`) : chaque icône et chaque caractère affiché
   existe dans les polices de Windows.
 
 Rien n'y est propre à un logiciel : le nom, la version, l'icône, les pages, les actions du menu,
-les réglages rapides et les textes viennent du logiciel, par le trait `Logiciel`.
+les réglages rapides et les textes viennent du logiciel, par les traits `Reglages` (les
+Paramètres) et `Logiciel` (tout le reste).
 
 ## L'utiliser dans un projet
 
@@ -52,7 +63,8 @@ les réglages rapides et les textes viennent du logiciel, par le trait `Logiciel
    allow-git = ["https://github.com/Galu83/Interface-commune"]
    ```
 
-4. Le logiciel décrit ce qui lui est propre en écrivant le trait `Logiciel`, puis :
+4. Le logiciel décrit ce qui lui est propre en écrivant les traits `Reglages` et `Logiciel`,
+   puis :
 
    ```rust,ignore
    let Ok(_verrou) = horloge::instance_unique("MonLogiciel") else { return };
@@ -98,8 +110,15 @@ de déploiement**, en lecture seule, valable pour ce seul dépôt, sans date de 
 ## Les choix faits seuls (et comment revenir en arrière)
 
 - **Une seule bibliothèque**, licence MIT (pour pouvoir servir aux logiciels sous toute licence).
-- **La base vient de KVMSoft** (MIT) : thème, placement, clics, fenêtre unique du volet ; les
-  idées des autres projets seulement, aucun code de PowerPeek (GPL).
+- **La base vient de KVMSoft** (MIT) : thème, placement, clics, fenêtre unique du volet. Les
+  fenêtres toutes faites et le champ de raccourci sont repris de Vocalis (MIT). Les mesures
+  des Paramètres sont celles de PowerPeek (MIT depuis sa version 0.20.0).
+- **Une seule boucle de fenêtres** : la fenêtre du volet est la fenêtre principale, jamais
+  refaite ; les autres fenêtres sont dessinées par elle (`show_viewport_immediate` d'egui),
+  même quand elle est cachée. Revenir : une boucle par fenêtre est impossible (winit n'en
+  permet qu'une par programme).
+- **Le logiciel qui ne veut que les Paramètres** écrit `Reglages` seul ; `Logiciel` le
+  prolonge. Revenir : réunir les deux traits.
 - **Segoe UI Variable** est lue une fois et réglée par ses axes (graisse 400/600, taille optique
   texte/titre) ; sans elle, Segoe UI et Segoe UI Semibold. Revenir : `polices.rs`.
 - **Les pages se nomment par une clé** (`general`, `mise_a_jour`, `a_propos`, celles du
@@ -128,6 +147,8 @@ de déploiement**, en lecture seule, valable pour ce seul dépôt, sans date de 
 | proptest (essais seulement) | MIT OR Apache-2.0 | essais au hasard |
 
 Toutes les licences des dépendances indirectes sont vérifiées par `cargo deny` (`deny.toml`,
-le même que dans les outils communs). Les polices de Windows ne sont jamais copiées.
+le même que dans les outils communs). Les polices de Windows ne sont jamais copiées. Les crates
+d'egui (et accesskit, profiling) sont publiées sans fichier de licence : leur avis MIT est dans
+`docs/LICENCES.md`, à livrer avec chaque logiciel.
 
 Les notes de passage de chaque projet : `docs/MIGRATION.md`.
