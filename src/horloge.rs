@@ -221,6 +221,13 @@ impl Poste {
     pub fn liens(&self) -> &Arc<Liens> {
         &self.liens
     }
+
+    /// Les autres fenêtres du logiciel (une fenêtre simple, une fenêtre de lecture…),
+    /// ouvertes et fermées dans la boucle de la bibliothèque, depuis n'importe quel fil (voir
+    /// [`crate::autres_fenetres`]).
+    pub fn fenetres(&self) -> crate::autres_fenetres::AutresFenetres {
+        self.liens.autres.clone()
+    }
 }
 
 /// L'icône près de l'horloge, avant son lancement.

@@ -11,6 +11,8 @@ mod demo {
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    use interface_commune::apparence::couleur;
+    use interface_commune::autres_fenetres::{Cadre, Contenu, Ouverture};
     use interface_commune::horloge::{Horloge, Poste, instance_unique};
     use interface_commune::parametres::Contexte;
     use interface_commune::theme::couverture;
@@ -35,6 +37,25 @@ mod demo {
             }
         }
         px
+    }
+
+    /// Une autre fenêtre : un mot et un bouton qui la ferme.
+    struct Bonjour;
+
+    impl Contenu for Bonjour {
+        fn dessiner(&mut self, ui: &mut egui::Ui, cadre: &mut Cadre<'_>) {
+            let p = cadre.palette;
+            let mut fermer = false;
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(couleur(p.fond)).inner_margin(16))
+                .show(ui, |ui| {
+                    ui.label("Une autre fenêtre, dans la même boucle.");
+                    fermer = dessin::bouton(ui, p, None, "Fermer", dessin::Genre::Accent).clicked();
+                });
+            if fermer {
+                cadre.fermer();
+            }
+        }
     }
 
     struct Exemple {
@@ -72,15 +93,23 @@ mod demo {
         }
 
         fn actions_menu(&self) -> Vec<menu::Action> {
-            vec![menu::Action::new("bonjour", '\u{E8BD}', "Dire bonjour")]
+            vec![
+                menu::Action::new("bonjour", '\u{E8BD}', "Dire bonjour"),
+                menu::Action::new("fenetre", '\u{E737}', "Ouvrir une fenêtre"),
+            ]
         }
 
         fn action(&self, cle: &str) {
-            if let Ok(p) = self.poste.lock()
-                && let Some(p) = p.as_ref()
-                && cle == "bonjour"
-            {
-                p.notifier("Bonjour !", false, None);
+            let Ok(p) = self.poste.lock() else { return };
+            let Some(p) = p.as_ref() else { return };
+            match cle {
+                "bonjour" => p.notifier("Bonjour !", false, None),
+                // Une autre fenêtre, dans la boucle de la bibliothèque.
+                "fenetre" => {
+                    p.fenetres()
+                        .ouvrir("bonjour", Ouverture::new("Bonjour", [360.0, 160.0]), Bonjour);
+                }
+                _ => {}
             }
         }
 

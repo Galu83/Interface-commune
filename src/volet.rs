@@ -3,7 +3,9 @@
 //!
 //! Les deux vivent dans **une seule fenêtre**, préparée au repos et gardée cachée
 //! ([`veiller`]) : au clic, elle est mise à jour et montrée, jamais reconstruite (ni fenêtre,
-//! ni OpenGL, ni polices). Elle monte depuis la barre des tâches en fondu (le volet) ou
+//! ni OpenGL, ni polices). C'est la fenêtre principale de la seule boucle de fenêtres du
+//! programme : les Paramètres et les autres fenêtres du logiciel sont dessinés avec elle
+//! ([`crate::autres_fenetres`]), même quand elle est cachée. Elle monte depuis la barre des tâches en fondu (le volet) ou
 //! apparaît en fondu (le petit menu), avec les durées de Windows (`theme`), et rien si
 //! « Effets d'animation » est coupé. Elle se ferme par Échap, un clic à côté ou la perte du
 //! focus, en fondu court.
@@ -169,6 +171,12 @@ struct Sortie {
     en_cours: Option<Demande>,
 }
 
+/// Ouvre les Paramètres à cette page, dans la boucle, ou les amène à cette page et devant
+/// s'ils sont déjà ouverts.
+fn ouvrir_parametres(liens: &Arc<Liens>, logiciel: &Arc<dyn Logiciel>, page: Option<String>) {
+    crate::parametres::fenetre::ouvrir_dans(liens, logiciel, page);
+}
+
 struct Volet<'a> {
     logiciel: Arc<dyn Logiciel>,
     liens: Arc<Liens>,
@@ -184,8 +192,11 @@ struct Volet<'a> {
     effets: bool,
     a_eu_le_focus: bool,
     focus_redemande: bool,
-    /// Une autre fenêtre est demandée : on se ferme dès que la surface est cachée.
+    /// Le logiciel se ferme : on se ferme dès que la surface est cachée.
     sortie_voulue: Option<Demande>,
+    /// La fenêtre se ferme pour de bon (la fermeture n'est pas annulée).
+    fin_voulue: bool,
+
     sortie: Rc<RefCell<Sortie>>,
     creee_a: Instant,
     /// Un clic arrivé avant la préparation : montré dès qu'elle est finie.
@@ -251,6 +262,20 @@ impl Volet<'_> {
                 ctx.send_viewport_cmd(ViewportCommand::Visible(true));
                 ctx.request_repaint();
             }
+            Suite::Parametres => {
+                // Le volet ou le petit menu montré se ferme ; les Paramètres s'ouvrent à côté,
+                // dans la même boucle.
+                if let Etape::Montree { .. } = self.etape {
+                    self.commencer_fermeture(ctx, None);
+                } else if let Etape::MiseEnPlace { .. } = self.etape {
+                    self.cacher_tout_de_suite(ctx);
+                }
+                let page = match d {
+                    Demande::Parametres(p) => p,
+                    _ => None,
+                };
+                ouvrir_parametres(&self.liens, &self.logiciel, page);
+            }
             Suite::Sortir => {
                 self.sortie_voulue = Some(d);
                 if let Etape::Montree { .. } = self.etape {
@@ -299,8 +324,10 @@ impl Volet<'_> {
         self.etape = Etape::Cachee;
     }
 
-    /// Rend la main au fil des fenêtres (la fenêtre est déjà cachée).
+    /// Rend la main au fil des fenêtres (la fenêtre est déjà cachée) : fin du programme, les
+    /// autres fenêtres se ferment avec elle.
     fn sortir(&mut self, ctx: &egui::Context) {
+        self.fin_voulue = true;
         self.liens.surface_prete.store(0, Ordering::Release);
         self.sortie.borrow_mut().suite = self.sortie_voulue.take();
         ctx.send_viewport_cmd(ViewportCommand::Close);
@@ -309,8 +336,12 @@ impl Volet<'_> {
     /// Fait ce que l'utilisateur a choisi, une fois la fenêtre cachée. N'attend jamais (le
     /// service et le fil des recherches sont prévenus par leur file, sans attente).
     fn faire(&mut self, choisi: Option<Choisi>) {
-        if let Some(d) = faire(choisi, &self.logiciel) {
-            self.sortie_voulue.get_or_insert(d);
+        match faire(choisi, &self.logiciel) {
+            Some(Demande::Parametres(page)) => ouvrir_parametres(&self.liens, &self.logiciel, page),
+            Some(d) => {
+                self.sortie_voulue.get_or_insert(d);
+            }
+            None => {}
         }
     }
 
@@ -622,12 +653,27 @@ impl eframe::App for Volet<'_> {
             return;
         }
         self.lire(ctx);
+        if self.liens.autres.a_faire() {
+            // Une autre fenêtre à ouvrir, à amener devant ou à fermer : il faut une image
+            // complète, même la fenêtre principale cachée (sans fenêtre visible, egui n'en
+            // ferait aucune).
+            ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
+            ctx.request_repaint();
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if self.hwnd.is_none() {
             self.hwnd = hwnd_de(frame);
+        }
+        if ui.input(|i| i.viewport().close_requested()) && !self.fin_voulue {
+            // Alt+F4 sur le volet ou le petit menu : il se ferme, la boucle (et les autres
+            // fenêtres) restent.
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            if let Etape::Montree { .. } = self.etape {
+                self.commencer_fermeture(&ctx, None);
+            }
         }
         if self.apparence.suivre(&ctx)
             && let Some(h) = self.hwnd
@@ -651,12 +697,16 @@ impl eframe::App for Volet<'_> {
             Etape::Montree { .. } => self.montree_image(ui, action),
             Etape::Fermeture { .. } => self.fermer_pas_a_pas(&ctx),
         }
+        // Les Paramètres et les autres fenêtres, à chaque image de la fenêtre principale
+        // (une fenêtre qui n'y est pas dessinée est détruite par egui).
+        self.liens.autres.montrer(&ctx, &p);
     }
 }
 
 /// Prépare au repos la fenêtre du volet et du petit menu (cachée, invisible), puis la garde :
-/// chaque demande de volet ou de petit menu la montre sans la reconstruire. Rend la main à la
-/// première demande d'une autre fenêtre (rendue), ou quand le logiciel se ferme (`None`).
+/// chaque demande de volet ou de petit menu la montre sans la reconstruire ; les Paramètres
+/// et les autres fenêtres s'ouvrent dans sa boucle. Rend la main quand le logiciel se ferme
+/// (`Demande::Quitter` ou `None`).
 pub fn veiller(
     logiciel: Arc<dyn Logiciel>,
     liens: Arc<Liens>,
@@ -690,6 +740,7 @@ pub fn veiller(
             if let Ok(mut c) = liens2.contexte.lock() {
                 *c = Some(cc.egui_ctx.clone());
             }
+            liens2.autres.lier(Some(cc.egui_ctx.clone()));
             // Une demande envoyée réveille cette fenêtre, même cachée.
             demandes.lecteur(Some(cc.egui_ctx.clone()));
             Ok(Box::new(Volet {
@@ -705,6 +756,7 @@ pub fn veiller(
                 a_eu_le_focus: false,
                 focus_redemande: false,
                 sortie_voulue: None,
+                fin_voulue: false,
                 sortie: s2,
                 creee_a,
                 premiere,
@@ -712,6 +764,7 @@ pub fn veiller(
         }),
     );
     demandes.lecteur(None);
+    liens.autres.lier(None);
     liens.surface_prete.store(0, Ordering::Release);
     let mut s = sortie.borrow_mut();
     match r {

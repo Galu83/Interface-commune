@@ -1,15 +1,19 @@
 //! La fenêtre des Paramètres (sous Windows) : coins arrondis et barre de titre sombre par
 //! Windows, aucune animation à nous (Windows anime déjà les fenêtres), taille et place
 //! retenues d'une ouverture à l'autre et toujours en entier sur un écran, taille minimale.
+//!
+//! Elle s'ouvre dans la boucle de la bibliothèque, à côté de la fenêtre du volet
+//! ([`ouvrir_dans`]). Secours, si cette fenêtre n'a pas pu être préparée : les Paramètres
+//! seuls, comme fenêtre principale d'une boucle ([`ouvrir`]).
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use eframe::egui::{self, FontDefinitions, ViewportCommand};
 
-use super::{Parametres, TAILLE, TAILLE_MIN};
+use super::{CLE_FENETRE, Parametres, TAILLE, TAILLE_MIN};
 use crate::Logiciel;
 use crate::apparence::{Apparence, couleur};
+use crate::autres_fenetres::{Cadre, Contenu, Ouverture};
 use crate::fenetres::Liens;
 use crate::place::{Place, garder_visible, place_valable};
 use crate::systeme::{self, hwnd_de};
@@ -31,81 +35,152 @@ pub fn icone_fenetre(l: &dyn Logiciel, sombre: bool) -> egui::IconData {
     }
 }
 
-struct Fenetre {
-    logiciel: Arc<dyn Logiciel>,
-    liens: Arc<Liens>,
-    apparence: Apparence,
-    parametres: Parametres,
-    hwnd: Option<isize>,
-    montree: bool,
-    /// La place retenue à poser une fois la fenêtre créée (pixels).
-    place: Option<Place>,
+/// La place retenue, ramenée sur l'écran le plus proche (il a pu changer).
+fn place_retenue(l: &dyn Logiciel) -> Option<Place> {
+    l.place_parametres().and_then(place_valable).and_then(|p| {
+        let travail = systeme::zone_de_travail_pres_de([p[0], p[1], p[0] + p[2], p[1] + p[3]])?;
+        Some(garder_visible(
+            p,
+            travail,
+            [TAILLE_MIN[0] as i32, TAILLE_MIN[1] as i32],
+        ))
+    })
 }
 
-impl Fenetre {
-    /// La place de la fenêtre, à retenir.
-    fn retenir(&self) {
-        if let Some(h) = self.hwnd
-            && let Some(r) = systeme::rect_fenetre(h)
-            && let Some(p) = place_valable([r[0], r[1], r[2] - r[0], r[3] - r[1]])
-        {
+/// Comment s'ouvrent les Paramètres : « Paramètres de <logiciel> », leur taille et leur
+/// place retenues (sinon centrés sur l'écran de la souris).
+pub fn ouverture(l: &dyn Logiciel, sombre: bool) -> Ouverture {
+    Ouverture::new(&format!("Paramètres de {}", l.identite().nom), TAILLE)
+        .taille_min(TAILLE_MIN)
+        .icone(icone_fenetre(l, sombre))
+        .place(place_retenue(l))
+}
+
+/// Les Paramètres, contenu d'une fenêtre de la boucle.
+pub struct ContenuParametres {
+    logiciel: Arc<dyn Logiciel>,
+    liens: Arc<Liens>,
+    parametres: Parametres,
+    /// Le thème de l'icône de la fenêtre.
+    sombre: Option<bool>,
+}
+
+impl ContenuParametres {
+    pub fn new(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, page: Option<&str>) -> Self {
+        let parametres = Parametres::new(&*logiciel, page);
+        ContenuParametres {
+            logiciel,
+            liens,
+            parametres,
+            sombre: None,
+        }
+    }
+}
+
+impl Contenu for ContenuParametres {
+    fn dessiner(&mut self, ui: &mut egui::Ui, cadre: &mut Cadre<'_>) {
+        let ctx = ui.ctx().clone();
+        let p = cadre.palette;
+        if self.sombre.is_some_and(|s| s != p.sombre) {
+            let icone = icone_fenetre(&*self.logiciel, p.sombre);
+            ctx.send_viewport_cmd(ViewportCommand::Icon(Some(Arc::new(icone))));
+        }
+        self.sombre = Some(p.sombre);
+        if let Some(page) = self.liens.page_voulue.lock().ok().and_then(|mut v| v.take()) {
+            self.parametres.aller_a(&page);
+        }
+        let l = self.logiciel.clone();
+        self.parametres.dessiner(ui, p, &*l);
+    }
+
+    fn fermee(&mut self, place: Option<Place>) {
+        if let Some(p) = place {
             self.logiciel.retenir_place(p);
         }
     }
 }
 
-impl eframe::App for Fenetre {
+/// Ouvre les Paramètres à cette page dans la boucle de la bibliothèque ; déjà ouverts, ils
+/// vont à cette page et passent devant.
+pub fn ouvrir_dans(liens: &Arc<Liens>, logiciel: &Arc<dyn Logiciel>, page: Option<String>) {
+    if liens.autres.ouverte(CLE_FENETRE) {
+        if page.is_some()
+            && let Ok(mut p) = liens.page_voulue.lock()
+        {
+            *p = page;
+        }
+        liens.autres.devant(CLE_FENETRE);
+        return;
+    }
+    if let Ok(mut p) = liens.page_voulue.lock() {
+        *p = None;
+    }
+    let sombre = crate::apparence::choix_windows().sombre;
+    liens.autres.ouvrir(
+        CLE_FENETRE,
+        ouverture(&**logiciel, sombre),
+        ContenuParametres::new(logiciel.clone(), liens.clone(), page.as_deref()),
+    );
+}
+
+/// Les Paramètres seuls, fenêtre principale de leur boucle (secours).
+struct Seuls {
+    contenu: ContenuParametres,
+    apparence: Apparence,
+    hwnd: Option<isize>,
+    images: u32,
+    montree: bool,
+    place: Option<Place>,
+}
+
+impl eframe::App for Seuls {
     fn clear_color(&self, _: &egui::Visuals) -> [f32; 4] {
         couleur(self.apparence.palette.fond).to_normalized_gamma_f32()
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        if self.apparence.suivre(&ctx)
-            && let Some(h) = self.hwnd
-        {
-            systeme::habiller(h, self.apparence.palette.sombre);
-            let icone = icone_fenetre(&*self.logiciel, self.apparence.palette.sombre);
-            ctx.send_viewport_cmd(ViewportCommand::Icon(Some(Arc::new(icone))));
-        }
+        let change = self.apparence.suivre(&ctx);
         if self.hwnd.is_none() {
             self.hwnd = hwnd_de(frame);
-            if let Some(h) = self.hwnd {
-                systeme::habiller(h, self.apparence.palette.sombre);
-                if let Some(p) = self.place.take() {
-                    systeme::poser(h, p);
-                }
+            if let Some(h) = self.hwnd
+                && let Some(p) = self.place.take()
+            {
+                systeme::poser(h, p);
             }
         }
-        if !self.montree {
-            // Barre de titre habillée avant de montrer la fenêtre : pas d'éclair blanc.
+        if let Some(h) = self.hwnd
+            && (change || self.images == 0)
+        {
+            systeme::habiller(h, self.apparence.palette.sombre);
+        }
+        self.images += 1;
+        if !self.montree && self.images >= crate::autres_fenetres::IMAGES_CACHEES {
+            // Habillée et dessinée avant d'être montrée : ni éclair blanc, ni fenêtre vide.
             self.montree = true;
             ctx.send_viewport_cmd(ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(ViewportCommand::Focus);
+        } else if !self.montree {
+            ctx.request_repaint();
         }
-        if let Some(page) = self.liens.page_voulue.lock().ok().and_then(|mut p| p.take()) {
-            self.parametres.aller_a(&page);
-        }
-        if self.liens.devant.swap(false, Ordering::AcqRel) {
-            ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
-            ctx.send_viewport_cmd(ViewportCommand::Focus);
-            if let Some(h) = self.hwnd {
-                systeme::premier_plan(h);
-            }
-        }
-        if self.liens.fermer.swap(false, Ordering::AcqRel) {
-            ctx.send_viewport_cmd(ViewportCommand::Close);
-        }
-        if ui.input(|i| i.viewport().close_requested()) {
-            self.retenir();
+        if ui.input(|i| i.viewport().close_requested())
+            && let Some(h) = self.hwnd
+            && let Some(r) = systeme::rect_fenetre(h)
+        {
+            self.contenu
+                .fermee(place_valable([r[0], r[1], r[2] - r[0], r[3] - r[1]]));
         }
         let p = self.apparence.palette.clone();
-        let l = self.logiciel.clone();
-        self.parametres.dessiner(ui, &p, &*l);
+        let mut cadre = Cadre::new(&p, self.hwnd, self.images, self.montree);
+        self.contenu.dessiner(ui, &mut cadre);
+        if cadre.fermeture_demandee() {
+            ctx.send_viewport_cmd(ViewportCommand::Close);
+        }
     }
 }
 
-/// Ouvre les Paramètres à cette page (sa clé) ; rend la main quand la fenêtre se ferme.
+/// Secours : ouvre les Paramètres seuls à cette page (sa clé), comme fenêtre principale d'une
+/// boucle ; rend la main quand la fenêtre se ferme.
 pub fn ouvrir(
     logiciel: Arc<dyn Logiciel>,
     liens: Arc<Liens>,
@@ -114,24 +189,10 @@ pub fn ouvrir(
 ) -> Result<(), String> {
     let apparence = Apparence::new(None);
     let nom = logiciel.identite().nom.clone();
-    // La place retenue, ramenée sur l'écran le plus proche (il a pu changer).
-    let place = logiciel.place_parametres().and_then(place_valable).and_then(|p| {
-        let travail = systeme::zone_de_travail_pres_de([p[0], p[1], p[0] + p[2], p[1] + p[3]])?;
-        Some(garder_visible(
-            p,
-            travail,
-            [TAILLE_MIN[0] as i32, TAILLE_MIN[1] as i32],
-        ))
-    });
-    let viewport = egui::ViewportBuilder::default()
-        .with_title(format!("Paramètres de {nom}"))
-        .with_inner_size(TAILLE)
-        .with_min_inner_size(TAILLE_MIN)
-        .with_icon(icone_fenetre(&*logiciel, apparence.palette.sombre))
-        .with_visible(false);
-    let mut options = crate::volet::options(viewport);
+    let o = ouverture(&*logiciel, apparence.palette.sombre);
+    let place = o.place;
+    let mut options = crate::volet::options(o.constructeur());
     options.centered = place.is_none();
-    let l2 = logiciel.clone();
     eframe::run_native(
         &nom,
         options,
@@ -141,13 +202,12 @@ pub fn ouvrir(
             if let Ok(mut c) = liens.contexte.lock() {
                 *c = Some(cc.egui_ctx.clone());
             }
-            let parametres = Parametres::new(&*l2, page.as_deref());
-            Ok(Box::new(Fenetre {
-                logiciel: l2,
-                liens,
+            let contenu = ContenuParametres::new(logiciel, liens, page.as_deref());
+            Ok(Box::new(Seuls {
+                contenu,
                 apparence,
-                parametres,
                 hwnd: None,
+                images: 0,
                 montree: false,
                 place,
             }))

@@ -142,6 +142,17 @@ pub fn garder_visible(place: Place, travail: Rect, minimum: [i32; 2]) -> Place {
     [vers_i32(x), vers_i32(y), vers_i32(largeur), vers_i32(hauteur)]
 }
 
+/// Le coin (gauche, haut) d'une fenêtre de `taille` (pixels) centrée dans la zone de
+/// travail ; une fenêtre plus grande que la zone part de son coin.
+pub fn centrer(taille: [i32; 2], travail: Rect) -> [i32; 2] {
+    let z = travail.map(i64::from);
+    let t = taille.map(i64::from);
+    let x = (z[0] + (z[2] - z[0] - t[0]) / 2).max(z[0]);
+    let y = (z[1] + (z[3] - z[1] - t[1]) / 2).max(z[1]);
+    let vers_i32 = |v: i64| i32::try_from(v).unwrap_or(if v < 0 { i32::MIN } else { i32::MAX });
+    [vers_i32(x), vers_i32(y)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,5 +300,12 @@ mod tests {
             prop_assert!(r[2] >= 1 && r[3] >= 1);
             prop_assert!(dedans(r, travail));
         }
+    }
+
+    #[test]
+    fn centrer_dans_la_zone() {
+        assert_eq!(centrer([200, 100], [0, 0, 1000, 500]), [400, 200]);
+        assert_eq!(centrer([200, 100], [-1920, 0, -920, 500]), [-1520, 200]);
+        assert_eq!(centrer([3000, 900], [0, 0, 1000, 500]), [0, 0]);
     }
 }

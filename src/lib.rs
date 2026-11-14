@@ -17,6 +17,7 @@
 //! par le trait [`Logiciel`].
 
 pub mod apparence;
+pub mod autres_fenetres;
 pub mod clics;
 pub mod dessin;
 pub mod fenetres;

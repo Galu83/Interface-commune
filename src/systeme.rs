@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use windows::Win32::Foundation::{COLORREF, CloseHandle, HANDLE, HWND, POINT, RECT, WAIT_FAILED};
+use windows::Win32::Foundation::{COLORREF, CloseHandle, HANDLE, HWND, LPARAM, POINT, RECT, WAIT_FAILED};
 use windows::Win32::Graphics::Dwm::{
     DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute,
 };
@@ -14,14 +14,15 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::Registry::{
     HKEY_CURRENT_USER, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RegGetValueW,
 };
-use windows::Win32::System::Threading::{CreateEventW, SetEvent};
+use windows::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, SetEvent};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, HWND_TOPMOST, IsWindow,
-    LWA_ALPHA, MSG, MsgWaitForMultipleObjects, PM_NOREMOVE, PM_QS_SENDMESSAGE, PeekMessageW, QS_SENDMESSAGE,
-    SPI_GETCLIENTAREAANIMATION, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
-    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW,
-    SetWindowPos, ShowWindow, ShowWindowAsync, SystemParametersInfoW, WS_EX_LAYERED,
+    EnumThreadWindows, GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, GetWindowTextW,
+    GetWindowThreadProcessId, HWND_TOPMOST, IsWindow, LWA_ALPHA, MSG, MsgWaitForMultipleObjects, PM_NOREMOVE,
+    PM_QS_SENDMESSAGE, PeekMessageW, QS_SENDMESSAGE, SPI_GETCLIENTAREAANIMATION, SW_HIDE, SW_SHOWNOACTIVATE,
+    SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetForegroundWindow,
+    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, ShowWindowAsync,
+    SystemParametersInfoW, WS_EX_LAYERED,
 };
 use windows::core::{BOOL, PCWSTR, w};
 
@@ -330,4 +331,45 @@ pub fn poser(h: isize, p: crate::place::Place) {
             SWP_NOZORDER | SWP_NOACTIVATE,
         )
     };
+}
+
+/// La fenêtre de ce fil qui porte ce titre. Les autres fenêtres d'egui (« viewports ») ne
+/// donnent pas leur HWND : on les retrouve par leur titre, parmi les seules fenêtres du fil
+/// des fenêtres.
+pub fn fenetre_du_fil(titre: &str) -> Option<isize> {
+    struct Recherche {
+        titre: Vec<u16>,
+        trouvee: isize,
+    }
+    extern "system" fn chaque(h: HWND, lp: LPARAM) -> BOOL {
+        // SAFETY: `lp` est le `&mut Recherche` donné à EnumThreadWindows plus bas, vivant et
+        // utilisé nulle part ailleurs pendant l'appel ; le titre est lu dans un tampon local.
+        let r = unsafe { &mut *(lp.0 as *mut Recherche) };
+        let mut tampon = [0u16; 256];
+        // SAFETY: fenêtre donnée par Windows ; tampon local de la taille annoncée.
+        let n = unsafe { GetWindowTextW(h, &mut tampon) };
+        if n > 0 && tampon.get(..n as usize) == Some(&r.titre[..]) {
+            r.trouvee = h.0 as isize;
+            return BOOL::from(false);
+        }
+        BOOL::from(true)
+    }
+    let mut r = Recherche {
+        titre: titre.encode_utf16().collect(),
+        trouvee: 0,
+    };
+    // SAFETY: `chaque` ne garde pas le pointeur au-delà de l'appel (EnumThreadWindows rend la
+    // main une fois les fenêtres vues) ; `r` vit jusque-là.
+    let _ = unsafe { EnumThreadWindows(GetCurrentThreadId(), Some(chaque), LPARAM((&raw mut r) as isize)) };
+    (r.trouvee != 0).then_some(r.trouvee)
+}
+
+/// La place (gauche, haut) d'une fenêtre de cette taille (pixels), centrée sur la zone de
+/// travail de l'écran de la souris.
+pub fn centree(taille: [i32; 2]) -> Option<[i32; 2]> {
+    let mut p = POINT::default();
+    // SAFETY: un POINT local.
+    unsafe { GetCursorPos(&mut p) }.ok()?;
+    let (_, t) = ecran_autour(p.x, p.y)?;
+    Some(crate::place::centrer(taille, t))
 }

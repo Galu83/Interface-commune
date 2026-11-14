@@ -29,6 +29,10 @@ use crate::theme::{Palette, TAILLE_PETIT};
 use crate::{Communs, EtatMiseAJour, Logiciel, cles, icones};
 use modele::{Annulation, PAGES_POUR_RECHERCHE, Page, Valeur};
 
+/// La clé de la fenêtre des Paramètres parmi les autres fenêtres de la boucle
+/// ([`crate::autres_fenetres`]) : réservée.
+pub const CLE_FENETRE: &str = "parametres";
+
 /// Taille de la fenêtre au premier lancement, et taille minimale (points).
 pub const TAILLE: [f32; 2] = [940.0, 660.0];
 pub const TAILLE_MIN: [f32; 2] = [760.0, 480.0];

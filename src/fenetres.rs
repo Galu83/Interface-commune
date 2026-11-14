@@ -1,19 +1,21 @@
 //! Le fil des fenêtres, sans Windows (tout est testé) : les demandes que l'icône lui envoie,
 //! ce que partagent les fils, et sa boucle.
 //!
-//! Un fil à part ouvre une fenêtre à la fois (`eframe::run_native` rend la main à la
-//! fermeture). **Au repos**, il garde prête, cachée, la fenêtre du volet et du petit menu :
-//! un clic la met à jour et la montre, sans rien reconstruire (ni fenêtre, ni OpenGL, ni
-//! polices). Elle n'est fermée que pour ouvrir les Paramètres, puis préparée de nouveau, au
-//! repos (règles : interface Windows 11, point 10, « la première ouverture aussi rapide que
-//! les suivantes »). Sans elle (polices ou OpenGL absents), le menu gris de Windows sert de
-//! secours.
+//! Un fil à part tient **la seule boucle de fenêtres du programme** (winit n'en accepte
+//! qu'une). Sa fenêtre principale est celle du volet et du petit menu, préparée une fois, au
+//! repos, et gardée cachée jusqu'à la fin : un clic la met à jour et la montre, sans rien
+//! reconstruire (ni fenêtre, ni OpenGL, ni polices ; règles : interface Windows 11, point 10,
+//! « la première ouverture aussi rapide que les suivantes »). Les Paramètres et les autres
+//! fenêtres du logiciel s'ouvrent et se ferment dans cette même boucle
+//! ([`crate::autres_fenetres`]). Sans elle (polices ou OpenGL absents), le menu gris de
+//! Windows sert de secours.
 
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::autres_fenetres::AutresFenetres;
 use crate::place::Rect;
 use crate::theme::Surface;
 
@@ -32,7 +34,8 @@ pub enum Demande {
         ancre: [i32; 2],
         clic: Instant,
     },
-    /// Les Paramètres, à cette page (sa clé) ou à la première.
+    /// Les Paramètres, à cette page (sa clé) ou à la première : une fenêtre de plus de la
+    /// boucle, à côté de la fenêtre du volet.
     Parametres(Option<String>),
     Quitter,
 }
@@ -66,17 +69,24 @@ pub struct Liens {
     pub surface_prete: AtomicIsize,
     /// Le logiciel se ferme : le fil des fenêtres ne prépare plus rien.
     pub quitter: AtomicBool,
-    /// La fenêtre ouverte doit se fermer.
+    /// Le volet ou le petit menu montré doit se fermer.
     pub fermer: AtomicBool,
-    /// Les Paramètres doivent passer devant.
-    pub devant: AtomicBool,
     /// Les Paramètres ouverts doivent montrer cette page.
     pub page_voulue: Mutex<Option<String>>,
+    /// Les Paramètres et les autres fenêtres du logiciel, dans la boucle des fenêtres.
+    pub autres: AutresFenetres,
 }
 
 impl Liens {
+    /// Ce qui est ouvert : le volet ou le petit menu s'il est montré ; sinon les Paramètres
+    /// s'ils sont ouverts.
     pub fn ouvert(&self) -> Ouvert {
-        self.ouvert.lock().map(|o| *o).unwrap_or_default()
+        let o = self.ouvert.lock().map(|o| *o).unwrap_or_default();
+        if o == Ouvert::Rien && self.autres.ouverte(crate::parametres::CLE_FENETRE) {
+            Ouvert::Parametres
+        } else {
+            o
+        }
     }
 
     pub fn mettre(&self, o: Ouvert) {
@@ -95,8 +105,9 @@ impl Liens {
             .is_some_and(|(t, s)| s == surface && t.elapsed() < Duration::from_millis(400))
     }
 
-    /// Redessine la fenêtre ouverte : à appeler quand l'état du logiciel change (le volet
-    /// ou les Paramètres le montrent aussitôt).
+    /// Redessine les fenêtres ouvertes : à appeler quand l'état du logiciel change (le volet,
+    /// les Paramètres et les autres fenêtres le montrent aussitôt : elles sont dessinées avec
+    /// la fenêtre principale).
     pub fn redessiner(&self) {
         if let Ok(c) = self.contexte.lock()
             && let Some(c) = c.as_ref()
@@ -110,9 +121,9 @@ impl Liens {
         self.redessiner();
     }
 
+    /// Les Paramètres ouverts passent devant.
     pub fn mettre_devant(&self) {
-        self.devant.store(true, Ordering::Release);
-        self.redessiner();
+        self.autres.devant(crate::parametres::CLE_FENETRE);
     }
 
     /// Montre les Paramètres sur cette page : ouverts, ils passent devant et changent de
@@ -262,18 +273,20 @@ pub fn canal() -> (Demandes, Reception) {
 
 /// Ce que le fil des fenêtres ouvre : les vraies fenêtres (egui), ou un faux dans les tests.
 pub trait Ouvreur {
-    /// Prépare au repos la fenêtre du volet et du petit menu, cachée, et la garde : chaque
-    /// demande de volet ou de petit menu la montre sans la reconstruire. Rend la première
-    /// demande qui n'est pas pour elle (`None` : plus personne n'envoie, ou le logiciel se
-    /// ferme). `premiere` : un clic arrivé avant la préparation, montré dès qu'elle est
-    /// finie. En erreur, rend aussi la demande de volet ou de menu en cours, s'il y en a
-    /// une (pour le menu de secours).
+    /// Prépare au repos la fenêtre du volet et du petit menu, cachée, et la garde jusqu'à la
+    /// fin : chaque demande de volet ou de petit menu la montre sans la reconstruire ; une
+    /// demande de Paramètres les ouvre dans la même boucle. Rend `Demande::Quitter`, ou
+    /// `None` (plus personne n'envoie, le logiciel se ferme, ou la fenêtre a été fermée).
+    /// `premiere` : une demande arrivée avant la préparation, faite dès qu'elle est finie. En
+    /// erreur, rend aussi la demande de volet ou de menu en cours, s'il y en a une (pour le
+    /// menu de secours).
     fn surface(
         &mut self,
         demandes: &Reception,
         premiere: Option<Demande>,
     ) -> Result<Option<Demande>, (String, Option<Demande>)>;
-    /// Ouvre les Paramètres à cette page ; rend la main à leur fermeture.
+    /// Secours, quand la fenêtre du volet n'a pas pu être préparée : les Paramètres seuls, à
+    /// cette page ; rend la main à leur fermeture.
     fn parametres(&mut self, page: Option<String>) -> Result<(), String>;
     /// Le menu gris de Windows, à la place du volet ou du petit menu.
     fn secours(&mut self, d: &Demande);
@@ -281,8 +294,9 @@ pub trait Ouvreur {
     fn noter(&mut self, ligne: String);
 }
 
-/// La boucle du fil des fenêtres : au repos, la surface (volet et petit menu) préparée ;
-/// les Paramètres quand ils sont demandés ; jusqu'à `Demande::Quitter`.
+/// La boucle du fil des fenêtres : la surface (volet et petit menu) préparée au repos, qui
+/// ouvre aussi les Paramètres et les autres fenêtres, jusqu'à `Demande::Quitter`. Elle n'est
+/// refaite que si elle a été fermée (par Windows, ou une erreur).
 pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: &Reception) {
     loop {
         if liens.quitter.load(Ordering::Acquire) {
@@ -300,8 +314,8 @@ pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: 
                 Some(d) => d,
                 None => break,
             },
-            Some(d) if impossible || !matches!(d, Demande::Volet { .. } | Demande::Menu { .. }) => d,
-            // Rien (ou un clic arrivé avant la préparation, qu'elle montrera) : la surface.
+            Some(d) if impossible || d == Demande::Quitter => d,
+            // Rien (ou une demande arrivée avant la préparation, qu'elle fera) : la surface.
             premiere => {
                 let r = ouvreur.surface(demandes, premiere);
                 liens.surface_prete.store(0, Ordering::Release);
@@ -338,7 +352,7 @@ pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: 
                 Ok(())
             }
             Demande::Parametres(page) => {
-                liens.devant.store(false, Ordering::Release);
+                // Ici seulement quand la surface est impossible : les Paramètres seuls.
                 liens.fermer.store(false, Ordering::Release);
                 liens.mettre(Ouvert::Parametres);
                 ouvreur.parametres(page)
@@ -402,7 +416,9 @@ pub enum Suite {
     Montrer(Surface),
     /// Déjà montrée avec cette surface : rien.
     Ignorer,
-    /// Une autre fenêtre est demandée : se cacher et rendre la main au fil des fenêtres.
+    /// Les Paramètres sont demandés : le volet se cache, ils s'ouvrent à côté.
+    Parametres,
+    /// Le logiciel se ferme : se cacher et rendre la main au fil des fenêtres.
     Sortir,
 }
 
@@ -411,7 +427,8 @@ pub fn suite(d: &Demande, montree: Option<Surface>) -> Suite {
     let voulue = match d {
         Demande::Volet { .. } => Surface::Volet,
         Demande::Menu { .. } => Surface::Menu,
-        _ => return Suite::Sortir,
+        Demande::Parametres(_) => return Suite::Parametres,
+        Demande::Quitter => return Suite::Sortir,
     };
     if montree == Some(voulue) {
         Suite::Ignorer
@@ -482,7 +499,12 @@ mod tests {
             let s = match d {
                 Demande::Volet { .. } => Surface::Volet,
                 Demande::Menu { .. } => Surface::Menu,
-                _ => return false,
+                Demande::Parametres(page) => {
+                    // Ouverts dans la même boucle, sans quitter la surface.
+                    self.parametres.push(page.clone());
+                    return true;
+                }
+                Demande::Quitter => return false,
             };
             self.ouvertures.push((s, self.preparations));
             true
@@ -497,7 +519,7 @@ mod tests {
         ) -> Result<Option<Demande>, (String, Option<Demande>)> {
             self.preparations += 1;
             if let Some(d) = premiere {
-                assert!(self.montrer(&d), "seul un clic arrive avant la préparation");
+                assert!(self.montrer(&d), "Quitter n'arrive jamais avant la préparation");
             }
             loop {
                 match demandes.recevoir() {
@@ -508,7 +530,7 @@ mod tests {
         }
 
         fn parametres(&mut self, page: Option<String>) -> Result<(), String> {
-            self.parametres.push(page);
+            self.parametres.push(page.map(|p| format!("seuls:{p}")));
             Ok(())
         }
 
@@ -536,13 +558,14 @@ mod tests {
 
     /// Règle : la première ouverture aussi rapide que les suivantes. La surface (volet et
     /// petit menu) est préparée une fois au repos ; deux ouvertures (et plus) ne la
-    /// reconstruisent pas. Elle n'est refaite qu'après une autre fenêtre (les Paramètres),
-    /// au repos ; un clic arrivé avant la préparation n'est pas perdu.
+    /// reconstruisent pas, ni les Paramètres, ouverts dans la même boucle. Une demande
+    /// arrivée avant la préparation n'est pas perdue.
     #[test]
     fn deux_ouvertures_ne_reconstruisent_pas_le_volet() {
         let liens = Liens::default();
         let (envoi, reception) = canal();
         for d in [
+            Demande::Parametres(None),
             volet(),
             volet(),
             menu(),
@@ -556,7 +579,7 @@ mod tests {
         }
         let mut faux = Faux::default();
         boucle_des_fenetres(&liens, &mut faux, &reception);
-        assert_eq!(faux.preparations, 2, "{:?}", faux.ouvertures);
+        assert_eq!(faux.preparations, 1, "{:?}", faux.ouvertures);
         assert_eq!(
             faux.ouvertures,
             vec![
@@ -564,11 +587,11 @@ mod tests {
                 (Surface::Volet, 1),
                 (Surface::Menu, 1),
                 (Surface::Volet, 1),
-                (Surface::Menu, 2),
-                (Surface::Volet, 2),
+                (Surface::Menu, 1),
+                (Surface::Volet, 1),
             ]
         );
-        assert_eq!(faux.parametres, vec![Some("general".to_string())]);
+        assert_eq!(faux.parametres, vec![None, Some("general".to_string())]);
     }
 
     /// Le logiciel se ferme : plus rien n'est préparé.
@@ -598,6 +621,26 @@ mod tests {
         assert_eq!(faux.parametres, vec![None]);
     }
 
+    /// Les Paramètres ouverts dans la boucle comptent comme « ouverts » pour l'icône (un
+    /// clic les ramène devant).
+    #[test]
+    fn parametres_ouverts_dans_la_boucle() {
+        struct Rien;
+        impl crate::autres_fenetres::Contenu for Rien {
+            fn dessiner(&mut self, _: &mut egui::Ui, _: &mut crate::autres_fenetres::Cadre<'_>) {}
+        }
+        let liens = Liens::default();
+        assert_eq!(liens.ouvert(), Ouvert::Rien);
+        liens.autres.ouvrir(
+            crate::parametres::CLE_FENETRE,
+            crate::autres_fenetres::Ouverture::new("Paramètres", [100.0, 100.0]),
+            Rien,
+        );
+        assert_eq!(liens.ouvert(), Ouvert::Parametres);
+        liens.mettre(Ouvert::Surface(Surface::Volet));
+        assert_eq!(liens.ouvert(), Ouvert::Surface(Surface::Volet));
+    }
+
     /// Clic gauche : le volet ; clic droit : le petit menu ; une autre fenêtre : on rend la
     /// main. Un deuxième clic pendant l'ouverture ne rouvre rien.
     #[test]
@@ -609,7 +652,8 @@ mod tests {
             suite(&menu(), Some(Surface::Volet)),
             Suite::Montrer(Surface::Menu)
         );
-        assert_eq!(suite(&Demande::Parametres(None), None), Suite::Sortir);
+        assert_eq!(suite(&Demande::Parametres(None), None), Suite::Parametres);
+
         assert_eq!(suite(&Demande::Quitter, Some(Surface::Menu)), Suite::Sortir);
     }
 
