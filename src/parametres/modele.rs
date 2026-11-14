@@ -6,6 +6,7 @@
 use std::time::{Duration, Instant};
 
 use crate::icones;
+use crate::textes::Textes;
 
 /// Une page de la navigation.
 #[derive(Debug, Clone, PartialEq)]
@@ -41,39 +42,44 @@ pub const GENERAL: &str = "general";
 pub const MISE_A_JOUR: &str = "mise_a_jour";
 pub const A_PROPOS: &str = "a_propos";
 
-/// Les trois pages communes, toujours en bas, dans cet ordre, avec ces noms et ces icônes.
-pub fn pages_communes() -> [Page; 3] {
+/// Les trois pages communes, toujours en bas, dans cet ordre, avec ces noms (dans la langue
+/// de `t`) et ces icônes.
+pub fn pages_communes(t: &Textes) -> [Page; 3] {
     [
-        Page::new(GENERAL, "Général", icones::REGLAGES).avec_mots(&[
-            "Démarrer avec Windows",
-            "Langue",
-            "Notifications",
-            "Ouvrir le journal",
-            "Rétablir les réglages par défaut",
+        Page::new(GENERAL, t.general, icones::REGLAGES).avec_mots(&[
+            t.demarrer_avec_windows,
+            t.langue,
+            t.notifications,
+            t.ouvrir_le_journal,
+            t.retablir,
         ]),
-        Page::new(MISE_A_JOUR, "Mise à jour", icones::MISE_A_JOUR).avec_mots(&[
-            "Rechercher une mise à jour",
-            "Dossier des installateurs",
-            "Installer maintenant",
-            "Nouveautés",
+        Page::new(MISE_A_JOUR, t.mise_a_jour, icones::MISE_A_JOUR).avec_mots(&[
+            t.rechercher_mise_a_jour,
+            t.dossier_installateurs,
+            t.installer_maintenant,
+            t.nouveautes,
         ]),
-        Page::new(A_PROPOS, "À propos", icones::A_PROPOS).avec_mots(&["Version", "Licence", "Crédits"]),
+        Page::new(A_PROPOS, t.a_propos, icones::A_PROPOS).avec_mots(&[
+            t.version.trim_end_matches("{}").trim(),
+            t.licence,
+            t.credits,
+        ]),
     ]
 }
 
 /// La page « Accueil », facultative, en premier.
-pub fn page_accueil() -> Page {
-    Page::new(ACCUEIL, "Accueil", icones::ACCUEIL)
+pub fn page_accueil(t: &Textes) -> Page {
+    Page::new(ACCUEIL, t.accueil, icones::ACCUEIL)
 }
 
 /// Toute la navigation : l'Accueil s'il est voulu, les pages propres au logiciel (sans
 /// doublon avec une clé commune), puis Général, Mise à jour, À propos.
-pub fn navigation(accueil: bool, propres: &[Page]) -> Vec<Page> {
-    let communes = pages_communes();
+pub fn navigation(t: &Textes, accueil: bool, propres: &[Page]) -> Vec<Page> {
+    let communes = pages_communes(t);
     let reservee = |c: &str| c == ACCUEIL || communes.iter().any(|p| p.cle == c);
     let mut v = Vec::new();
     if accueil {
-        v.push(page_accueil());
+        v.push(page_accueil(t));
     }
     for p in propres {
         if !reservee(&p.cle) && !v.iter().any(|q: &Page| q.cle == p.cle) {
@@ -253,7 +259,7 @@ mod tests {
     /// avec ces noms et ces icônes (E713, E895, E946).
     #[test]
     fn ordre_des_pages() {
-        let n = navigation(true, &propres());
+        let n = navigation(&crate::textes::FRANCAIS, true, &propres());
         let cles: Vec<&str> = n.iter().map(|p| p.cle.as_str()).collect();
         assert_eq!(
             cles,
@@ -275,7 +281,7 @@ mod tests {
                 ("À propos", '\u{E946}')
             ]
         );
-        assert_eq!(navigation(false, &[]).len(), 3);
+        assert_eq!(navigation(&crate::textes::FRANCAIS, false, &[]).len(), 3);
     }
 
     #[test]
@@ -294,7 +300,7 @@ mod tests {
         assert_eq!(page_demandee(&["--parametres", "../../x"]), Some(None));
         let long = "a".repeat(41);
         assert_eq!(page_demandee(&["--parametres", long.as_str()]), Some(None));
-        let n = navigation(false, &propres());
+        let n = navigation(&crate::textes::FRANCAIS, false, &propres());
         assert_eq!(rang_de_page(&n, Some("a_propos")), 4);
         assert_eq!(rang_de_page(&n, Some("inconnue")), 0);
         assert_eq!(rang_de_page(&n, None), 0);
@@ -302,7 +308,7 @@ mod tests {
 
     #[test]
     fn recherche_sans_accents() {
-        let n = navigation(true, &propres());
+        let n = navigation(&crate::textes::FRANCAIS, true, &propres());
         assert_eq!(chercher(&n, "luminosite"), vec![1]);
         assert_eq!(chercher(&n, "DÉMARRER windows"), vec![3]);
         assert_eq!(chercher(&n, "  "), Vec::<usize>::new());

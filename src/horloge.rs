@@ -312,9 +312,9 @@ impl Ouvreur for Fenetres {
     }
 
     fn parametres(&mut self, page: Option<String>) -> Result<(), String> {
-        crate::parametres::fenetre::ouvrir(
+        crate::parametres::fenetre::ouvrir_seuls(
             self.logiciel.clone(),
-            self.liens.clone(),
+            Some(self.liens.clone()),
             page,
             self.polices.clone(),
         )
@@ -610,7 +610,8 @@ impl Principal {
     /// s'ouvrir (carte graphique sans OpenGL, polices absentes). Les mêmes lignes, dans le
     /// même ordre.
     fn menu_de_secours(&mut self, x: i32, y: i32) {
-        let lignes = menu::lignes(&self.logiciel.actions_menu(), &self.logiciel.lignes_en_plus());
+        let l = &self.logiciel;
+        let lignes = menu::lignes(l.textes(), &l.actions_menu(), &l.lignes_en_plus());
         // SAFETY: menu créé, rempli de chaînes vivantes pendant chaque appel, affiché puis
         // détruit ici ; la fenêtre est celle de ce fil.
         let choix = unsafe {

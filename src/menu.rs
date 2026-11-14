@@ -1,10 +1,12 @@
 //! Le petit menu de l'icône (clic droit), en calcul pur (règles : interface Windows 11,
-//! point 10) : toujours dans cet ordre, avec ces mots et ces icônes dans tous les logiciels :
+//! point 10) : toujours dans cet ordre, avec ces mots ([`crate::textes`]) et ces icônes dans
+//! tous les logiciels :
 //! les une ou deux actions propres au logiciel, un trait, puis « Paramètres » (E713),
 //! « Rechercher une mise à jour » (E895), les lignes communes de plus (« Ouvrir le
 //! journal »…), et « Quitter » en dernier.
 
 use crate::icones;
+use crate::textes::Textes;
 
 /// Une ligne du petit menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,9 +45,9 @@ impl Action {
         }
     }
 
-    /// La ligne commune « Ouvrir le journal » (clé `journal`).
-    pub fn ouvrir_le_journal() -> Action {
-        Action::new("journal", icones::JOURNAL, "Ouvrir le journal")
+    /// La ligne commune « Ouvrir le journal » (clé `journal`), dans la langue de `t`.
+    pub fn ouvrir_le_journal(t: &Textes) -> Action {
+        Action::new(crate::cles::JOURNAL, icones::JOURNAL, t.ouvrir_le_journal)
     }
 }
 
@@ -54,15 +56,10 @@ pub const ACTIONS_PROPRES_MAX: usize = 2;
 /// Les lignes communes de plus : deux au plus.
 pub const LIGNES_EN_PLUS_MAX: usize = 2;
 
-/// Les textes communs, les mêmes dans tous les logiciels.
-pub const PARAMETRES: &str = "Paramètres";
-pub const RECHERCHER: &str = "Rechercher une mise à jour";
-pub const QUITTER: &str = "Quitter";
-
 /// Les lignes du petit menu, dans l'ordre des règles ; `None` : un trait de séparation
 /// (seulement entre les actions propres et les lignes communes). Au-delà de deux, les
 /// actions propres et les lignes de plus sont ignorées.
-pub fn lignes(propres: &[Action], en_plus: &[Action]) -> Vec<Option<Ligne>> {
+pub fn lignes(t: &Textes, propres: &[Action], en_plus: &[Action]) -> Vec<Option<Ligne>> {
     let ligne = |a: &Action| {
         Some(Ligne {
             icone: a.icone,
@@ -76,18 +73,18 @@ pub fn lignes(propres: &[Action], en_plus: &[Action]) -> Vec<Option<Ligne>> {
     }
     l.push(Some(Ligne {
         icone: icones::REGLAGES,
-        texte: PARAMETRES.into(),
+        texte: t.parametres.into(),
         quoi: Choix::Parametres,
     }));
     l.push(Some(Ligne {
         icone: icones::MISE_A_JOUR,
-        texte: RECHERCHER.into(),
+        texte: t.rechercher_mise_a_jour.into(),
         quoi: Choix::RechercherMiseAJour,
     }));
     l.extend(en_plus.iter().take(LIGNES_EN_PLUS_MAX).map(ligne));
     l.push(Some(Ligne {
         icone: icones::QUITTER,
-        texte: QUITTER.into(),
+        texte: t.quitter.into(),
         quoi: Choix::Quitter,
     }));
     l
@@ -108,7 +105,8 @@ mod tests {
     #[test]
     fn ordre_du_petit_menu() {
         let propres = [Action::new("relire", '\u{E72C}', "Relire les écrans")];
-        let l = lignes(&propres, &[Action::ouvrir_le_journal()]);
+        let fr = &crate::textes::FRANCAIS;
+        let l = lignes(fr, &propres, &[Action::ouvrir_le_journal(fr)]);
         assert_eq!(
             textes(&l),
             [
@@ -126,7 +124,7 @@ mod tests {
         assert_eq!(l.last().cloned().flatten().map(|l| l.quoi), Some(Choix::Quitter));
         // Sans action propre : pas de trait en tête.
         assert_eq!(
-            textes(&lignes(&[], &[])),
+            textes(&lignes(fr, &[], &[])),
             ["Paramètres", "Rechercher une mise à jour", "Quitter"]
         );
         // Trois actions propres : deux gardées.
@@ -135,6 +133,12 @@ mod tests {
             Action::new("b", '\u{E710}', "B"),
             Action::new("c", '\u{E710}', "C"),
         ];
-        assert_eq!(textes(&lignes(&trois, &[]))[..3], ["A", "B", "—"]);
+        assert_eq!(textes(&lignes(fr, &trois, &[]))[..3], ["A", "B", "—"]);
+        // En anglais : les mêmes lignes, les mots de la langue.
+        let en = &crate::textes::ANGLAIS;
+        assert_eq!(
+            textes(&lignes(en, &[], &[Action::ouvrir_le_journal(en)])),
+            ["Settings", "Check for updates", "Open the log", "Quit"]
+        );
     }
 }

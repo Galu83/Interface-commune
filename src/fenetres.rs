@@ -72,7 +72,7 @@ pub struct Liens {
     /// Le volet ou le petit menu montré doit se fermer.
     pub fermer: AtomicBool,
     /// Les Paramètres ouverts doivent montrer cette page.
-    pub page_voulue: Mutex<Option<String>>,
+    pub page_voulue: Arc<Mutex<Option<String>>>,
     /// Les Paramètres et les autres fenêtres du logiciel, dans la boucle des fenêtres.
     pub autres: AutresFenetres,
 }

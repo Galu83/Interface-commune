@@ -1,25 +1,34 @@
-//! La fenêtre des Paramètres (sous Windows) : coins arrondis et barre de titre sombre par
-//! Windows, aucune animation à nous (Windows anime déjà les fenêtres), taille et place
-//! retenues d'une ouverture à l'autre et toujours en entier sur un écran, taille minimale.
+//! La fenêtre des Paramètres (sous Windows) : « Paramètres de <logiciel> », coins arrondis et
+//! barre de titre sombre par Windows, aucune animation à nous (Windows anime déjà les
+//! fenêtres), taille et place retenues d'une ouverture à l'autre et toujours en entier sur un
+//! écran, taille minimale.
 //!
-//! Elle s'ouvre dans la boucle de la bibliothèque, à côté de la fenêtre du volet
-//! ([`ouvrir_dans`]). Secours, si cette fenêtre n'a pas pu être préparée : les Paramètres
-//! seuls, comme fenêtre principale d'une boucle ([`ouvrir`]).
+//! Trois façons de l'ouvrir :
+//! - avec l'icône de la bibliothèque (`horloge`) : dans sa boucle, à côté du volet
+//!   ([`ouvrir_dans`]) ;
+//! - dans la boucle d'un logiciel qui a la sienne : ses [`AutresFenetres`] dessinées par sa
+//!   fenêtre principale ([`ouvrir_dans_boucle`]), ou [`super::Parametres::dessiner`] dans sa
+//!   propre fenêtre ;
+//! - seuls, comme fenêtre principale d'une boucle ([`ouvrir_seuls`]) : un logiciel sans autre
+//!   fenêtre, ou le secours quand la fenêtre du volet n'a pas pu être préparée.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use eframe::egui::{self, FontDefinitions, ViewportCommand};
 
 use super::{CLE_FENETRE, Parametres, TAILLE, TAILLE_MIN};
-use crate::Logiciel;
 use crate::apparence::{Apparence, couleur};
-use crate::autres_fenetres::{Cadre, Contenu, Ouverture};
+use crate::autres_fenetres::{AutresFenetres, Cadre, Contenu, Ouverture};
 use crate::fenetres::Liens;
 use crate::place::{Place, garder_visible, place_valable};
 use crate::systeme::{self, hwnd_de};
+use crate::{Logiciel, Reglages};
 
-/// L'icône de la fenêtre (barre des tâches, Alt+Tab), en RVBA.
-pub fn icone_fenetre(l: &dyn Logiciel, sombre: bool) -> egui::IconData {
+/// La page que les Paramètres ouverts doivent montrer (une notification, `--parametres`…).
+pub type PageVoulue = Arc<Mutex<Option<String>>>;
+
+/// L'icône de la fenêtre (barre des tâches, Alt+Tab), en RVBA : l'icône du logiciel.
+pub fn icone_fenetre(l: &dyn Reglages, sombre: bool) -> egui::IconData {
     let t = 32;
     let mut px = (l.identite().icone)(t, sombre);
     if px.len() != (t * t * 4) as usize {
@@ -36,7 +45,7 @@ pub fn icone_fenetre(l: &dyn Logiciel, sombre: bool) -> egui::IconData {
 }
 
 /// La place retenue, ramenée sur l'écran le plus proche (il a pu changer).
-fn place_retenue(l: &dyn Logiciel) -> Option<Place> {
+fn place_retenue(l: &dyn Reglages) -> Option<Place> {
     l.place_parametres().and_then(place_valable).and_then(|p| {
         let travail = systeme::zone_de_travail_pres_de([p[0], p[1], p[0] + p[2], p[1] + p[3]])?;
         Some(garder_visible(
@@ -49,8 +58,8 @@ fn place_retenue(l: &dyn Logiciel) -> Option<Place> {
 
 /// Comment s'ouvrent les Paramètres : « Paramètres de <logiciel> », leur taille et leur
 /// place retenues (sinon centrés sur l'écran de la souris).
-pub fn ouverture(l: &dyn Logiciel, sombre: bool) -> Ouverture {
-    Ouverture::new(&format!("Paramètres de {}", l.identite().nom), TAILLE)
+pub fn ouverture(l: &dyn Reglages, sombre: bool) -> Ouverture {
+    Ouverture::new(&Parametres::titre_fenetre(l), TAILLE)
         .taille_min(TAILLE_MIN)
         .icone(icone_fenetre(l, sombre))
         .place(place_retenue(l))
@@ -58,19 +67,19 @@ pub fn ouverture(l: &dyn Logiciel, sombre: bool) -> Ouverture {
 
 /// Les Paramètres, contenu d'une fenêtre de la boucle.
 pub struct ContenuParametres {
-    logiciel: Arc<dyn Logiciel>,
-    liens: Arc<Liens>,
+    reglages: Arc<dyn Reglages>,
+    voulue: PageVoulue,
     parametres: Parametres,
     /// Le thème de l'icône de la fenêtre.
     sombre: Option<bool>,
 }
 
 impl ContenuParametres {
-    pub fn new(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, page: Option<&str>) -> Self {
-        let parametres = Parametres::new(&*logiciel, page);
+    pub fn new(reglages: Arc<dyn Reglages>, voulue: PageVoulue, page: Option<&str>) -> Self {
+        let parametres = Parametres::new(&*reglages, page);
         ContenuParametres {
-            logiciel,
-            liens,
+            reglages,
+            voulue,
             parametres,
             sombre: None,
         }
@@ -82,48 +91,62 @@ impl Contenu for ContenuParametres {
         let ctx = ui.ctx().clone();
         let p = cadre.palette;
         if self.sombre.is_some_and(|s| s != p.sombre) {
-            let icone = icone_fenetre(&*self.logiciel, p.sombre);
+            let icone = icone_fenetre(&*self.reglages, p.sombre);
             ctx.send_viewport_cmd(ViewportCommand::Icon(Some(Arc::new(icone))));
         }
         self.sombre = Some(p.sombre);
-        if let Some(page) = self.liens.page_voulue.lock().ok().and_then(|mut v| v.take()) {
+        if let Some(page) = self.voulue.lock().ok().and_then(|mut v| v.take()) {
             self.parametres.aller_a(&page);
         }
-        let l = self.logiciel.clone();
+        // Le titre suit la langue.
+        cadre.titre(&Parametres::titre_fenetre(&*self.reglages));
+        let l = self.reglages.clone();
         self.parametres.dessiner(ui, p, &*l);
     }
 
     fn fermee(&mut self, place: Option<Place>) {
         if let Some(p) = place {
-            self.logiciel.retenir_place(p);
+            self.reglages.retenir_place(p);
         }
     }
 }
 
-/// Ouvre les Paramètres à cette page dans la boucle de la bibliothèque ; déjà ouverts, ils
-/// vont à cette page et passent devant.
-pub fn ouvrir_dans(liens: &Arc<Liens>, logiciel: &Arc<dyn Logiciel>, page: Option<String>) {
-    if liens.autres.ouverte(CLE_FENETRE) {
+/// Ouvre les Paramètres à cette page parmi les fenêtres d'une boucle ; déjà ouverts, ils
+/// vont à cette page et passent devant. `voulue` : partagée avec le logiciel, pour changer
+/// de page plus tard.
+pub fn ouvrir_dans_boucle(
+    autres: &AutresFenetres,
+    reglages: &Arc<dyn Reglages>,
+    voulue: &PageVoulue,
+    page: Option<String>,
+) {
+    if autres.ouverte(CLE_FENETRE) {
         if page.is_some()
-            && let Ok(mut p) = liens.page_voulue.lock()
+            && let Ok(mut p) = voulue.lock()
         {
             *p = page;
         }
-        liens.autres.devant(CLE_FENETRE);
+        autres.devant(CLE_FENETRE);
         return;
     }
-    if let Ok(mut p) = liens.page_voulue.lock() {
+    if let Ok(mut p) = voulue.lock() {
         *p = None;
     }
     let sombre = crate::apparence::choix_windows().sombre;
-    liens.autres.ouvrir(
+    autres.ouvrir(
         CLE_FENETRE,
-        ouverture(&**logiciel, sombre),
-        ContenuParametres::new(logiciel.clone(), liens.clone(), page.as_deref()),
+        ouverture(&**reglages, sombre),
+        ContenuParametres::new(reglages.clone(), voulue.clone(), page.as_deref()),
     );
 }
 
-/// Les Paramètres seuls, fenêtre principale de leur boucle (secours).
+/// Ouvre les Paramètres dans la boucle de la bibliothèque (icône près de l'horloge).
+pub fn ouvrir_dans(liens: &Arc<Liens>, logiciel: &Arc<dyn Logiciel>, page: Option<String>) {
+    let reglages: Arc<dyn Reglages> = logiciel.clone();
+    ouvrir_dans_boucle(&liens.autres, &reglages, &liens.page_voulue, page);
+}
+
+/// Les Paramètres seuls, fenêtre principale de leur boucle.
 struct Seuls {
     contenu: ContenuParametres,
     apparence: Apparence,
@@ -173,23 +196,29 @@ impl eframe::App for Seuls {
         let p = self.apparence.palette.clone();
         let mut cadre = Cadre::new(&p, self.hwnd, self.images, self.montree);
         self.contenu.dessiner(ui, &mut cadre);
+        if let Some(t) = cadre.titre_demande() {
+            let t = t.to_string();
+            ctx.send_viewport_cmd(ViewportCommand::Title(t));
+        }
         if cadre.fermeture_demandee() {
             ctx.send_viewport_cmd(ViewportCommand::Close);
         }
     }
 }
 
-/// Secours : ouvre les Paramètres seuls à cette page (sa clé), comme fenêtre principale d'une
-/// boucle ; rend la main quand la fenêtre se ferme.
-pub fn ouvrir(
-    logiciel: Arc<dyn Logiciel>,
-    liens: Arc<Liens>,
+/// Ouvre les Paramètres seuls à cette page (sa clé), comme fenêtre principale d'une boucle,
+/// sur le fil qui appelle ; rend la main quand la fenêtre se ferme. `liens` : pour les
+/// redessiner et changer de page depuis un autre fil (`Liens::redessiner`,
+/// `Liens::page_voulue`).
+pub fn ouvrir_seuls(
+    reglages: Arc<dyn Reglages>,
+    liens: Option<Arc<Liens>>,
     page: Option<String>,
     polices: FontDefinitions,
 ) -> Result<(), String> {
     let apparence = Apparence::new(None);
-    let nom = logiciel.identite().nom.clone();
-    let o = ouverture(&*logiciel, apparence.palette.sombre);
+    let nom = reglages.identite().nom.clone();
+    let o = ouverture(&*reglages, apparence.palette.sombre);
     let place = o.place;
     let mut options = crate::volet::options(o.constructeur());
     options.centered = place.is_none();
@@ -199,10 +228,16 @@ pub fn ouvrir(
         Box::new(move |cc| {
             cc.egui_ctx.set_fonts(polices);
             apparence.appliquer(&cc.egui_ctx);
-            if let Ok(mut c) = liens.contexte.lock() {
-                *c = Some(cc.egui_ctx.clone());
-            }
-            let contenu = ContenuParametres::new(logiciel, liens, page.as_deref());
+            let voulue = match &liens {
+                Some(l) => {
+                    if let Ok(mut c) = l.contexte.lock() {
+                        *c = Some(cc.egui_ctx.clone());
+                    }
+                    l.page_voulue.clone()
+                }
+                None => PageVoulue::default(),
+            };
+            let contenu = ContenuParametres::new(reglages, voulue, page.as_deref());
             Ok(Box::new(Seuls {
                 contenu,
                 apparence,

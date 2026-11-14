@@ -12,9 +12,16 @@
 //!   Mise à jour et À propos, cartes, interrupteurs, effet immédiat avec « Annuler »,
 //!   bandeau de redémarrage, taille retenue, `--parametres <page>`.
 //!
-//! Rien n'y est propre à un logiciel : le nom, la version, l'icône, les pages propres, les
-//! actions du petit menu, les réglages rapides du volet et les textes viennent du logiciel,
-//! par le trait [`Logiciel`].
+//! Rien n'y est propre à un logiciel : le nom, la version, le logo, les pages propres, les
+//! actions du petit menu, les réglages rapides du volet viennent du logiciel ; les mots
+//! communs, en français ou en anglais, de [`textes`].
+//!
+//! Deux traits, pour prendre ce dont on a besoin :
+//! - [`Reglages`] : ce qu'il faut aux **Paramètres seuls** (un logiciel qui garde son icône,
+//!   son menu et sa boucle de fenêtres peut ne prendre qu'eux : [`parametres::Parametres`]
+//!   dans sa fenêtre, ou [`autres_fenetres`] et `parametres::fenetre::ouvrir_seuls`) ;
+//! - [`Logiciel`] (qui comprend [`Reglages`]) : en plus, l'icône près de l'horloge, le volet
+//!   et le petit menu (`horloge::Horloge`).
 
 pub mod apparence;
 pub mod autres_fenetres;
@@ -27,6 +34,7 @@ pub mod parametres;
 pub mod place;
 pub mod polices;
 pub mod surface;
+pub mod textes;
 pub mod theme;
 pub mod verification;
 
@@ -40,6 +48,7 @@ pub mod systeme;
 pub mod volet;
 
 pub use parametres::modele::{Page, Valeur};
+pub use textes::{Langue, Textes};
 pub use theme::{Palette, Rgb};
 
 /// Qui est le logiciel.
@@ -57,8 +66,33 @@ pub struct Identite {
     /// prémultiplié), lignes de haut en bas ; `barre_sombre` : la barre des tâches est
     /// sombre. Aussi l'icône des Paramètres (barre des tâches, Alt+Tab).
     pub icone: fn(taille: u32, barre_sombre: bool) -> Vec<u8>,
-    /// Le glyphe de Segoe Fluent Icons montré à côté du nom, en haut de la navigation.
-    pub glyphe: char,
+    /// Son vrai logo, en haut de la navigation des Paramètres et dans « À propos » :
+    /// `taille` × `taille` pixels en RVBA (alpha non prémultiplié), ou `None` si le logo ne
+    /// peut pas être fait à cette taille. Sans logo, l'icône sert (sur fond sombre si le
+    /// thème l'est).
+    pub logo: Option<FaireLogo>,
+}
+
+/// Fait le logo à une taille (pixels) : RVBA, ou `None`.
+pub type FaireLogo = fn(taille: u32) -> Option<Vec<u8>>;
+
+impl Identite {
+    /// Le logo à cette taille (pixels), en RVBA ; à défaut, l'icône. `None` si ni l'un ni
+    /// l'autre n'a la bonne taille.
+    pub fn logo_rvba(&self, taille: u32, sombre: bool) -> Option<Vec<u8>> {
+        let n = (taille as usize) * (taille as usize) * 4;
+        if let Some(logo) = self.logo {
+            return logo(taille).filter(|px| px.len() == n);
+        }
+        let mut px = (self.icone)(taille, sombre);
+        if px.len() != n {
+            return None;
+        }
+        for p in px.chunks_mut(4) {
+            p.swap(0, 2);
+        }
+        Some(px)
+    }
 }
 
 /// L'état montré en haut du volet, en gros et en couleur (règles : point 6).
@@ -140,47 +174,25 @@ pub mod cles {
     pub const REDEMARRER: &str = "redemarrer";
 }
 
-/// Ce qu'un logiciel donne à l'interface commune. Toutes les méthodes sont appelées sur le
-/// fil des fenêtres, à chaque image pour celles qui décrivent : elles rendent ce que le
-/// logiciel a déjà en mémoire, sans disque, réseau ni attente. Celles qui agissent
-/// (`action`, `changer`…) envoient l'ordre au logiciel et rendent la main tout de suite.
-pub trait Logiciel: Send + Sync + 'static {
+/// Ce qu'un logiciel donne aux Paramètres. Toutes les méthodes sont appelées sur le fil des
+/// fenêtres, à chaque image pour celles qui décrivent : elles rendent ce que le logiciel a
+/// déjà en mémoire, sans disque, réseau ni attente. Celles qui agissent (`action`,
+/// `changer`…) envoient l'ordre au logiciel et rendent la main tout de suite.
+pub trait Reglages: Send + Sync + 'static {
     fn identite(&self) -> &Identite;
 
-    /// L'état, en haut du volet.
-    fn etat(&self) -> Etat;
-
-    /// Les réglages rapides du volet (lignes de [`dessin::ligne`], tuiles…), sous l'état.
-    /// Rend la clé d'une action qui ferme le volet (faite une fois la fenêtre cachée,
-    /// par [`Logiciel::action`]) ; un réglage qui ne ferme pas le volet se change ici.
-    fn dessiner_rapides(&self, _ui: &mut egui::Ui, _p: &Palette) -> Option<String> {
-        None
+    /// Les mots communs écrits par la bibliothèque : le français par défaut ;
+    /// `Textes::de(Langue::Anglais)` pour l'anglais, ou ses propres textes.
+    fn textes(&self) -> &Textes {
+        &textes::FRANCAIS
     }
 
-    /// La largeur qu'il faut aux réglages rapides pour tenir sans couper (points).
-    fn largeur_rapides(&self, _ui: &egui::Ui) -> f32 {
-        0.0
-    }
-
-    /// Les une ou deux actions propres du petit menu.
-    fn actions_menu(&self) -> Vec<menu::Action> {
-        Vec::new()
-    }
-
-    /// Les lignes communes de plus du petit menu, placées avant « Quitter ».
-    fn lignes_en_plus(&self) -> Vec<menu::Action> {
-        vec![menu::Action::ouvrir_le_journal()]
-    }
-
-    /// Une action choisie : du petit menu, du volet, ou une action commune ([`cles`]).
+    /// Une action commune choisie ([`cles`]), ou une action du logiciel.
     fn action(&self, cle: &str);
 
     /// « Rechercher une mise à jour » : la recherche part sur un fil à part ; sa réponse
     /// arrive dans [`Communs::mise_a_jour`].
     fn rechercher_mise_a_jour(&self);
-
-    /// « Quitter » : le logiciel se ferme (il appelle [`fenetres::Liens::tout_fermer`]).
-    fn quitter(&self);
 
     /// La page « Accueil » (le résumé de l'état) est-elle voulue ?
     fn accueil(&self) -> bool {
@@ -209,6 +221,40 @@ pub trait Logiciel: Send + Sync + 'static {
 
     /// La place des Paramètres à retenir, à leur fermeture.
     fn retenir_place(&self, _place: place::Place) {}
+}
+
+/// Ce qu'un logiciel donne à l'interface commune entière : les Paramètres ([`Reglages`]),
+/// plus l'icône près de l'horloge, le volet et le petit menu. Mêmes règles d'appel que
+/// [`Reglages`].
+pub trait Logiciel: Reglages {
+    /// L'état, en haut du volet.
+    fn etat(&self) -> Etat;
+
+    /// Les réglages rapides du volet (lignes de [`dessin::ligne`], tuiles…), sous l'état.
+    /// Rend la clé d'une action qui ferme le volet (faite une fois la fenêtre cachée,
+    /// par [`Logiciel::action`]) ; un réglage qui ne ferme pas le volet se change ici.
+    fn dessiner_rapides(&self, _ui: &mut egui::Ui, _p: &Palette) -> Option<String> {
+        None
+    }
+
+    /// La largeur qu'il faut aux réglages rapides pour tenir sans couper (points).
+    fn largeur_rapides(&self, _ui: &egui::Ui) -> f32 {
+        0.0
+    }
+
+    /// Les une ou deux actions propres du petit menu.
+    fn actions_menu(&self) -> Vec<menu::Action> {
+        Vec::new()
+    }
+
+    /// Les lignes communes de plus du petit menu, placées avant « Quitter » (« Ouvrir le
+    /// journal » par défaut, dans la langue de [`Reglages::textes`]).
+    fn lignes_en_plus(&self) -> Vec<menu::Action> {
+        vec![menu::Action::ouvrir_le_journal(self.textes())]
+    }
+
+    /// « Quitter » : le logiciel se ferme (il appelle [`fenetres::Liens::tout_fermer`]).
+    fn quitter(&self);
 
     /// Une ligne pour le journal du logiciel. Appelée depuis un fil à part : le fil des
     /// fenêtres ne touche jamais au disque pendant une ouverture.

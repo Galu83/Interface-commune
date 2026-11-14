@@ -59,6 +59,10 @@ fn version(l: &dyn Logiciel) -> String {
     format!("{} {}", i.nom, i.version)
 }
 
+fn lignes_du_menu(l: &dyn Logiciel) -> Vec<Option<menu::Ligne>> {
+    menu::lignes(l.textes(), &l.actions_menu(), &l.lignes_en_plus())
+}
+
 /// La largeur de la surface (points) : ce qu'il faut pour que ses textes tiennent sur une
 /// ligne, mesurés avec les polices du moment, entre la largeur minimale et [`LARGEUR_MAX`].
 pub fn largeur(ui: &egui::Ui, s: Surface, l: &dyn Logiciel) -> f32 {
@@ -71,7 +75,7 @@ pub fn largeur(ui: &egui::Ui, s: Surface, l: &dyn Logiciel) -> f32 {
     let (min, besoin) = match s {
         Surface::Menu => (
             LARGEUR_MENU,
-            menu::lignes(&l.actions_menu(), &l.lignes_en_plus())
+            lignes_du_menu(l)
                 .iter()
                 .flatten()
                 .map(|li| {
@@ -169,7 +173,7 @@ pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Optio
                 .size(TAILLE_PETIT),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if bouton_icone(ui, p, icones::REGLAGES, menu::PARAMETRES).clicked() {
+            if bouton_icone(ui, p, icones::REGLAGES, l.textes().parametres).clicked() {
                 choisi = Some(Choisi::Parametres);
             }
         });
@@ -180,7 +184,7 @@ pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Optio
 /// Le petit menu, dans l'ordre des règles.
 pub fn dessiner_menu(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Option<Choisi> {
     let mut choisi = None;
-    for li in menu::lignes(&l.actions_menu(), &l.lignes_en_plus()) {
+    for li in lignes_du_menu(l) {
         match li {
             None => separateur(ui, p),
             Some(li) => {

@@ -7,6 +7,7 @@ use egui::{Align2, CornerRadius, FontId, Response, Sense, Stroke, StrokeKind, Ui
 use crate::apparence::couleur;
 use crate::icones;
 use crate::polices::{icones as police_icones, semibold, titre};
+use crate::textes::Textes;
 use crate::theme::{Palette, Rgb};
 
 /// Contour de focus (clavier) : 2 px de la couleur du texte, comme Windows.
@@ -242,10 +243,10 @@ pub fn bouton(ui: &mut Ui, p: &Palette, glyphe: Option<char>, texte: &str, genre
 }
 
 /// Un interrupteur avec « Activé » ou « Désactivé » écrit à sa gauche (règles : point 7).
-pub fn interrupteur_ecrit(ui: &mut Ui, p: &Palette, actif: &mut bool) -> Response {
+pub fn interrupteur_ecrit(ui: &mut Ui, p: &Palette, t: &Textes, actif: &mut bool) -> Response {
     ui.horizontal(|ui| {
         let r = interrupteur(ui, p, actif);
-        ui.label(if *actif { "Activé" } else { "Désactivé" });
+        ui.label(if *actif { t.active } else { t.desactive });
         r
     })
     .inner

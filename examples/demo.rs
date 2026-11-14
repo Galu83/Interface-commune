@@ -17,8 +17,8 @@ mod demo {
     use interface_commune::parametres::Contexte;
     use interface_commune::theme::couverture;
     use interface_commune::{
-        Communs, Etat, EtatMiseAJour, GenreEtat, Identite, Logiciel, Page, Palette, Valeur, dessin, menu,
-        parametres,
+        Communs, Etat, EtatMiseAJour, GenreEtat, Identite, Logiciel, Page, Palette, Reglages, Valeur, dessin,
+        menu, parametres,
     };
 
     /// L'icône de l'exemple : un carré arrondi, de la couleur du texte de la barre des tâches.
@@ -66,10 +66,6 @@ mod demo {
     }
 
     impl Logiciel for Exemple {
-        fn identite(&self) -> &Identite {
-            &self.identite
-        }
-
         fn etat(&self) -> Etat {
             Etat {
                 genre: GenreEtat::Pret,
@@ -99,6 +95,22 @@ mod demo {
             ]
         }
 
+        fn quitter(&self) {
+            if let Ok(p) = self.poste.lock()
+                && let Some(p) = p.as_ref()
+            {
+                p.quitter();
+            }
+        }
+
+        fn noter(&self, _ligne: String) {}
+    }
+
+    impl Reglages for Exemple {
+        fn identite(&self) -> &Identite {
+            &self.identite
+        }
+
         fn action(&self, cle: &str) {
             let Ok(p) = self.poste.lock() else { return };
             let Some(p) = p.as_ref() else { return };
@@ -114,14 +126,6 @@ mod demo {
         }
 
         fn rechercher_mise_a_jour(&self) {}
-
-        fn quitter(&self) {
-            if let Ok(p) = self.poste.lock()
-                && let Some(p) = p.as_ref()
-            {
-                p.quitter();
-            }
-        }
 
         fn pages(&self) -> Vec<Page> {
             vec![Page::new("exemple", "Exemple", '\u{E8BD}')]
@@ -151,8 +155,6 @@ mod demo {
                 self.demarrage.store(b, Ordering::Relaxed);
             }
         }
-
-        fn noter(&self, _ligne: String) {}
     }
 
     pub fn principal() {
@@ -168,7 +170,7 @@ mod demo {
                 licence: "MIT".into(),
                 description: "Un exemple de l'interface commune.".into(),
                 icone,
-                glyphe: '\u{E8BD}',
+                logo: None,
             },
             rapide: AtomicBool::new(false),
             demarrage: AtomicBool::new(false),
