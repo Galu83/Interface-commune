@@ -51,7 +51,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, HICON, ICONINFO, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
     RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetWindowLongPtrW,
     TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE,
-    WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_SETTINGCHANGE, WNDCLASSW, WS_OVERLAPPED,
+    WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WNDCLASSW,
+    WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -147,7 +148,6 @@ pub fn instance_unique(nom: &str) -> Result<Unique, bool> {
 }
 
 /// Une commande du logiciel au fil principal.
-#[derive(Debug, Clone, PartialEq, Eq)]
 enum Commande {
     Notifier {
         texte: String,
@@ -157,6 +157,48 @@ enum Commande {
     Infobulle(String),
     Icone,
     Quitter,
+    /// Du code du logiciel, à faire sur le fil de la fenêtre cachée (son adresse en
+    /// paramètre) : `RegisterHotKey`…
+    Executer(Box<dyn FnOnce(isize) + Send>),
+}
+
+/// Un message de Windows reçu par la fenêtre cachée du logiciel (celle de l'icône).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessageWindows {
+    /// La fenêtre cachée (son adresse).
+    pub fenetre: isize,
+    pub message: u32,
+    pub wparam: usize,
+    pub lparam: isize,
+}
+
+/// Ce que le logiciel fait des messages de Windows de la fenêtre cachée (`WM_HOTKEY`, ses
+/// messages à lui, `WM_POWERBROADCAST`…), sur le fil de l'icône. `Some(résultat)` : traité ;
+/// `None` : Windows fait le traitement par défaut. Il voit aussi, sans pouvoir les arrêter,
+/// `WM_QUERYENDSESSION`, `WM_ENDSESSION` et `WM_SETTINGCHANGE`. Il ne voit jamais les
+/// messages propres à la bibliothèque.
+pub type Recepteur = Box<dyn FnMut(&MessageWindows) -> Option<isize>>;
+
+/// Qui reçoit un message de la fenêtre cachée.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Destinataire {
+    /// La bibliothèque seule (ses messages, la fermeture).
+    Bibliotheque,
+    /// Le logiciel le voit, puis la bibliothèque le traite.
+    LesDeux,
+    /// Le logiciel (sinon : traitement par défaut de Windows).
+    Logiciel,
+}
+
+fn destinataire(msg: u32, taskbar_created: u32) -> Destinataire {
+    match msg {
+        WM_ICONE | WM_COMMANDE | WM_OUVRIR_PARAMETRES | WM_MENU_DE_SECOURS | WM_CLOSE | WM_DESTROY => {
+            Destinataire::Bibliotheque
+        }
+        m if m == taskbar_created && m != 0 => Destinataire::Bibliotheque,
+        WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE => Destinataire::LesDeux,
+        _ => Destinataire::Logiciel,
+    }
 }
 
 /// Ce que fait un clic sur une notification.
@@ -206,6 +248,13 @@ impl Poste {
             probleme,
             au_clic: AuClic::Parametres(page.map(str::to_string)),
         });
+    }
+
+    /// Fait ce code du logiciel sur le fil de la fenêtre cachée de l'icône, qui le reçoit en
+    /// paramètre (son adresse) : par exemple `RegisterHotKey`, qui exige le fil de la fenêtre.
+    /// Les messages arrivent ensuite au récepteur ([`Horloge::recevoir_messages`]).
+    pub fn sur_le_fil_principal(&self, f: impl FnOnce(isize) + Send + 'static) {
+        self.envoyer(Commande::Executer(Box::new(f)));
     }
 
     /// Une notification près de l'horloge ; un clic dessus rend cette action au logiciel
@@ -261,6 +310,7 @@ pub struct Horloge {
     nom: String,
     poste: Poste,
     reception: Reception,
+    messages: Option<Recepteur>,
 }
 
 impl Horloge {
@@ -275,7 +325,15 @@ impl Horloge {
                 file: Arc::default(),
             },
             reception,
+            messages: None,
         }
+    }
+
+    /// Les messages de Windows du logiciel passent par la boucle de l'icône (une seule boucle
+    /// pour tout le programme) : voir [`Recepteur`].
+    pub fn recevoir_messages(mut self, f: impl FnMut(&MessageWindows) -> Option<isize> + 'static) -> Horloge {
+        self.messages = Some(Box::new(f));
+        self
     }
 
     pub fn poste(&self) -> Poste {
@@ -295,6 +353,7 @@ impl Horloge {
             nom,
             poste,
             reception,
+            messages,
         } = self;
         if let Some(page) = parametres {
             let _ = poste.demandes.send(Demande::Parametres(page));
@@ -304,7 +363,7 @@ impl Horloge {
             .name("fenêtres".into())
             .spawn(move || fil_des_fenetres(l2, liens2, reception))
             .map_err(|e| e.to_string())?;
-        let r = boucle(&nom, logiciel, poste.clone());
+        let r = boucle(&nom, logiciel, poste.clone(), messages);
         poste.liens.tout_fermer();
         let _ = poste.demandes.send(Demande::Quitter);
         let _ = fil.join();
@@ -486,6 +545,8 @@ struct Principal {
     clics: Clics,
     /// Ce que fait un clic sur la dernière notification.
     au_clic: AuClic,
+    /// Les messages de Windows du logiciel.
+    messages: Option<Recepteur>,
 }
 
 /// L'état du fil principal, rangé dans la fenêtre cachée (`GWLP_USERDATA`) : aucune
@@ -563,6 +624,7 @@ impl Principal {
                     self.modifier_icone();
                 }
                 Commande::Icone => self.redessiner_icone(true),
+                Commande::Executer(f) => f(self.fenetre.0 as isize),
                 Commande::Quitter => {
                     self.fermer();
                     return;
@@ -630,6 +692,17 @@ impl Principal {
 
     fn ouvrir_parametres(&self, page: Option<String>) {
         self.liens().montrer_page(&self.poste.demandes, page);
+    }
+
+    /// Passe un message au logiciel ; `Some(résultat)` s'il l'a traité.
+    fn transmettre(&mut self, msg: u32, wp: usize, lp: isize) -> Option<isize> {
+        let m = MessageWindows {
+            fenetre: self.fenetre.0 as isize,
+            message: msg,
+            wparam: wp,
+            lparam: lp,
+        };
+        self.messages.as_mut().and_then(|f| f(&m))
     }
 
     /// Un clic sur la dernière notification.
@@ -709,6 +782,7 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
     // SAFETY: la valeur rangée est 0 ou l'adresse de l'état de `boucle`, qui vit jusqu'à ce
     // que `boucle` la remette à 0 ; les messages arrivent sur ce même fil.
     let etat = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } as *const Etat;
+    let mut resultat = 0isize;
     // SAFETY: voir ci-dessus.
     let traite = unsafe { etat.as_ref() }.is_some_and(|p| {
         let Ok(mut p) = p.try_borrow_mut() else {
@@ -718,6 +792,21 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
         if !message_permis(msg, wp.0) {
             // Message interne sans le jeton : venu d'un autre programme, ignoré.
             return true;
+        }
+        match destinataire(msg, p.taskbar_created) {
+            Destinataire::Bibliotheque => {}
+            Destinataire::LesDeux => {
+                let _ = p.transmettre(msg, wp.0, lp.0);
+            }
+            Destinataire::Logiciel => {
+                return match p.transmettre(msg, wp.0, lp.0) {
+                    Some(r) => {
+                        resultat = r;
+                        true
+                    }
+                    None => false,
+                };
+            }
         }
         match msg {
             WM_ICONE => {
@@ -779,7 +868,7 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
         }
     });
     if traite {
-        LRESULT(0)
+        LRESULT(resultat)
     } else {
         // SAFETY: traitement par défaut de Windows, avec les paramètres reçus.
         unsafe { DefWindowProcW(h, msg, wp, lp) }
@@ -787,7 +876,12 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
 }
 
 /// Crée la fenêtre cachée et l'icône, puis traite les messages jusqu'à « Quitter ».
-fn boucle(nom: &str, logiciel: Arc<dyn Logiciel>, poste: Poste) -> Result<(), String> {
+fn boucle(
+    nom: &str,
+    logiciel: Arc<dyn Logiciel>,
+    poste: Poste,
+    messages: Option<Recepteur>,
+) -> Result<(), String> {
     let c = classe(nom);
     let titre = HSTRING::from(nom);
     // SAFETY: module de ce programme ; classe décrite par une structure locale dont les
@@ -833,6 +927,7 @@ fn boucle(nom: &str, logiciel: Arc<dyn Logiciel>, poste: Poste) -> Result<(), St
         infobulle: nom.into(),
         clics: Clics::default(),
         au_clic: AuClic::default(),
+        messages,
     };
     p.icone = fabriquer_icone(&*logiciel, p.barre_sombre);
     p.ajouter_icone();
@@ -858,6 +953,45 @@ fn boucle(nom: &str, logiciel: Arc<dyn Logiciel>, poste: Poste) -> Result<(), St
 mod essais {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    /// Les messages de Windows : ceux de la bibliothèque restent à elle ; la fin de session et
+    /// les changements de réglages sont vus des deux ; tous les autres (raccourcis globaux,
+    /// messages du logiciel) vont au logiciel.
+    #[test]
+    fn messages_de_windows_au_logiciel() {
+        use windows::Win32::UI::WindowsAndMessaging::{WM_HOTKEY, WM_POWERBROADCAST};
+        let barre = 0xC123;
+        for m in [
+            WM_ICONE,
+            WM_COMMANDE,
+            WM_OUVRIR_PARAMETRES,
+            WM_MENU_DE_SECOURS,
+            WM_CLOSE,
+            WM_DESTROY,
+            barre,
+        ] {
+            assert_eq!(destinataire(m, barre), Destinataire::Bibliotheque, "{m:#x}");
+        }
+        for m in [WM_QUERYENDSESSION, WM_ENDSESSION, WM_SETTINGCHANGE] {
+            assert_eq!(destinataire(m, barre), Destinataire::LesDeux, "{m:#x}");
+        }
+        for m in [WM_HOTKEY, WM_POWERBROADCAST, WM_APP + 100] {
+            assert_eq!(destinataire(m, barre), Destinataire::Logiciel, "{m:#x}");
+        }
+        // Avant « TaskbarCreated » (0 : pas encore connu), 0 n'est pas un message de la barre.
+        assert_eq!(destinataire(0, 0), Destinataire::Logiciel);
+    }
+
+    /// Du code du logiciel attend son tour sur le fil de la fenêtre cachée.
+    #[test]
+    fn code_pour_le_fil_principal() {
+        let p = Horloge::new("essai-fil").poste();
+        p.sur_le_fil_principal(|_| {});
+        assert!(matches!(
+            p.file.lock().unwrap().front(),
+            Some(Commande::Executer(_))
+        ));
+    }
 
     /// Une notification ouvre les Paramètres à sa page, ou rend une action au logiciel.
     #[test]
