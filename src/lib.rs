@@ -131,8 +131,13 @@ pub enum EtatMiseAJour {
     Recherche,
     /// Une version plus récente est prête : son numéro.
     Prete(String),
-    /// La recherche a échoué : pourquoi, en mots simples.
+    /// La recherche a échoué : pourquoi, en mots simples (montré en rouge).
     Erreur(String),
+    /// Les recherches sont coupées par l'utilisateur (montré comme une information).
+    Coupee,
+    /// Rien de grave, à dire simplement : dossier introuvable, dossier refusé… (montré comme
+    /// une information, pas comme une erreur).
+    Information(String),
 }
 
 /// Une pièce empruntée, pour les crédits de la page « À propos ».
@@ -148,6 +153,9 @@ pub struct Credit {
 pub struct Communs {
     /// « Démarrer avec Windows » (clé `general.demarrage`).
     pub demarrage: Option<bool>,
+    /// « Démarrer avec Windows » ne peut pas changer : pourquoi (l'interrupteur est grisé et
+    /// la raison remplace l'explication).
+    pub demarrage_bloque: Option<String>,
     /// « Langue » : la langue choisie et celles proposées (clé `general.langue`).
     pub langue: Option<(String, Vec<String>)>,
     /// « Notifications » (clé `general.notifications`).
@@ -157,6 +165,15 @@ pub struct Communs {
     pub dossier_installateurs: String,
     /// Le dossier des installateurs ne se choisit pas (le bouton « Choisir… » est caché).
     pub dossier_fixe: bool,
+    /// Le dossier peut être trouvé tout seul : `Some(true)` s'il l'est déjà, `Some(false)`
+    /// pour montrer le bouton « Automatique » (action `mise_a_jour.dossier_auto`).
+    pub dossier_automatique: Option<bool>,
+    /// « Chercher les mises à jour » : l'interrupteur qui coupe les recherches (clé
+    /// `mise_a_jour.recherches`) ; `None` : pas montré.
+    pub recherches: Option<bool>,
+    /// Le fichier complet des licences existe : bouton « Voir les licences » dans À propos
+    /// (action `licences`).
+    pub fichier_licences: bool,
     /// Les nouveautés de la version prête, une par ligne.
     pub nouveautes: Vec<String>,
     pub credits: Vec<Credit>,
@@ -177,6 +194,12 @@ pub mod cles {
     pub const INSTALLER: &str = "mise_a_jour.installer";
     /// « Redémarrer maintenant » (bandeau de redémarrage).
     pub const REDEMARRER: &str = "redemarrer";
+    /// « Chercher les mises à jour » (interrupteur, page Mise à jour).
+    pub const RECHERCHES: &str = "mise_a_jour.recherches";
+    /// « Automatique » : le dossier des installateurs trouvé tout seul.
+    pub const DOSSIER_AUTO: &str = "mise_a_jour.dossier_auto";
+    /// « Voir les licences » : ouvrir le fichier complet des licences.
+    pub const LICENCES: &str = "licences";
 }
 
 /// Ce qu'un logiciel donne aux Paramètres. Toutes les méthodes sont appelées sur le fil des
@@ -215,6 +238,19 @@ pub trait Reglages: Send + Sync + 'static {
     /// Les cartes propres au logiciel dans la page Général, après les réglages communs et
     /// avant « Journal » (`dessin::carte`…).
     fn dessiner_general(&self, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// Les cartes propres au logiciel dans la page Mise à jour, après le dossier.
+    fn dessiner_mise_a_jour(&self, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// Les cartes propres au logiciel dans la page À propos, après la licence et avant les
+    /// crédits.
+    fn dessiner_a_propos(&self, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// Ce que « Rétablir les réglages par défaut » remet à zéro, en une phrase (montrée dans
+    /// la confirmation) ; `None` : la phrase commune.
+    fn retablir_explication(&self) -> Option<String> {
+        None
+    }
 
     /// Un point d'alerte sur cette page dans la navigation (quelque chose attend
     /// l'utilisateur). Par défaut : la page Mise à jour, quand une version est prête.

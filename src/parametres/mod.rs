@@ -33,7 +33,7 @@ use crate::polices::semibold;
 use crate::textes::{Textes, remplir};
 use crate::theme::{Palette, TAILLE_PETIT};
 use crate::{Communs, EtatMiseAJour, Reglages, cles, icones};
-use modele::{Annulation, PAGES_POUR_RECHERCHE, Page, Valeur};
+use modele::{Annulation, Changement, PAGES_POUR_RECHERCHE, Page, Valeur};
 
 /// La clé de la fenêtre des Paramètres parmi les autres fenêtres de la boucle
 /// ([`crate::autres_fenetres`]) : réservée.
@@ -57,6 +57,7 @@ pub struct Contexte<'a> {
     pub sous_page: Option<String>,
     sous_page_voulue: Option<Option<String>>,
     changements: Vec<(String, String, Valeur, Valeur)>,
+    groupes: Vec<(String, Vec<Changement>)>,
     redemarrage: Option<String>,
     aller_a: Option<String>,
 }
@@ -66,6 +67,12 @@ impl Contexte<'_> {
     /// logiciel (`Reglages::changer`, effet immédiat) et ouvre la bulle « Annuler ».
     pub fn changer(&mut self, cle: &str, titre: &str, avant: Valeur, apres: Valeur) {
         self.changements.push((cle.into(), titre.into(), avant, apres));
+    }
+
+    /// Plusieurs réglages changés d'un seul geste (clé, avant, après) : tous rendus au
+    /// logiciel, et une seule bulle « Annuler » (titre `titre`) qui les remet tous.
+    pub fn changer_groupe(&mut self, titre: &str, changements: Vec<Changement>) {
+        self.groupes.push((titre.into(), changements));
     }
 
     /// Ce changement ne prend effet qu'au redémarrage : le bandeau le dit en haut de la page.
@@ -142,6 +149,16 @@ impl Parametres {
     pub fn changer(&mut self, l: &dyn Reglages, cle: &str, titre: &str, avant: Valeur, apres: Valeur) {
         self.annulation.changer(cle, titre, avant, &apres, Instant::now());
         l.changer(cle, apres);
+    }
+
+    /// Un groupe de changements : tous rendus au logiciel, une seule bulle « Annuler ».
+    pub fn changer_groupe(&mut self, l: &dyn Reglages, titre: &str, changements: Vec<Changement>) {
+        for (cle, avant, apres) in &changements {
+            if avant != apres {
+                l.changer(cle, apres.clone());
+            }
+        }
+        self.annulation.changer_groupe(titre, changements, Instant::now());
     }
 
     /// Le titre de la fenêtre : « Paramètres de <logiciel> », dans la langue du logiciel.
@@ -403,7 +420,16 @@ impl Parametres {
         let t = self.textes.clone();
         match page.cle.as_str() {
             modele::GENERAL => self.page_general(ui, p, l, &communs),
-            modele::MISE_A_JOUR => page_mise_a_jour(ui, p, &t, l, &communs),
+            modele::MISE_A_JOUR => {
+                let mut changes = Vec::new();
+                page_mise_a_jour(ui, p, &t, l, &communs, |cle, titre, avant, apres| {
+                    changes.push((cle.to_string(), titre.to_string(), avant, apres));
+                });
+                for (cle, titre, avant, apres) in changes {
+                    self.changer(l, &cle, &titre, avant, apres);
+                }
+                self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_mise_a_jour(ui, c));
+            }
             modele::A_PROPOS => self.page_a_propos(ui, p, l, &communs),
             cle => self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_page(cle, ui, c)),
         }
@@ -425,12 +451,16 @@ impl Parametres {
             sous_page: self.sous_page.clone(),
             sous_page_voulue: None,
             changements: Vec::new(),
+            groupes: Vec::new(),
             redemarrage: None,
             aller_a: None,
         };
         dessin(l, ui, &mut c);
         for (cle, titre, avant, apres) in c.changements {
             self.changer(l, &cle, &titre, avant, apres);
+        }
+        for (titre, changements) in c.groupes {
+            self.changer_groupe(l, &titre, changements);
         }
         if let Some(r) = c.redemarrage {
             self.redemarrage = Some(r);
@@ -466,8 +496,10 @@ impl Parametres {
             });
         });
         ui.add_space(8.0);
-        if annuler && let Some((cle, avant)) = self.annulation.annuler(Instant::now()) {
-            l.changer(&cle, avant);
+        if annuler {
+            for (cle, avant) in self.annulation.annuler(Instant::now()) {
+                l.changer(&cle, avant);
+            }
         } else if fermer {
             self.annulation.oublier();
         }
@@ -477,14 +509,17 @@ impl Parametres {
         let t = self.textes.clone();
         if let Some(actif) = c.demarrage {
             let mut v = actif;
+            let bloque = c.demarrage_bloque.as_deref();
             carte(
                 ui,
                 p,
                 icones::DEMARRAGE,
                 t.demarrer_avec_windows,
-                t.demarrer_explication,
+                bloque.unwrap_or(t.demarrer_explication),
                 |ui| {
-                    interrupteur_ecrit(ui, p, &t, &mut v);
+                    ui.add_enabled_ui(bloque.is_none(), |ui| {
+                        interrupteur_ecrit(ui, p, &t, &mut v);
+                    });
                 },
             );
             if v != actif {
@@ -550,12 +585,13 @@ impl Parametres {
         });
         titre_section(ui, t.remise_a_zero);
         if self.confirmer_retablir {
+            let explication = l.retablir_explication();
             carte_large(
                 ui,
                 p,
                 icones::RETABLIR,
                 t.retablir_question,
-                t.retablir_question_explication,
+                explication.as_deref().unwrap_or(t.retablir_question_explication),
                 260.0,
                 |ui| {
                     if bouton(ui, p, None, t.non, Genre::Normal).clicked() {
@@ -609,19 +645,25 @@ impl Parametres {
                 });
             });
         });
-        carte_info(
-            ui,
-            p,
-            icones::LICENCE,
-            t.licence,
-            &remplir(t.sous_licence, &[&id.nom, &id.licence]),
-        );
+        let sous_licence = remplir(t.sous_licence, &[&id.nom, &id.licence]);
+        if c.fichier_licences {
+            carte(ui, p, icones::LICENCE, t.licence, &sous_licence, |ui| {
+                if bouton(ui, p, None, t.voir_licences, Genre::Normal).clicked() {
+                    l.action(cles::LICENCES);
+                }
+            });
+        } else {
+            carte_info(ui, p, icones::LICENCE, t.licence, &sous_licence);
+        }
+        // Les cartes propres au logiciel, avant les crédits.
+        self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_a_propos(ui, c));
         if !c.credits.is_empty() {
             titre_section(ui, t.credits);
             dessin::cadre_carte(p).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 for cr in &c.credits {
-                    ui.horizontal(|ui| {
+                    // Un nom long passe à la ligne au lieu de déborder.
+                    ui.horizontal_wrapped(|ui| {
                         ui.label(&cr.nom);
                         ui.label(RichText::new(&cr.licence).color(couleur(p.texte_secondaire)));
                     });
@@ -639,10 +681,19 @@ pub fn texte_mise_a_jour(e: &EtatMiseAJour, p: &Palette, t: &Textes) -> (char, c
         EtatMiseAJour::Recherche => (icones::MISE_A_JOUR, p.orange, t.maj_recherche.into()),
         EtatMiseAJour::Prete(v) => (icones::INSTALLER, p.accent, remplir(t.maj_prete, &[v])),
         EtatMiseAJour::Erreur(e) => (icones::PROBLEME, p.rouge, e.clone()),
+        EtatMiseAJour::Coupee => (icones::A_PROPOS, p.texte_secondaire, t.maj_coupee.into()),
+        EtatMiseAJour::Information(e) => (icones::A_PROPOS, p.texte_secondaire, e.clone()),
     }
 }
 
-fn page_mise_a_jour(ui: &mut egui::Ui, p: &Palette, t: &Textes, l: &dyn Reglages, c: &Communs) {
+fn page_mise_a_jour(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    t: &Textes,
+    l: &dyn Reglages,
+    c: &Communs,
+    mut changer: impl FnMut(&str, &str, Valeur, Valeur),
+) {
     let (g, couleur_etat, texte) = texte_mise_a_jour(&c.mise_a_jour, p, t);
     dessin::cadre_carte(p).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -668,14 +719,15 @@ fn page_mise_a_jour(ui: &mut egui::Ui, p: &Palette, t: &Textes, l: &dyn Reglages
                     {
                         l.action(cles::INSTALLER);
                     }
-                } else if bouton(
-                    ui,
-                    p,
-                    Some(icones::MISE_A_JOUR),
-                    t.rechercher_mise_a_jour,
-                    Genre::Normal,
-                )
-                .clicked()
+                } else if c.recherches != Some(false)
+                    && bouton(
+                        ui,
+                        p,
+                        Some(icones::MISE_A_JOUR),
+                        t.rechercher_mise_a_jour,
+                        Genre::Normal,
+                    )
+                    .clicked()
                 {
                     l.rechercher_mise_a_jour();
                 }
@@ -692,16 +744,49 @@ fn page_mise_a_jour(ui: &mut egui::Ui, p: &Palette, t: &Textes, l: &dyn Reglages
         });
     }
     titre_section(ui, t.reglages);
+    if let Some(actif) = c.recherches {
+        let mut v = actif;
+        let explication = match (actif, c.dossier_automatique) {
+            (false, _) => t.recherches_coupees,
+            (true, Some(true)) => t.recherches_automatique,
+            _ => t.recherches_dossier,
+        };
+        carte(
+            ui,
+            p,
+            icones::MISE_A_JOUR,
+            t.chercher_mises_a_jour,
+            explication,
+            |ui| {
+                interrupteur_ecrit(ui, p, t, &mut v);
+            },
+        );
+        if v != actif {
+            changer(
+                cles::RECHERCHES,
+                t.chercher_mises_a_jour,
+                Valeur::Booleen(actif),
+                Valeur::Booleen(v),
+            );
+        }
+    }
+    if c.recherches == Some(false) {
+        return;
+    }
+    let automatique = !c.dossier_fixe && c.dossier_automatique == Some(false);
     carte_large(
         ui,
         p,
         icones::DOSSIER,
         t.dossier_installateurs,
         &c.dossier_installateurs,
-        120.0,
+        if automatique { 240.0 } else { 120.0 },
         |ui| {
             if !c.dossier_fixe && bouton(ui, p, None, t.choisir, Genre::Normal).clicked() {
                 l.action(cles::DOSSIER);
+            }
+            if automatique && bouton(ui, p, None, t.automatique, Genre::Normal).clicked() {
+                l.action(cles::DOSSIER_AUTO);
             }
         },
     );

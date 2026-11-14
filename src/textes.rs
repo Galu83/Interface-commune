@@ -86,6 +86,14 @@ pub struct Textes {
     /// « {} est sous licence {}. » (le nom, la licence).
     pub sous_licence: &'static str,
     pub credits: &'static str,
+    /// « Voir les licences » (le fichier complet des licences).
+    pub voir_licences: &'static str,
+    pub chercher_mises_a_jour: &'static str,
+    pub recherches_coupees: &'static str,
+    pub recherches_automatique: &'static str,
+    pub recherches_dossier: &'static str,
+    pub automatique: &'static str,
+    pub maj_coupee: &'static str,
 }
 
 pub const FRANCAIS: Textes = Textes {
@@ -138,6 +146,13 @@ pub const FRANCAIS: Textes = Textes {
     appuyer_touches: "Appuyez sur les touches… (Échap : annuler)",
     licence: "Licence",
     sous_licence: "{} est sous licence {}.",
+    voir_licences: "Voir les licences",
+    chercher_mises_a_jour: "Chercher les mises à jour",
+    recherches_coupees: "Coupé : le logiciel ne cherche pas de nouvelle version.",
+    recherches_automatique: "Dans le dossier « Installateurs », trouvé tout seul.",
+    recherches_dossier: "Dans le dossier des installateurs choisi plus bas.",
+    automatique: "Automatique",
+    maj_coupee: "Recherche des mises à jour coupée",
     credits: "Crédits",
 };
 
@@ -191,6 +206,13 @@ pub const ANGLAIS: Textes = Textes {
     appuyer_touches: "Press the keys… (Esc: cancel)",
     licence: "Licence",
     sous_licence: "{} is under the {} licence.",
+    voir_licences: "View licences",
+    chercher_mises_a_jour: "Check for updates",
+    recherches_coupees: "Off: the app does not look for a new version.",
+    recherches_automatique: "In the “Installateurs” folder, found automatically.",
+    recherches_dossier: "In the folder of installers chosen below.",
+    automatique: "Automatic",
+    maj_coupee: "Update checks are off",
     credits: "Credits",
 };
 

@@ -169,6 +169,9 @@ pub enum Valeur {
     Texte(String),
 }
 
+/// Un changement d'un groupe : la clé, la valeur d'avant, celle d'après.
+pub type Changement = (String, Valeur, Valeur);
+
 /// La bulle « Annuler » reste ce temps après un changement.
 pub const DUREE_ANNULER: Duration = Duration::from_secs(6);
 
@@ -179,6 +182,8 @@ pub struct Annulable {
     /// Le nom du réglage, montré dans la bulle (« Thème changé »).
     pub titre: String,
     pub avant: Valeur,
+    /// Les autres réglages d'un groupe de changements (clé, valeur d'avant), défaits avec lui.
+    pub autres: Vec<(String, Valeur)>,
     quand: Instant,
 }
 
@@ -211,9 +216,29 @@ impl Annulation {
                 cle: cle.to_string(),
                 titre: titre.to_string(),
                 avant,
+                autres: Vec::new(),
                 quand: maintenant,
             });
         }
+    }
+
+    /// Plusieurs réglages changés d'un seul geste (clé, avant, après) : une seule bulle, et
+    /// « Annuler » les remet tous. Ceux qui ne changent rien sont oubliés.
+    pub fn changer_groupe(&mut self, titre: &str, changements: Vec<Changement>, maintenant: Instant) {
+        let mut avants = changements
+            .into_iter()
+            .filter(|(_, avant, apres)| avant != apres)
+            .map(|(cle, avant, _)| (cle, avant));
+        let Some((cle, avant)) = avants.next() else {
+            return;
+        };
+        self.annulable = Some(Annulable {
+            cle,
+            titre: titre.to_string(),
+            avant,
+            autres: avants.collect(),
+            quand: maintenant,
+        });
     }
 
     /// Ce que la bulle propose, tant qu'elle est montrée.
@@ -229,11 +254,17 @@ impl Annulation {
             .map(|a| DUREE_ANNULER.saturating_sub(maintenant.saturating_duration_since(a.quand)))
     }
 
-    /// « Annuler » est cliqué : rend la clé et la valeur d'avant, à remettre par le logiciel.
-    /// Rien si la bulle a déjà disparu.
-    pub fn annuler(&mut self, maintenant: Instant) -> Option<(String, Valeur)> {
-        let a = self.annulable.take()?;
-        (maintenant.saturating_duration_since(a.quand) < DUREE_ANNULER).then_some((a.cle, a.avant))
+    /// « Annuler » est cliqué : rend les clés et les valeurs d'avant, à remettre par le
+    /// logiciel (une seule, sauf pour un groupe). Rien si la bulle a déjà disparu.
+    pub fn annuler(&mut self, maintenant: Instant) -> Vec<(String, Valeur)> {
+        match self.annulable.take() {
+            Some(a) if maintenant.saturating_duration_since(a.quand) < DUREE_ANNULER => {
+                let mut tout = vec![(a.cle, a.avant)];
+                tout.extend(a.autres);
+                tout
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// La bulle est fermée sans annuler.
@@ -327,9 +358,9 @@ mod tests {
         assert!(a.reste(t + Duration::from_secs(1)).is_some());
         assert_eq!(
             a.annuler(t + Duration::from_secs(1)),
-            Some(("theme".into(), b(false)))
+            vec![("theme".into(), b(false))]
         );
-        assert_eq!(a.annuler(t + Duration::from_secs(1)), None);
+        assert!(a.annuler(t + Duration::from_secs(1)).is_empty());
         // Un curseur : 1 → 2 → 3, « Annuler » revient à 1.
         let n = Valeur::Nombre;
         a.changer("vitesse", "Vitesse", n(1.0), &n(2.0), t);
@@ -359,9 +390,26 @@ mod tests {
             t,
         );
         assert!(a.a_annuler(t + DUREE_ANNULER).is_none());
-        assert_eq!(a.annuler(t + DUREE_ANNULER), None);
+        assert!(a.annuler(t + DUREE_ANNULER).is_empty());
         // Un changement qui ne change rien n'ouvre pas de bulle.
         a.changer("x", "X", b(true), &b(true), t);
+        assert!(a.a_annuler(t).is_none());
+        // Un groupe : une seule bulle, « Annuler » remet tout ; ce qui ne change pas est oublié.
+        a.changer_groupe(
+            "Disposition",
+            vec![
+                ("gauche".into(), n(1.0), n(2.0)),
+                ("pareil".into(), b(true), b(true)),
+                ("droite".into(), n(3.0), n(4.0)),
+            ],
+            t,
+        );
+        assert_eq!(a.a_annuler(t).map(|x| x.titre.as_str()), Some("Disposition"));
+        assert_eq!(
+            a.annuler(t),
+            vec![("gauche".into(), n(1.0)), ("droite".into(), n(3.0))]
+        );
+        a.changer_groupe("Rien", vec![("x".into(), b(true), b(true))], t);
         assert!(a.a_annuler(t).is_none());
     }
 }

@@ -113,6 +113,7 @@ impl Reglages for Demo {
                 nom: "egui".into(),
                 licence: "MIT OR Apache-2.0".into(),
             }],
+            ..Default::default()
         }
     }
 
@@ -311,11 +312,9 @@ fn effet_immediat_et_annuler_vers_le_logiciel() {
         demo.changes.lock().expect("verrou").last(),
         Some(&("general.demarrage".to_string(), Valeur::Booleen(false)))
     );
-    let (cle, avant) = s
-        .annulation
-        .annuler(std::time::Instant::now())
-        .expect("bulle Annuler");
-    demo.changer(&cle, avant);
+    for (cle, avant) in s.annulation.annuler(std::time::Instant::now()) {
+        demo.changer(&cle, avant);
+    }
     assert_eq!(
         demo.changes.lock().expect("verrou").last(),
         Some(&("general.demarrage".to_string(), Valeur::Booleen(true)))
@@ -664,4 +663,161 @@ fn petit_menu_aux_mesures_communes() {
     };
     let pas = y("Rechercher une mise à jour") - y("Paramètres");
     assert!((pas - MENU_LIGNE - MENU_ECART).abs() < 0.6, "pas : {pas}");
+}
+
+/// Un logiciel qui change les pages communes : ses propres `Communs`, sa phrase pour
+/// « Rétablir », et une carte propre dans Mise à jour et dans À propos.
+struct Variante(Demo, Communs);
+
+impl Reglages for Variante {
+    fn identite(&self) -> &Identite {
+        &self.0.identite
+    }
+
+    fn action(&self, cle: &str) {
+        self.0.action(cle);
+    }
+
+    fn rechercher_mise_a_jour(&self) {}
+
+    fn communs(&self) -> Communs {
+        self.1.clone()
+    }
+
+    fn changer(&self, cle: &str, valeur: Valeur) {
+        self.0.changer(cle, valeur);
+    }
+
+    fn dessiner_mise_a_jour(&self, ui: &mut egui::Ui, page: &mut Contexte) {
+        dessin::carte_info(ui, page.palette, '\u{E7F4}', "Carte de mise à jour", "Inventée.");
+    }
+
+    fn dessiner_a_propos(&self, ui: &mut egui::Ui, page: &mut Contexte) {
+        dessin::carte_info(ui, page.palette, '\u{E7F4}', "Carte à propos", "Inventée.");
+        // Un groupe de changements d'un seul geste : une seule bulle « Annuler ».
+        if page.sous_page.is_none() {
+            page.changer_groupe(
+                "Disposition",
+                vec![
+                    ("gauche".into(), Valeur::Nombre(1.0), Valeur::Nombre(2.0)),
+                    ("droite".into(), Valeur::Nombre(3.0), Valeur::Nombre(4.0)),
+                ],
+            );
+            page.ouvrir_sous_page(Some("Fait"));
+        }
+    }
+
+    fn retablir_explication(&self) -> Option<String> {
+        Some("Les dispositions inventées sont effacées.".into())
+    }
+}
+
+/// Démarrage grisé avec sa raison, et la phrase de « Rétablir » fournie par le logiciel.
+#[test]
+fn demarrage_grise_et_retablir_du_logiciel() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let base = Demo::new().communs();
+    let l = Variante(
+        Demo::new(),
+        Communs {
+            demarrage_bloque: Some("Refusé par une règle inventée.".into()),
+            ..base
+        },
+    );
+    let mut s = Parametres::new(&l, Some("general"));
+    let v = image_parametres(&mut s, &l);
+    assert!(texte(&v, "Refusé par une règle inventée.").is_some());
+    assert!(texte(&v, Textes::default().demarrer_explication).is_none());
+    s.confirmer_retablir = true;
+    let v = image_parametres(&mut s, &l);
+    assert!(texte(&v, "Les dispositions inventées sont effacées.").is_some());
+}
+
+/// Mise à jour : l'interrupteur des recherches, « Automatique », la carte propre après le
+/// dossier ; recherches coupées : une information, ni recherche ni dossier.
+#[test]
+fn mise_a_jour_recherches_et_dossier_automatique() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let base = Demo::new().communs();
+    let l = Variante(
+        Demo::new(),
+        Communs {
+            recherches: Some(true),
+            dossier_automatique: Some(false),
+            mise_a_jour: EtatMiseAJour::Information("Dossier introuvable.".into()),
+            ..base.clone()
+        },
+    );
+    let mut s = Parametres::new(&l, Some("mise_a_jour"));
+    let v = image_parametres(&mut s, &l);
+    let y = |t: &str| texte(&v, t).expect(t).0.center().y;
+    assert!(y("Chercher les mises à jour") < y("Dossier des installateurs"));
+    assert!(y("Dossier des installateurs") < y("Carte de mise à jour"));
+    assert!(texte(&v, "Automatique").is_some());
+    assert!(texte(&v, "Dossier introuvable.").is_some());
+    assert!(texte(&v, "Rechercher une mise à jour").is_some());
+    let coupee = Variante(
+        Demo::new(),
+        Communs {
+            recherches: Some(false),
+            mise_a_jour: EtatMiseAJour::Coupee,
+            ..base
+        },
+    );
+    let mut s = Parametres::new(&coupee, Some("mise_a_jour"));
+    let v = image_parametres(&mut s, &coupee);
+    assert!(texte(&v, "Recherche des mises à jour coupée").is_some());
+    assert!(texte(&v, "Rechercher une mise à jour").is_none());
+    assert!(texte(&v, "Dossier des installateurs").is_none());
+    // L'explication passe par les espaces insécables (« Coupé : ») : on cherche sa fin.
+    assert!(v.iter().any(|d| matches!(
+        d,
+        Dessine::Texte { texte, .. } if texte.ends_with("ne cherche pas de nouvelle version.")
+    )));
+}
+
+/// À propos : « Voir les licences », la carte propre avant les crédits, un long crédit qui
+/// passe à la ligne, et un groupe de changements défait d'un seul « Annuler ».
+#[test]
+fn a_propos_licences_credits_et_groupe() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let base = Demo::new().communs();
+    let long = "Une bibliothèque inventée au nom vraiment très long, bien plus large que la page".repeat(2);
+    let l = Variante(
+        Demo::new(),
+        Communs {
+            fichier_licences: true,
+            credits: vec![interface_commune::Credit {
+                nom: long.clone(),
+                licence: "MIT".into(),
+            }],
+            ..base
+        },
+    );
+    let mut s = Parametres::new(&l, Some("a_propos"));
+    let v = image_parametres(&mut s, &l);
+    let y = |t: &str| texte(&v, t).expect(t).0.center().y;
+    assert!(y("Licence") < y("Carte à propos"));
+    assert!(y("Carte à propos") < y("Crédits"));
+    assert!(texte(&v, "Voir les licences").is_some());
+    let (credit, _) = texte(&v, &long).expect("crédit");
+    assert!(credit.right() <= 920.0, "le crédit déborde : {credit:?}");
+    // Les deux changements du groupe sont partis au logiciel ; « Annuler » remet les deux.
+    let faits = l.0.changes.lock().expect("verrou").clone();
+    assert!(faits.contains(&("gauche".into(), Valeur::Nombre(2.0))));
+    assert!(faits.contains(&("droite".into(), Valeur::Nombre(4.0))));
+    let defaits = s.annulation.annuler(std::time::Instant::now());
+    assert_eq!(
+        defaits,
+        vec![
+            ("gauche".to_string(), Valeur::Nombre(1.0)),
+            ("droite".to_string(), Valeur::Nombre(3.0))
+        ]
+    );
 }
