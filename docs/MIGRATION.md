@@ -45,6 +45,10 @@ de travail par projet, sur sa branche.
   « Choisir… » ; un `Communs { … }` écrit en entier doit l'ajouter) ;
   `Poste::notifier_action` (un clic sur la notification rend une action au logiciel) ;
   `dessin::champ_raccourci` (saisie d'un raccourci clavier).
+- **Fenêtre vide au démarrage corrigée** : chaque fenêtre préparée d'avance (volet et petit
+  menu, Paramètres, autres fenêtres) reste voilée (`DWMWA_CLOAK`) jusqu'à son ouverture pour de
+  bon ; eframe 0.37 la montrait d'office à sa première image. Vocalis peut retirer son
+  contournement `voile_volet.rs`.
 - **Licences** : copier `docs/LICENCES.md` (avis MIT d'egui et des crates sans fichier de
   licence) dans l'avis de licence livré avec le logiciel.
 
@@ -90,7 +94,9 @@ de travail par projet, sur sa branche.
 - PowerPeek est sous licence MIT depuis sa version 0.20.0. Ses Paramètres servent de modèle
   à ceux de la bibliothèque (règles de l'interface, point 7) : en-tête avec le vrai logo (32
   points), nom en 16 points, version en 12, lignes de navigation de 38 points, colonne de 250
-  à 340 points selon le plus long nom de page, point d'alerte à 16 points du bord droit.
+  à 340 points selon le plus long nom de page, point d'alerte à 16 points du bord droit,
+  fenêtre de 920 × 680 points (au moins 700 × 500), page à 18 points du bord gauche et 22 du
+  haut.
 - Il peut ne prendre que les Paramètres : écrire `Reglages` seul (ses pages propres,
   `textes()` en anglais quand sa langue est l'anglais, `logo` = son logo), puis, dans sa
   propre boucle, `parametres::fenetre::ouvrir_dans_boucle` avec ses `AutresFenetres`

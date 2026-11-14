@@ -280,7 +280,7 @@ fn parametres_sans_fenetre() {
     );
     for cle in &cles {
         s.aller_a(cle);
-        let textes = image(egui::vec2(940.0, 660.0), 1.0, |ui, p| s.dessiner(ui, p, &demo));
+        let textes = image(egui::vec2(920.0, 680.0), 1.0, |ui, p| s.dessiner(ui, p, &demo));
         if polices::polices().is_ok() {
             let tous: Vec<&str> = textes.iter().map(|(t, _)| t.as_str()).collect();
             assert!(tous.contains(&"Démo"), "{cle} : {tous:?}");
@@ -366,7 +366,7 @@ fn image_parametres(s: &mut Parametres, l: &dyn Reglages) -> Vec<Dessine> {
         let entree = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(940.0, 660.0),
+                egui::vec2(920.0, 680.0),
             )),
             ..Default::default()
         };
@@ -468,7 +468,7 @@ fn entete_et_navigation_comme_powerpeek() {
     );
     assert!((y("Mise à jour") - y("Général") - pas).abs() < 0.6);
     assert!(
-        (y("À propos") - y("Mise à jour") - pas).abs() < 0.6 && y("À propos") < 660.0 - 150.0,
+        (y("À propos") - y("Mise à jour") - pas).abs() < 0.6 && y("À propos") < 680.0 - 150.0,
         "les pages communes ne sont pas au bas"
     );
     let largeur = |s: &Parametres, l: &dyn Reglages| {

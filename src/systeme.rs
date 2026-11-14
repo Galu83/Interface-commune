@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use windows::Win32::Foundation::{COLORREF, CloseHandle, HANDLE, HWND, LPARAM, POINT, RECT, WAIT_FAILED};
 use windows::Win32::Graphics::Dwm::{
-    DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute,
+    DWMWA_CLOAK, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    DwmSetWindowAttribute,
 };
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
@@ -162,6 +163,25 @@ pub fn deplacer(h: isize, x: i32, y: i32, dessus: bool) {
     let _ = unsafe { SetWindowPos(hwnd(h), apres, x, y, 0, 0, drapeaux) };
 }
 
+/// Voile la fenêtre (le compositeur ne la dessine plus à l'écran, même montrée) ou lève le
+/// voile. Une fenêtre préparée d'avance reste voilée jusqu'à son ouverture : eframe 0.37
+/// montre d'office une fenêtre à sa première image, même créée cachée, et winit retire alors
+/// son opacité 0. Rend `false` si Windows refuse.
+pub fn voiler(h: isize, voile: bool) -> bool {
+    let v = BOOL::from(voile);
+    // SAFETY: valeur locale passée avec sa taille exacte ; fenêtre d'egui vivante.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd(h),
+            DWMWA_CLOAK,
+            (&raw const v).cast(),
+            size_of_val(&v) as u32,
+        )
+    }
+    .is_ok()
+}
+
+/// Met la fenêtre au premier plan.
 pub fn premier_plan(h: isize) {
     // SAFETY: fenêtre d'egui vivante ; Windows refuse sans dommage s'il n'est pas d'accord.
     let _ = unsafe { SetForegroundWindow(hwnd(h)) };

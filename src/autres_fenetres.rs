@@ -220,6 +220,8 @@ struct Fenetre {
     hwnd: Option<isize>,
     /// Le thème avec lequel la barre de titre a été habillée.
     sombre: Option<bool>,
+    /// Voilée (`systeme::voiler`) tant qu'elle n'est pas montrée.
+    voilee: Option<bool>,
     devant: bool,
     fermer: bool,
 }
@@ -250,6 +252,8 @@ impl Fenetre {
         if !self.montree {
             if self.images >= IMAGES_CACHEES || !reelle {
                 self.montree = true;
+                #[cfg(windows)]
+                self.voiler(false);
                 ctx.send_viewport_cmd(ViewportCommand::Visible(true));
                 if self.ouverture.focus {
                     ctx.send_viewport_cmd(ViewportCommand::Focus);
@@ -297,6 +301,10 @@ impl Fenetre {
             self.hwnd = systeme::fenetre_du_fil(&self.titre);
         }
         let Some(h) = self.hwnd else { return };
+        if !self.montree {
+            // Préparée cachée : voilée dès qu'elle existe (eframe la montrerait d'office).
+            self.voiler(true);
+        }
         if self.sombre != Some(palette.sombre) {
             self.sombre = Some(palette.sombre);
             systeme::habiller(h, palette.sombre);
@@ -314,6 +322,17 @@ impl Fenetre {
                     }
                 }
             }
+        }
+    }
+
+    /// Voile la fenêtre ou lève le voile (une seule fois par changement).
+    #[cfg(windows)]
+    fn voiler(&mut self, voile: bool) {
+        if let Some(h) = self.hwnd
+            && self.voilee != Some(voile)
+            && crate::systeme::voiler(h, voile)
+        {
+            self.voilee = Some(voile);
         }
     }
 
@@ -402,6 +421,7 @@ impl AutresFenetres {
                         montree: false,
                         hwnd: None,
                         sombre: None,
+                        voilee: None,
                         devant: false,
                         fermer: false,
                     })),

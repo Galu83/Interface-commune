@@ -40,8 +40,8 @@ use modele::{Annulation, PAGES_POUR_RECHERCHE, Page, Valeur};
 pub const CLE_FENETRE: &str = "parametres";
 
 /// Taille de la fenêtre au premier lancement, et taille minimale (points).
-pub const TAILLE: [f32; 2] = [940.0, 660.0];
-pub const TAILLE_MIN: [f32; 2] = [760.0, 480.0];
+pub const TAILLE: [f32; 2] = [920.0, 680.0];
+pub const TAILLE_MIN: [f32; 2] = [700.0, 500.0];
 /// Largeur de la navigation : au moins (celle de PowerPeek), au plus (points).
 pub const LARGEUR_NAVIGATION_MIN: f32 = 250.0;
 pub const LARGEUR_NAVIGATION_MAX: f32 = 340.0;

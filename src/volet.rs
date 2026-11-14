@@ -185,6 +185,8 @@ struct Volet<'a> {
     hwnd: Option<isize>,
     /// Windows accepte l'opacité de la fenêtre (fondu possible, préparation invisible).
     transparente: bool,
+    /// La fenêtre est voilée (`systeme::voiler`) : toujours, sauf montrée pour de vrai.
+    voilee: Option<bool>,
     etape: Etape,
     /// La taille du contenu de chaque surface (points), mesurée à chaque image.
     tailles: [egui::Vec2; 2],
@@ -697,10 +699,26 @@ impl eframe::App for Volet<'_> {
             Etape::Montree { .. } => self.montree_image(ui, action),
             Etape::Fermeture { .. } => self.fermer_pas_a_pas(&ctx),
         }
+        // Voilée tant qu'elle n'est pas ouverte pour de bon : eframe montre d'office une
+        // fenêtre à sa première image, même préparée cachée. Fait avant la fin de l'image,
+        // donc avant que la demande de la montrer soit appliquée.
+        let voile = voilee(&self.etape);
+        if let Some(h) = self.hwnd
+            && self.voilee != Some(voile)
+            && systeme::voiler(h, voile)
+        {
+            self.voilee = Some(voile);
+        }
         // Les Paramètres et les autres fenêtres, à chaque image de la fenêtre principale
         // (une fenêtre qui n'y est pas dessinée est détruite par egui).
         self.liens.autres.montrer(&ctx, &p);
     }
+}
+
+/// La fenêtre du volet est-elle voilée à cette étape ? Oui, sauf montrée pour de vrai
+/// (animation d'ouverture, attente d'un choix, fermeture).
+fn voilee(e: &Etape) -> bool {
+    !matches!(e, Etape::Montree { .. } | Etape::Fermeture { .. })
 }
 
 /// Prépare au repos la fenêtre du volet et du petit menu (cachée, invisible), puis la garde :
@@ -750,6 +768,7 @@ pub fn veiller(
                 apparence,
                 hwnd: None,
                 transparente: false,
+                voilee: None,
                 etape: Etape::Preparation(0),
                 tailles: [egui::vec2(LARGEUR, 300.0), egui::vec2(LARGEUR_MENU, 200.0)],
                 effets: true,
@@ -770,5 +789,34 @@ pub fn veiller(
     match r {
         Ok(()) => Ok(s.suite.take()),
         Err(e) => Err((e.to_string(), s.en_cours.take())),
+    }
+}
+
+#[cfg(test)]
+mod essais {
+    use super::*;
+
+    /// Préparée, cachée ou en train de se mettre en place : voilée (eframe la montre d'office
+    /// à sa première image, et winit lui retire son opacité 0). Le voile ne se lève qu'à
+    /// l'ouverture pour de vrai, et revient à la fermeture.
+    #[test]
+    fn voilee_sauf_montree_pour_de_vrai() {
+        let maintenant = Instant::now();
+        let m = Montrer {
+            surface: Surface::Volet,
+            icone: [0, 0, 16, 16],
+            ancre: [8, 8],
+            clic: maintenant,
+            recue: maintenant,
+        };
+        assert!(voilee(&Etape::Preparation(0)));
+        assert!(voilee(&Etape::Preparation(2)));
+        assert!(voilee(&Etape::Cachee));
+        assert!(voilee(&Etape::MiseEnPlace { m, images: 1 }));
+        assert!(!voilee(&Etape::Fermeture {
+            surface: Surface::Menu,
+            debut: maintenant,
+            puis: None,
+        }));
     }
 }

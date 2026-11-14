@@ -166,10 +166,13 @@ impl eframe::App for Seuls {
         let change = self.apparence.suivre(&ctx);
         if self.hwnd.is_none() {
             self.hwnd = hwnd_de(frame);
-            if let Some(h) = self.hwnd
-                && let Some(p) = self.place.take()
-            {
-                systeme::poser(h, p);
+            if let Some(h) = self.hwnd {
+                // Voilée jusqu'à ce qu'elle soit habillée et dessinée : eframe la montre
+                // d'office à sa première image.
+                systeme::voiler(h, true);
+                if let Some(p) = self.place.take() {
+                    systeme::poser(h, p);
+                }
             }
         }
         if let Some(h) = self.hwnd
@@ -181,6 +184,9 @@ impl eframe::App for Seuls {
         if !self.montree && self.images >= crate::autres_fenetres::IMAGES_CACHEES {
             // Habillée et dessinée avant d'être montrée : ni éclair blanc, ni fenêtre vide.
             self.montree = true;
+            if let Some(h) = self.hwnd {
+                systeme::voiler(h, false);
+            }
             ctx.send_viewport_cmd(ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(ViewportCommand::Focus);
         } else if !self.montree {
