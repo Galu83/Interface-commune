@@ -45,6 +45,14 @@ de travail par projet, sur sa branche.
   « Choisir… » ; un `Communs { … }` écrit en entier doit l'ajouter) ;
   `Poste::notifier_action` (un clic sur la notification rend une action au logiciel) ;
   `dessin::champ_raccourci` (saisie d'un raccourci clavier).
+- **Messages Windows du logiciel dans la boucle de l'icône** : `Horloge::recevoir_messages(f)`
+  reçoit les messages de la fenêtre cachée qui ne sont pas à la bibliothèque (`WM_HOTKEY`, ses
+  messages internes, ses minuteries…) et voit la fin de session ; `Poste::sur_le_fil_principal(f)`
+  fait du code sur le fil de cette fenêtre (`RegisterHotKey` sur l'adresse reçue). Plus besoin
+  d'une boucle de messages à soi.
+- **Notifications à trois niveaux** : `Poste::notifier_avec(texte, Niveau, AuClic)`
+  (information, avertissement, erreur). **Icône selon l'état** : `Logiciel::icone_etat`, au
+  plus un changement par seconde.
 - **Fenêtre vide au démarrage corrigée** : chaque fenêtre préparée d'avance (volet et petit
   menu, Paramètres, autres fenêtres) reste voilée (`DWMWA_CLOAK`) jusqu'à son ouverture pour de
   bon ; eframe 0.37 la montrait d'office à sa première image. Vocalis peut retirer son
