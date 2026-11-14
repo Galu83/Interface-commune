@@ -4,7 +4,7 @@
 
 use interface_commune::{icones, verification};
 
-const SOURCES: [(&str, &str); 12] = [
+const SOURCES: [(&str, &str); 13] = [
     ("surface.rs", include_str!("../src/surface.rs")),
     ("menu.rs", include_str!("../src/menu.rs")),
     ("parametres/mod.rs", include_str!("../src/parametres/mod.rs")),
@@ -22,6 +22,7 @@ const SOURCES: [(&str, &str); 12] = [
     ("textes.rs", include_str!("../src/textes.rs")),
     ("autres_fenetres.rs", include_str!("../src/autres_fenetres.rs")),
     ("toutes_faites.rs", include_str!("../src/toutes_faites.rs")),
+    ("briques.rs", include_str!("../src/briques.rs")),
     // Les caractères écrits par leur code : espace insécable, points de suspension.
     ("ajoutés", "\u{a0}…›"),
 ];

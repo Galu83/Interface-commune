@@ -45,7 +45,18 @@ de travail par projet, sur sa branche.
   « Choisir… » ; un `Communs { … }` écrit en entier doit l'ajouter) ;
   `Poste::notifier_action` (un clic sur la notification rend une action au logiciel) ;
   `dessin::champ_raccourci` (saisie d'un raccourci clavier).
-- **Messages Windows du logiciel dans la boucle de l'icône** : `Horloge::recevoir_messages(f)`
+- **Même volet et même petit menu pour tous** (point 6). Le volet se décrit par des briques
+  (`Logiciel::briques`, module `briques`) que la bibliothèque dessine : interrupteur, choix
+  coché avec raccourci à droite, choix segmenté, appareil (icône, nom, %, barre, sous-ligne),
+  titre de section, liste de raccourcis, action. Un interrupteur ou un choix segmenté appelle
+  `Reglages::changer` sans fermer le volet ; les autres rendent leur clé à
+  `Reglages::action`. `dessiner_rapides` ne sert plus qu'au passage, puis disparaîtra.
+- **Les mesures, écrites une fois** dans `mesures` : petit menu comme Windows 11 (lignes de
+  32, écart de 2, marge de 4, séparateur de 9, icône 16 centrée à 20, texte à 42) ; volet
+  (briques de 36, choix segmenté de 32, écart de 2, section de 28, raccourci de 24, marges 6
+  et 14) ; Paramètres (celles de PowerPeek). Les lignes du petit menu passent de 36 + 8 à
+  32 + 2 : plus serrées, comme KVMSoft et PowerPeek.
+ : `Horloge::recevoir_messages(f)`
   reçoit les messages de la fenêtre cachée qui ne sont pas à la bibliothèque (`WM_HOTKEY`, ses
   messages internes, ses minuteries…) et voit la fin de session ; `Poste::sur_le_fil_principal(f)`
   fait du code sur le fil de cette fenêtre (`RegisterHotKey` sur l'adresse reçue). Plus besoin

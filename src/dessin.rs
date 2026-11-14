@@ -33,11 +33,10 @@ pub fn icone(ui: &Ui, centre: egui::Pos2, glyphe: char, taille: f32, c: Rgb) {
     );
 }
 
-/// Dans une ligne de menu : où commence le texte, la marge à droite, et l'écart minimal
-/// entre le texte et l'aide de droite (points).
-const LIGNE_TEXTE_X: f32 = 42.0;
-const LIGNE_MARGE_DROITE: f32 = 12.0;
-const LIGNE_ECART: f32 = 16.0;
+use crate::mesures::{
+    LIGNE_ARRONDI, LIGNE_ECART, LIGNE_ICONE, LIGNE_ICONE_X, LIGNE_MARGE_DROITE, LIGNE_TEXTE_X, MENU_LIGNE,
+    VOLET_LIGNE,
+};
 
 /// La largeur qu'il faut à une ligne de menu pour tout montrer sans couper : `texte` et
 /// `droite`, les largeurs mesurées de ses deux textes.
@@ -45,9 +44,9 @@ pub fn largeur_ligne(texte: f32, droite: Option<f32>) -> f32 {
     LIGNE_TEXTE_X + texte + droite.map_or(0.0, |d| LIGNE_ECART + d) + LIGNE_MARGE_DROITE
 }
 
-/// Une ligne de menu sur toute la largeur : icône, texte, et à droite une aide discrète.
-/// L'aide de droite est toujours entière ; un texte trop long pour la place qui reste finit
-/// par « … » (le nom entier reste dans l'info-bulle).
+/// Une ligne du volet sur toute la largeur ([`VOLET_LIGNE`]) : icône, texte, et à droite une
+/// aide discrète. L'aide de droite est toujours entière ; un texte trop long pour la place qui
+/// reste finit par « … » (le nom entier reste dans l'info-bulle).
 pub fn ligne(
     ui: &mut Ui,
     p: &Palette,
@@ -56,7 +55,25 @@ pub fn ligne(
     texte: &str,
     droite: Option<&str>,
 ) -> Response {
-    let (rect, r) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
+    ligne_de(ui, p, glyphe, couleur_icone, texte, droite, VOLET_LIGNE)
+}
+
+/// Une ligne du petit menu ([`MENU_LIGNE`], comme les menus de Windows 11).
+pub fn ligne_menu(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str) -> Response {
+    ligne_de(ui, p, glyphe, p.texte, texte, None, MENU_LIGNE)
+}
+
+/// Une ligne de cette hauteur ; `glyphe` espace : sans icône.
+pub fn ligne_de(
+    ui: &mut Ui,
+    p: &Palette,
+    glyphe: char,
+    couleur_icone: Rgb,
+    texte: &str,
+    droite: Option<&str>,
+    hauteur: f32,
+) -> Response {
+    let (rect, r) = ui.allocate_exact_size(vec2(ui.available_width(), hauteur), Sense::click());
     let droite = droite.map(|d| {
         ui.painter().layout_no_wrap(
             d.to_string(),
@@ -86,15 +103,18 @@ pub fn ligne(
             None
         };
         if let Some(f) = fond {
-            ui.painter().rect_filled(rect, CornerRadius::same(4), couleur(f));
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(LIGNE_ARRONDI), couleur(f));
         }
-        icone(
-            ui,
-            pos2(rect.left() + 20.0, rect.center().y),
-            glyphe,
-            16.0,
-            couleur_icone,
-        );
+        if glyphe != ' ' {
+            icone(
+                ui,
+                pos2(rect.left() + LIGNE_ICONE_X, rect.center().y),
+                glyphe,
+                LIGNE_ICONE,
+                couleur_icone,
+            );
+        }
         let haut = rect.center().y - galley.size().y / 2.0;
         ui.painter()
             .galley(pos2(rect.left() + LIGNE_TEXTE_X, haut), galley, couleur(p.texte));

@@ -25,11 +25,13 @@
 
 pub mod apparence;
 pub mod autres_fenetres;
+pub mod briques;
 pub mod clics;
 pub mod dessin;
 pub mod fenetres;
 pub mod icones;
 pub mod menu;
+pub mod mesures;
 pub mod parametres;
 pub mod place;
 pub mod polices;
@@ -244,7 +246,16 @@ pub trait Logiciel: Reglages {
     /// L'état, en haut du volet.
     fn etat(&self) -> Etat;
 
-    /// Les réglages rapides du volet (lignes de [`dessin::ligne`], tuiles…), sous l'état.
+    /// Les réglages rapides du volet, sous l'état : des briques toutes faites, dessinées par
+    /// la bibliothèque (interrupteur, choix, choix segmenté, appareil, section, raccourcis,
+    /// action). Un interrupteur ou un choix segmenté change le réglage (`Reglages::changer`)
+    /// sans fermer le volet ; les autres rendent leur clé à `Reglages::action`, volet fermé.
+    fn briques(&self) -> Vec<briques::Brique> {
+        Vec::new()
+    }
+
+    /// **Passage seulement**, à remplacer par [`Logiciel::briques`] : des réglages rapides
+    /// dessinés par le logiciel, sous les briques.
     /// Rend la clé d'une action qui ferme le volet (faite une fois la fenêtre cachée,
     /// par [`Logiciel::action`]) ; un réglage qui ne ferme pas le volet se change ici.
     fn dessiner_rapides(&self, _ui: &mut egui::Ui, _p: &Palette) -> Option<String> {

@@ -12,25 +12,29 @@
 use egui::RichText;
 
 use crate::apparence::couleur;
-use crate::dessin::{self, bouton_icone, ligne};
+use crate::briques::{self, Geste};
+use crate::dessin::{self, bouton_icone, ligne_menu};
 use crate::menu::{self, Choix};
+use crate::mesures::{
+    MENU_ECART, MENU_MARGE, SEPARATEUR, VOLET_MARGE, VOLET_MARGE_BAS, VOLET_MARGE_ETAT, VOLET_ROUE,
+};
 use crate::polices::{semibold, titre};
 use crate::theme::{Palette, Rgb, Surface, TAILLE_PETIT, TAILLE_TEXTE, TAILLE_TITRE_VOLET};
 use crate::{GenreEtat, Logiciel, icones};
 
-/// Largeur du volet, au moins, en points.
-pub const LARGEUR: f32 = 320.0;
-/// Largeur du petit menu, au moins, en points.
-pub const LARGEUR_MENU: f32 = 240.0;
-/// Largeur du volet et du petit menu, au plus, en points (le volet réseau de Windows 11 en
-/// fait 360).
-pub const LARGEUR_MAX: f32 = 400.0;
-/// La marge autour du contenu, et celle, à gauche et à droite, du bloc de l'état (points).
-const MARGE: f32 = 6.0;
-const MARGE_ETAT: f32 = 14.0;
-/// La ligne du bas : marge à gauche, et la roue dentée (points).
-const MARGE_BAS: f32 = 10.0;
-const ROUE: f32 = 36.0;
+/// Largeur du volet et du petit menu : au moins, au plus (points ; [`crate::mesures`]).
+pub use crate::mesures::{LARGEUR_MAX, MENU_LARGEUR as LARGEUR_MENU, VOLET_LARGEUR as LARGEUR};
+const MARGE_ETAT: f32 = VOLET_MARGE_ETAT;
+const MARGE_BAS: f32 = VOLET_MARGE_BAS;
+const ROUE: f32 = VOLET_ROUE;
+
+/// La marge autour du contenu de la surface.
+fn marge(s: Surface) -> f32 {
+    match s {
+        Surface::Volet => VOLET_MARGE,
+        Surface::Menu => MENU_MARGE,
+    }
+}
 
 /// Ce que l'utilisateur a choisi dans le volet ou le petit menu (fait une fois la fenêtre
 /// cachée).
@@ -93,12 +97,13 @@ pub fn largeur(ui: &egui::Ui, s: Surface, l: &dyn Logiciel) -> f32 {
                     + mesure(&e.ligne, semibold(TAILLE_TEXTE)),
             );
             b = b.max(l.largeur_rapides(ui));
+            b = b.max(briques::largeur(ui, &l.briques()));
             let bas = MARGE_BAS + mesure(&version(l), egui::FontId::proportional(TAILLE_PETIT));
             b = b.max(bas + ui.spacing().item_spacing.x + ROUE);
             (LARGEUR, b)
         }
     };
-    (besoin + 2.0 * MARGE).ceil().clamp(min, LARGEUR_MAX)
+    (besoin + 2.0 * marge(s)).ceil().clamp(min, LARGEUR_MAX)
 }
 
 /// Dessine la surface à sa largeur, avec sa marge ; rend ce qui a été choisi et la taille
@@ -110,10 +115,11 @@ pub fn dessiner(
     l: &dyn Logiciel,
 ) -> (Option<Choisi>, egui::Vec2) {
     let largeur = largeur(ui, s, l);
+    let m = marge(s);
     let r = egui::Frame::new()
-        .inner_margin(egui::Margin::same(MARGE as i8))
+        .inner_margin(egui::Margin::same(m as i8))
         .show(ui, |ui| {
-            ui.set_width(largeur - 2.0 * MARGE);
+            ui.set_width(largeur - 2.0 * m);
             match s {
                 Surface::Volet => dessiner_volet(ui, p, l),
                 Surface::Menu => dessiner_menu(ui, p, l),
@@ -124,7 +130,7 @@ pub fn dessiner(
 
 /// Un trait de séparation sur toute la largeur.
 fn separateur(ui: &mut egui::Ui, p: &Palette) {
-    let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 9.0), egui::Sense::hover());
+    let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), SEPARATEUR), egui::Sense::hover());
     ui.painter().hline(
         r.x_range().shrink(4.0),
         r.center().y,
@@ -160,6 +166,11 @@ pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Optio
             }
         });
     ui.add_space(2.0);
+    match briques::dessiner(ui, p, &l.briques()) {
+        Some(Geste::Action(cle)) => choisi = Some(Choisi::Rapide(cle)),
+        Some(Geste::Changer(cle, v)) => l.changer(&cle, v),
+        None => {}
+    }
     if let Some(cle) = l.dessiner_rapides(ui, p) {
         choisi = Some(Choisi::Rapide(cle));
     }
@@ -184,11 +195,12 @@ pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Optio
 /// Le petit menu, dans l'ordre des règles.
 pub fn dessiner_menu(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Option<Choisi> {
     let mut choisi = None;
+    ui.spacing_mut().item_spacing.y = MENU_ECART;
     for li in lignes_du_menu(l) {
         match li {
             None => separateur(ui, p),
             Some(li) => {
-                if ligne(ui, p, li.icone, p.texte, &li.texte, None).clicked() {
+                if ligne_menu(ui, p, li.icone, &li.texte).clicked() {
                     choisi = Some(Choisi::Menu(li.quoi));
                 }
             }

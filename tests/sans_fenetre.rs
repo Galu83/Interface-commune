@@ -206,7 +206,10 @@ fn image(
 fn formes(s: &egui::Shape, textes: &mut Vec<(String, egui::Rect)>) {
     match s {
         egui::Shape::Vec(v) => v.iter().for_each(|s| formes(s, textes)),
-        egui::Shape::Text(t) => textes.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+        egui::Shape::Text(t) => textes.push((
+            t.galley.text().to_string(),
+            egui::Rect::from_min_size(t.pos, t.galley.size()),
+        )),
         _ => {}
     }
 }
@@ -638,4 +641,27 @@ impl Reglages for Alerte {
     }
 
     fn changer(&self, _: &str, _: Valeur) {}
+}
+
+/// Le petit menu a les mesures de Windows 11 ([`interface_commune::mesures`]) : lignes de 32
+/// points séparées de 2, pour tous les logiciels.
+#[test]
+fn petit_menu_aux_mesures_communes() {
+    use interface_commune::mesures::{MENU_ECART, MENU_LIGNE};
+    if polices::polices().is_err() {
+        return;
+    }
+    let demo = Demo::new();
+    let textes = image(egui::vec2(800.0, 1200.0), 1.0, |ui, p| {
+        surface::dessiner(ui, p, Surface::Menu, &demo);
+    });
+    let y = |t: &str| {
+        textes
+            .iter()
+            .find(|(x, _)| x == t)
+            .map(|(_, r)| r.center().y)
+            .expect(t)
+    };
+    let pas = y("Rechercher une mise à jour") - y("Paramètres");
+    assert!((pas - MENU_LIGNE - MENU_ECART).abs() < 0.6, "pas : {pas}");
 }

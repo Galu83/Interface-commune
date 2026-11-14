@@ -13,13 +13,14 @@ mod demo {
 
     use interface_commune::apparence::couleur;
     use interface_commune::autres_fenetres::{Cadre, Contenu, Ouverture};
+    use interface_commune::briques::Brique;
     use interface_commune::horloge::{Horloge, Poste, instance_unique};
     use interface_commune::parametres::Contexte;
     use interface_commune::theme::couverture;
     use interface_commune::toutes_faites::{self, Bouton, Champ, Lecture, ReponseLecture, Simple, Ton};
     use interface_commune::{
-        Communs, Etat, EtatMiseAJour, GenreEtat, Identite, Logiciel, Page, Palette, Reglages, Valeur, dessin,
-        menu, parametres,
+        Communs, Etat, EtatMiseAJour, GenreEtat, Identite, Logiciel, Page, Reglages, Valeur, dessin, menu,
+        parametres,
     };
 
     /// L'icône de l'exemple : un carré arrondi, de la couleur du texte de la barre des tâches.
@@ -76,17 +77,22 @@ mod demo {
             }
         }
 
-        fn dessiner_rapides(&self, ui: &mut egui::Ui, p: &Palette) -> Option<String> {
-            let mut actif = self.rapide.load(Ordering::Relaxed);
-            ui.horizontal(|ui| {
-                ui.add_space(14.0);
-                ui.label("Mode essai");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    dessin::interrupteur(ui, p, &mut actif);
-                });
-            });
-            self.rapide.store(actif, Ordering::Relaxed);
-            None
+        fn briques(&self) -> Vec<Brique> {
+            vec![
+                Brique::Interrupteur {
+                    cle: "essai".into(),
+                    glyphe: Some('\u{E7F4}'),
+                    texte: "Mode essai".into(),
+                    actif: self.rapide.load(Ordering::Relaxed),
+                },
+                Brique::Choix {
+                    cle: "bonjour".into(),
+                    glyphe: None,
+                    texte: "Dire bonjour".into(),
+                    coche: false,
+                    raccourci: Some("Ctrl+Alt+B".into()),
+                },
+            ]
         }
 
         fn actions_menu(&self) -> Vec<menu::Action> {
@@ -207,8 +213,12 @@ mod demo {
         }
 
         fn changer(&self, cle: &str, valeur: Valeur) {
-            if let (interface_commune::cles::DEMARRAGE, Valeur::Booleen(b)) = (cle, valeur) {
-                self.demarrage.store(b, Ordering::Relaxed);
+            match (cle, valeur) {
+                (interface_commune::cles::DEMARRAGE, Valeur::Booleen(b)) => {
+                    self.demarrage.store(b, Ordering::Relaxed)
+                }
+                ("essai", Valeur::Booleen(b)) => self.rapide.store(b, Ordering::Relaxed),
+                _ => {}
             }
         }
     }

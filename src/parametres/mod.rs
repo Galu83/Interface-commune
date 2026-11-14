@@ -39,26 +39,13 @@ use modele::{Annulation, PAGES_POUR_RECHERCHE, Page, Valeur};
 /// ([`crate::autres_fenetres`]) : réservée.
 pub const CLE_FENETRE: &str = "parametres";
 
-/// Taille de la fenêtre au premier lancement, et taille minimale (points).
-pub const TAILLE: [f32; 2] = [920.0, 680.0];
-pub const TAILLE_MIN: [f32; 2] = [700.0, 500.0];
-/// Largeur de la navigation : au moins (celle de PowerPeek), au plus (points).
-pub const LARGEUR_NAVIGATION_MIN: f32 = 250.0;
-pub const LARGEUR_NAVIGATION_MAX: f32 = 340.0;
-/// Les marges de la navigation (gauche, droite, haut, bas ; points).
-const MARGE_NAVIGATION: [i8; 4] = [10, 6, 18, 12];
-/// Une ligne de la navigation (points) : sa hauteur, où commence son texte, la place gardée
-/// à droite pour le point d'alerte.
-pub const LIGNE_NAVIGATION: f32 = 38.0;
-/// Rayon du point d'alerte d'une ligne de navigation (à 16 points du bord droit).
-pub const RAYON_ALERTE: f32 = 4.0;
-const NAVIGATION_TEXTE_X: f32 = 46.0;
-const NAVIGATION_DROITE: f32 = 32.0;
-/// Le logo, le nom et la version en haut de la navigation (points).
-pub const TAILLE_LOGO: f32 = 32.0;
-pub const TAILLE_NOM: f32 = 16.0;
-/// L'espace entre les pages du logiciel et les trois pages communes (points).
-pub const ESPACE_COMMUNES: f32 = 6.0;
+// Les mesures, écrites une seule fois dans `crate::mesures`.
+pub use crate::mesures::{
+    ESPACE_COMMUNES, NAVIGATION_LARGEUR_MAX as LARGEUR_NAVIGATION_MAX,
+    NAVIGATION_LARGEUR_MIN as LARGEUR_NAVIGATION_MIN, NAVIGATION_LIGNE as LIGNE_NAVIGATION,
+    PARAMETRES_TAILLE as TAILLE, PARAMETRES_TAILLE_MIN as TAILLE_MIN, RAYON_ALERTE, TAILLE_LOGO, TAILLE_NOM,
+};
+use crate::mesures::{NAVIGATION_DROITE, NAVIGATION_MARGES as MARGE_NAVIGATION, NAVIGATION_TEXTE_X};
 
 /// Ce qu'une page reçoit pour se dessiner : la palette, et de quoi signaler un changement,
 /// un redémarrage nécessaire ou une sous-page.

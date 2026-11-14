@@ -8,6 +8,7 @@
 | `src/horloge.rs` | l'icône près de l'horloge, une seule copie, `Horloge::lancer`, `Poste` |
 | `src/fenetres.rs`, `volet.rs`, `surface.rs` | le fil des fenêtres, la fenêtre unique du volet et du petit menu (la fenêtre principale de la boucle), leur contenu |
 | `src/autres_fenetres.rs` | les autres fenêtres de la boucle (Paramètres, fenêtres du logiciel) |
+| `src/briques.rs`, `mesures.rs` | les briques du volet ; les mesures communes du volet, du menu et des Paramètres |
 | `src/toutes_faites.rs` | la fenêtre simple et la fenêtre de lecture |
 | `src/menu.rs` | l'ordre du petit menu |
 | `src/parametres/` | les Paramètres : modèle (pages, Annuler), dessin, fenêtre |
