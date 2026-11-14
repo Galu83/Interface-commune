@@ -25,7 +25,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM,
@@ -42,17 +42,17 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::Shell::{
     NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_RESPECT_QUIET_TIME,
-    NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW,
+    NIIF_WARNING, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW,
     NOTIFYICONIDENTIFIER, Shell_NotifyIconGetRect, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
     DestroyMenu, DestroyWindow, DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW,
-    GetWindowLongPtrW, HICON, ICONINFO, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
-    RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetWindowLongPtrW,
-    TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE,
-    WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WNDCLASSW,
-    WS_OVERLAPPED,
+    GetWindowLongPtrW, HICON, ICONINFO, KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
+    PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetTimer,
+    SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage,
+    WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_QUERYENDSESSION, WM_SETTINGCHANGE,
+    WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -73,6 +73,16 @@ const WM_COMMANDE: u32 = WM_APP + 4;
 /// Le menu moderne ne peut pas s'ouvrir : le menu de secours à `lparam` (x, y).
 const WM_MENU_DE_SECOURS: u32 = WM_APP + 6;
 const ID_ICONE: u32 = 1;
+/// La minuterie qui redessine l'icône quand un changement arrive trop tôt.
+const MINUTERIE_ICONE: usize = 0x1C0E;
+/// Au plus un changement d'icône par seconde (contre le clignotement).
+pub const DELAI_ICONE: Duration = Duration::from_secs(1);
+
+/// Le temps à attendre avant de changer l'icône ; `None` : tout de suite.
+fn attente_icone(derniere: Option<Instant>, maintenant: Instant) -> Option<Duration> {
+    let passe = maintenant.checked_duration_since(derniere?)?;
+    DELAI_ICONE.checked_sub(passe).filter(|d| !d.is_zero())
+}
 /// Un clic sur une notification (`NIN_BALLOONUSERCLICK`).
 const NIN_BALLOONUSERCLICK: u32 = 0x405;
 
@@ -151,7 +161,7 @@ pub fn instance_unique(nom: &str) -> Result<Unique, bool> {
 enum Commande {
     Notifier {
         texte: String,
-        probleme: bool,
+        niveau: Niveau,
         au_clic: AuClic,
     },
     Infobulle(String),
@@ -190,8 +200,9 @@ enum Destinataire {
     Logiciel,
 }
 
-fn destinataire(msg: u32, taskbar_created: u32) -> Destinataire {
+fn destinataire(msg: u32, wp: usize, taskbar_created: u32) -> Destinataire {
     match msg {
+        WM_TIMER if wp == MINUTERIE_ICONE => Destinataire::Bibliotheque,
         WM_ICONE | WM_COMMANDE | WM_OUVRIR_PARAMETRES | WM_MENU_DE_SECOURS | WM_CLOSE | WM_DESTROY => {
             Destinataire::Bibliotheque
         }
@@ -199,6 +210,15 @@ fn destinataire(msg: u32, taskbar_created: u32) -> Destinataire {
         WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE => Destinataire::LesDeux,
         _ => Destinataire::Logiciel,
     }
+}
+
+/// Le niveau d'une notification : son icône dans la bulle de Windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Niveau {
+    #[default]
+    Information,
+    Avertissement,
+    Erreur,
 }
 
 /// Ce que fait un clic sur une notification.
@@ -245,8 +265,21 @@ impl Poste {
     pub fn notifier(&self, texte: &str, probleme: bool, page: Option<&str>) {
         self.envoyer(Commande::Notifier {
             texte: texte.into(),
-            probleme,
+            niveau: if probleme {
+                Niveau::Erreur
+            } else {
+                Niveau::Information
+            },
             au_clic: AuClic::Parametres(page.map(str::to_string)),
+        });
+    }
+
+    /// Une notification près de l'horloge, à ce niveau ; un clic dessus fait `au_clic`.
+    pub fn notifier_avec(&self, texte: &str, niveau: Niveau, au_clic: AuClic) {
+        self.envoyer(Commande::Notifier {
+            texte: texte.into(),
+            niveau,
+            au_clic,
         });
     }
 
@@ -262,7 +295,11 @@ impl Poste {
     pub fn notifier_action(&self, texte: &str, probleme: bool, action: &str) {
         self.envoyer(Commande::Notifier {
             texte: texte.into(),
-            probleme,
+            niveau: if probleme {
+                Niveau::Erreur
+            } else {
+                Niveau::Information
+            },
             au_clic: AuClic::Action(action.into()),
         });
     }
@@ -467,7 +504,9 @@ fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: R
 fn fabriquer_icone(logiciel: &dyn Logiciel, barre_sombre: bool) -> Option<HICON> {
     // SAFETY: simples lectures de réglages de Windows.
     let taille = unsafe { GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()) }.clamp(16, 64);
-    let px = (logiciel.identite().icone)(taille as u32, barre_sombre);
+    let px = logiciel
+        .icone_etat(taille as u32, barre_sombre)
+        .unwrap_or_else(|| (logiciel.identite().icone)(taille as u32, barre_sombre));
     if px.len() != (taille * taille * 4) as usize {
         return None;
     }
@@ -547,6 +586,9 @@ struct Principal {
     au_clic: AuClic,
     /// Les messages de Windows du logiciel.
     messages: Option<Recepteur>,
+    /// Le dernier changement d'icône, et un changement qui attend la fin du délai.
+    icone_changee: Option<Instant>,
+    icone_attendue: bool,
 }
 
 /// L'état du fil principal, rangé dans la fenêtre cachée (`GWLP_USERDATA`) : aucune
@@ -607,7 +649,7 @@ impl Principal {
             match c {
                 Commande::Notifier {
                     texte,
-                    probleme,
+                    niveau,
                     au_clic,
                 } => {
                     self.au_clic = au_clic;
@@ -615,7 +657,11 @@ impl Principal {
                     d.uFlags = NIF_INFO;
                     copier(&mut d.szInfoTitle, &self.logiciel.identite().nom);
                     copier(&mut d.szInfo, &texte);
-                    d.dwInfoFlags = if probleme { NIIF_ERROR } else { NIIF_INFO } | NIIF_RESPECT_QUIET_TIME;
+                    d.dwInfoFlags = match niveau {
+                        Niveau::Information => NIIF_INFO,
+                        Niveau::Avertissement => NIIF_WARNING,
+                        Niveau::Erreur => NIIF_ERROR,
+                    } | NIIF_RESPECT_QUIET_TIME;
                     // SAFETY: comme `ajouter_icone`.
                     let _ = unsafe { Shell_NotifyIconW(NIM_MODIFY, &d) };
                 }
@@ -623,7 +669,7 @@ impl Principal {
                     self.infobulle = t;
                     self.modifier_icone();
                 }
-                Commande::Icone => self.redessiner_icone(true),
+                Commande::Icone => self.icone_demandee(),
                 Commande::Executer(f) => f(self.fenetre.0 as isize),
                 Commande::Quitter => {
                     self.fermer();
@@ -692,6 +738,33 @@ impl Principal {
 
     fn ouvrir_parametres(&self, page: Option<String>) {
         self.liens().montrer_page(&self.poste.demandes, page);
+    }
+
+    /// L'icône doit changer : tout de suite, ou à la fin du délai contre le clignotement.
+    fn icone_demandee(&mut self) {
+        if self.icone_attendue {
+            return;
+        }
+        match attente_icone(self.icone_changee, Instant::now()) {
+            None => self.changer_icone(),
+            Some(d) => {
+                self.icone_attendue = true;
+                // SAFETY: minuterie de la fenêtre de ce fil ; WM_TIMER la rappelle.
+                unsafe {
+                    SetTimer(
+                        Some(self.fenetre),
+                        MINUTERIE_ICONE,
+                        d.as_millis().max(1) as u32,
+                        None,
+                    )
+                };
+            }
+        }
+    }
+
+    fn changer_icone(&mut self) {
+        self.icone_changee = Some(Instant::now());
+        self.redessiner_icone(true);
     }
 
     /// Passe un message au logiciel ; `Some(résultat)` s'il l'a traité.
@@ -793,7 +866,7 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
             // Message interne sans le jeton : venu d'un autre programme, ignoré.
             return true;
         }
-        match destinataire(msg, p.taskbar_created) {
+        match destinataire(msg, wp.0, p.taskbar_created) {
             Destinataire::Bibliotheque => {}
             Destinataire::LesDeux => {
                 let _ = p.transmettre(msg, wp.0, lp.0);
@@ -824,6 +897,14 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
             }
             WM_COMMANDE => {
                 p.commandes();
+                true
+            }
+            WM_TIMER => {
+                // La minuterie de l'icône (les autres vont au logiciel).
+                // SAFETY: minuterie de cette fenêtre.
+                let _ = unsafe { KillTimer(Some(p.fenetre), MINUTERIE_ICONE) };
+                p.icone_attendue = false;
+                p.changer_icone();
                 true
             }
             WM_OUVRIR_PARAMETRES => {
@@ -928,6 +1009,8 @@ fn boucle(
         clics: Clics::default(),
         au_clic: AuClic::default(),
         messages,
+        icone_changee: None,
+        icone_attendue: false,
     };
     p.icone = fabriquer_icone(&*logiciel, p.barre_sombre);
     p.ajouter_icone();
@@ -970,16 +1053,58 @@ mod essais {
             WM_DESTROY,
             barre,
         ] {
-            assert_eq!(destinataire(m, barre), Destinataire::Bibliotheque, "{m:#x}");
+            assert_eq!(destinataire(m, 0, barre), Destinataire::Bibliotheque, "{m:#x}");
         }
         for m in [WM_QUERYENDSESSION, WM_ENDSESSION, WM_SETTINGCHANGE] {
-            assert_eq!(destinataire(m, barre), Destinataire::LesDeux, "{m:#x}");
+            assert_eq!(destinataire(m, 0, barre), Destinataire::LesDeux, "{m:#x}");
         }
         for m in [WM_HOTKEY, WM_POWERBROADCAST, WM_APP + 100] {
-            assert_eq!(destinataire(m, barre), Destinataire::Logiciel, "{m:#x}");
+            assert_eq!(destinataire(m, 0, barre), Destinataire::Logiciel, "{m:#x}");
         }
+        // La minuterie de l'icône est à la bibliothèque ; celles du logiciel, à lui.
+        assert_eq!(
+            destinataire(WM_TIMER, MINUTERIE_ICONE, barre),
+            Destinataire::Bibliotheque
+        );
+        assert_eq!(destinataire(WM_TIMER, 7, barre), Destinataire::Logiciel);
         // Avant « TaskbarCreated » (0 : pas encore connu), 0 n'est pas un message de la barre.
-        assert_eq!(destinataire(0, 0), Destinataire::Logiciel);
+        assert_eq!(destinataire(0, 0, 0), Destinataire::Logiciel);
+    }
+
+    /// Au plus un changement d'icône par seconde : le suivant attend la fin du délai.
+    #[test]
+    fn icone_contre_le_clignotement() {
+        let t = Instant::now();
+        assert_eq!(attente_icone(None, t), None);
+        assert_eq!(
+            attente_icone(Some(t), t + Duration::from_millis(300)),
+            Some(Duration::from_millis(700))
+        );
+        assert_eq!(attente_icone(Some(t), t + DELAI_ICONE), None);
+        assert_eq!(attente_icone(Some(t), t + Duration::from_secs(5)), None);
+    }
+
+    /// Trois niveaux de notification.
+    #[test]
+    fn notification_a_trois_niveaux() {
+        let p = Horloge::new("essai-niveaux").poste();
+        p.notifier("Info.", false, None);
+        p.notifier_avec("Attention.", Niveau::Avertissement, AuClic::Action("voir".into()));
+        p.notifier("Erreur.", true, None);
+        let niveaux: Vec<Niveau> = p
+            .file
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|c| match c {
+                Commande::Notifier { niveau, .. } => Some(*niveau),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            niveaux,
+            [Niveau::Information, Niveau::Avertissement, Niveau::Erreur]
+        );
     }
 
     /// Du code du logiciel attend son tour sur le fil de la fenêtre cachée.

@@ -261,6 +261,13 @@ pub trait Logiciel: Reglages {
         Vec::new()
     }
 
+    /// L'icône près de l'horloge selon l'état du logiciel (BGRA, comme `Identite::icone`) ;
+    /// `None` : l'icône du logiciel. Relue à chaque `Poste::redessiner_icone`, au plus une
+    /// fois par seconde (contre le clignotement).
+    fn icone_etat(&self, _taille: u32, _barre_sombre: bool) -> Option<Vec<u8>> {
+        None
+    }
+
     /// Les lignes communes de plus du petit menu, placées avant « Quitter » (« Ouvrir le
     /// journal » par défaut, dans la langue de [`Reglages::textes`]).
     fn lignes_en_plus(&self) -> Vec<menu::Action> {
