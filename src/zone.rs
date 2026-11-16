@@ -860,4 +860,58 @@ mod essais {
         let i = Image::depuis_rvba(1, vec![1, 2, 3, 4]);
         assert_eq!(i.bgra, [3, 2, 1, 4]);
     }
+
+    /// La fenêtre cachée, pour de vrai, sans rien montrer : aucune icône n'est donnée à
+    /// Windows (les rappels sont inscrits à la main), des gestes lui sont postés comme
+    /// Windows le ferait. Chacun revient avec son icône et son point, dans l'ordre ; un
+    /// message d'une icône inconnue et le survol sont ignorés ; « TaskbarCreated » demande
+    /// de remettre les icônes.
+    #[test]
+    fn gestes_recus_par_la_fenetre_cachee() {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
+        };
+        let mut z = Zone::creer("EssaiZoneGestes", "Essai").unwrap();
+        {
+            let mut p = z.partage.borrow_mut();
+            p.rappels.insert(PREMIER_MESSAGE, ("souris".into(), 1));
+            p.rappels.insert(PREMIER_MESSAGE + 1, ("clavier".into(), 2));
+        }
+        let point = |x: u16, y: u16| WPARAM(usize::from(x) | (usize::from(y) << 16));
+        let poster = |msg: u32, wp: WPARAM, lp: isize| {
+            // SAFETY: fenêtre de ce fil, message sans pointeur.
+            unsafe { PostMessageW(Some(z.fenetre), msg, wp, LPARAM(lp)) }.unwrap();
+        };
+        poster(PREMIER_MESSAGE, point(100, 200), 0x0400); // NIN_SELECT
+        poster(PREMIER_MESSAGE + 1, point(300, 400), 0x007B); // WM_CONTEXTMENU
+        poster(PREMIER_MESSAGE, point(1, 1), 0x0200); // survol : ignoré
+        poster(PREMIER_MESSAGE + 7, point(1, 1), 0x0400); // icône inconnue : ignorée
+        poster(PREMIER_MESSAGE + 1, point(5, 6), 0x0405); // clic sur la notification
+        let barre = z.partage.borrow().taskbar_created;
+        poster(barre, WPARAM(0), 0);
+        let mut m = MSG::default();
+        // SAFETY: boucle des messages de ce fil, sur un MSG local.
+        unsafe {
+            while PeekMessageW(&mut m, None, 0, 0, PM_REMOVE).as_bool() {
+                let _ = TranslateMessage(&m);
+                DispatchMessageW(&m);
+            }
+        }
+        assert!(z.partage.borrow().a_remettre, "Explorateur redémarré");
+        let e = z.evenements();
+        assert!(!z.partage.borrow().a_remettre, "icônes remises");
+        let vu: Vec<(&str, Message, [i32; 2])> =
+            e.iter().map(|e| (e.icone.as_str(), e.message, e.ancre)).collect();
+        assert_eq!(
+            vu,
+            [
+                ("souris", Message::Selection, [100, 200]),
+                ("clavier", Message::MenuContextuel, [300, 400]),
+                ("clavier", Message::Notification, [5, 6]),
+            ]
+        );
+        // Sans icône dans la barre, la place est un petit carré autour de la souris.
+        assert!(e.iter().all(|e| e.rect[2] - e.rect[0] == 16));
+        assert!(z.evenements().is_empty());
+    }
 }
