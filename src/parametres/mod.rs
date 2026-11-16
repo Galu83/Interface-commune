@@ -60,9 +60,18 @@ pub struct Contexte<'a> {
     groupes: Vec<(String, Vec<Changement>)>,
     redemarrage: Option<String>,
     aller_a: Option<String>,
+    brouillon: Option<String>,
 }
 
 impl Contexte<'_> {
+    /// Le brouillon entier du logiciel ([`Reglages::instantane`]) vient d'être modifié par
+    /// l'utilisateur : la bulle « Annuler » (titre `titre`) le remet, d'un coup, tel qu'il
+    /// était au début de cette image ([`Reglages::remettre`]). À appeler quand le contenu d'une
+    /// page change le brouillon ; plusieurs appels de suite ne font qu'une bulle.
+    pub fn brouillon_modifie(&mut self, titre: &str) {
+        self.brouillon = Some(titre.into());
+    }
+
     /// Un réglage vient d'être changé par l'utilisateur : la bibliothèque le rend au
     /// logiciel (`Reglages::changer`, effet immédiat) et ouvre la bulle « Annuler ».
     pub fn changer(&mut self, cle: &str, titre: &str, avant: Valeur, apres: Valeur) {
@@ -107,6 +116,8 @@ pub struct Parametres {
     pub annulation: Annulation,
     /// Le redémarrage demandé par un réglage (la raison), jusqu'au redémarrage.
     pub redemarrage: Option<String>,
+    /// Le brouillon entier du logiciel au début de l'image en cours (pour « Annuler »).
+    avant_image: Option<modele::Instantane>,
     /// « Rétablir les réglages par défaut » attend sa confirmation.
     pub confirmer_retablir: bool,
     /// Les textes avec lesquels la navigation a été faite (une autre langue la refait).
@@ -126,6 +137,7 @@ impl Parametres {
             recherche: String::new(),
             annulation: Annulation::default(),
             redemarrage: None,
+            avant_image: None,
             confirmer_retablir: false,
             textes,
             logo: None,
@@ -415,6 +427,7 @@ impl Parametres {
             ui.add_space(8.0);
         }
         self.entete(ui, p, &page.titre);
+        self.avant_image = l.instantane();
         self.bulle_annuler(ui, p, l);
         let communs = l.communs();
         let t = self.textes.clone();
@@ -433,6 +446,8 @@ impl Parametres {
             modele::A_PROPOS => self.page_a_propos(ui, p, l, &communs),
             cle => self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_page(cle, ui, c)),
         }
+        // Le bas de la fenêtre, sous toutes les pages.
+        self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_pied(ui, c));
     }
 
     /// Fait dessiner le logiciel (une page propre, ses cartes de Général), puis applique ce
@@ -454,6 +469,7 @@ impl Parametres {
             groupes: Vec::new(),
             redemarrage: None,
             aller_a: None,
+            brouillon: None,
         };
         dessin(l, ui, &mut c);
         for (cle, titre, avant, apres) in c.changements {
@@ -461,6 +477,11 @@ impl Parametres {
         }
         for (titre, changements) in c.groupes {
             self.changer_groupe(l, &titre, changements);
+        }
+        if let Some(titre) = c.brouillon
+            && let Some(avant) = self.avant_image.clone()
+        {
+            self.annulation.changer_brouillon(&titre, avant, Instant::now());
         }
         if let Some(r) = c.redemarrage {
             self.redemarrage = Some(r);
@@ -497,6 +518,9 @@ impl Parametres {
         });
         ui.add_space(8.0);
         if annuler {
+            if let Some(avant) = self.annulation.annuler_brouillon(Instant::now()) {
+                l.remettre(&avant);
+            }
             for (cle, avant) in self.annulation.annuler(Instant::now()) {
                 l.changer(&cle, avant);
             }

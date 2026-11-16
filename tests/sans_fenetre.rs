@@ -821,3 +821,118 @@ fn a_propos_licences_credits_et_groupe() {
         ]
     );
 }
+
+/// Un logiciel à brouillon : ses réglages se modifient d'un bloc (un `Vec`), avec un pied de
+/// page et une fermeture qui peut être refusée.
+struct AvecBrouillon {
+    identite: Identite,
+    brouillon: Mutex<Vec<i32>>,
+    /// La page change le brouillon à la prochaine image (une seule fois).
+    modifier: AtomicBool,
+    enregistrement_ok: AtomicBool,
+    fermetures: Mutex<Vec<bool>>,
+}
+
+impl Reglages for AvecBrouillon {
+    fn identite(&self) -> &Identite {
+        &self.identite
+    }
+
+    fn action(&self, _: &str) {}
+
+    fn rechercher_mise_a_jour(&self) {}
+
+    fn pages(&self) -> Vec<Page> {
+        vec![Page::new("p", "Page du brouillon", '\u{E7F4}')]
+    }
+
+    fn dessiner_page(&self, _cle: &str, ui: &mut egui::Ui, page: &mut Contexte) {
+        ui.label("Contenu du brouillon");
+        if self.modifier.swap(false, Ordering::Relaxed) {
+            self.brouillon.lock().expect("verrou").push(2);
+            page.brouillon_modifie("Réglages");
+        }
+    }
+
+    fn dessiner_pied(&self, ui: &mut egui::Ui, _page: &mut Contexte) {
+        ui.label("Réglage pas enregistré");
+    }
+
+    fn instantane(&self) -> Option<interface_commune::Instantane> {
+        Some(interface_commune::Instantane::new(
+            self.brouillon.lock().expect("verrou").clone(),
+        ))
+    }
+
+    fn remettre(&self, instantane: &interface_commune::Instantane) {
+        if let Some(v) = instantane.get::<Vec<i32>>() {
+            self.brouillon.lock().expect("verrou").clone_from(v);
+        }
+    }
+
+    fn peut_fermer(&self, imposee: bool) -> bool {
+        self.fermetures.lock().expect("verrou").push(imposee);
+        self.enregistrement_ok.load(Ordering::Relaxed)
+    }
+
+    fn communs(&self) -> Communs {
+        Communs::default()
+    }
+
+    fn changer(&self, _: &str, _: Valeur) {}
+}
+
+/// Un brouillon entier : la page le modifie, la bulle « Annuler » le remet d'un coup à l'état
+/// d'avant l'image ; le pied de page est sous toutes les pages, communes comprises ; la
+/// fermeture passe par le logiciel, qui peut la refuser.
+#[test]
+fn brouillon_entier_pied_de_page_et_fermeture() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let l = AvecBrouillon {
+        identite: identite(),
+        brouillon: Mutex::new(vec![1]),
+        modifier: AtomicBool::new(true),
+        enregistrement_ok: AtomicBool::new(false),
+        fermetures: Mutex::default(),
+    };
+    let mut s = Parametres::new(&l, Some("p"));
+    let v = image_parametres(&mut s, &l);
+    assert!(texte(&v, "Contenu du brouillon").is_some());
+    assert!(
+        texte(&v, "Réglage pas enregistré").is_some(),
+        "pied sous une page propre"
+    );
+    assert_eq!(*l.brouillon.lock().expect("verrou"), vec![1, 2]);
+    // La bulle est celle du brouillon : seul `annuler_brouillon` la défait, d'un coup.
+    assert!(s.annulation.annuler(std::time::Instant::now()).is_empty());
+    let avant = s
+        .annulation
+        .annuler_brouillon(std::time::Instant::now())
+        .expect("bulle du brouillon");
+    l.remettre(&avant);
+    assert_eq!(*l.brouillon.lock().expect("verrou"), vec![1]);
+    // Le pied est aussi sous les pages communes.
+    let mut g = Parametres::new(&l, Some("general"));
+    let v = image_parametres(&mut g, &l);
+    assert!(texte(&v, "Réglage pas enregistré").is_some(), "pied sous Général");
+    // Fermeture : refusée tant que l'enregistrement échoue, acceptée ensuite.
+    let mut contenu = interface_commune::parametres::fenetre::ContenuParametres::new(
+        std::sync::Arc::new(AvecBrouillon {
+            identite: identite(),
+            brouillon: Mutex::default(),
+            modifier: AtomicBool::new(false),
+            enregistrement_ok: AtomicBool::new(false),
+            fermetures: Mutex::default(),
+        }),
+        Default::default(),
+        None,
+    );
+    use interface_commune::autres_fenetres::Contenu;
+    assert!(!contenu.peut_fermer(false), "refusée");
+    assert!(
+        !contenu.peut_fermer(true),
+        "le refus est rendu tel quel, la fenêtre l'ignore"
+    );
+}

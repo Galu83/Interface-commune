@@ -50,7 +50,7 @@ pub mod systeme;
 #[cfg(windows)]
 pub mod volet;
 
-pub use parametres::modele::{Page, Valeur};
+pub use parametres::modele::{Instantane, Page, Valeur};
 pub use textes::{Langue, Textes};
 pub use theme::{Palette, Rgb};
 
@@ -265,6 +265,32 @@ pub trait Reglages: Send + Sync + 'static {
     /// Un réglage changé : à appliquer et enregistrer tout de suite (aussi quand
     /// « Annuler » remet la valeur d'avant).
     fn changer(&self, cle: &str, valeur: Valeur);
+
+    /// Le bas de la fenêtre, sous **toutes** les pages (communes comprises) : les messages du
+    /// logiciel qui valent pour tout (un enregistrement refusé, un avis du service…), avec
+    /// leurs boutons (`dessin::carte`). Rien par défaut.
+    fn dessiner_pied(&self, _ui: &mut egui::Ui, _page: &mut parametres::Contexte) {}
+
+    /// **Brouillon entier** : l'état des réglages que le logiciel modifie d'un bloc, pris au
+    /// début de chaque image des Paramètres (il doit être rapide : un clone). `None` : le
+    /// logiciel change ses réglages un par un ([`Reglages::changer`]) et n'a pas de brouillon.
+    /// Voir [`parametres::Contexte::brouillon_modifie`].
+    fn instantane(&self) -> Option<Instantane> {
+        None
+    }
+
+    /// « Annuler » après un [`parametres::Contexte::brouillon_modifie`] : le logiciel reprend
+    /// ce brouillon (et l'enregistre comme n'importe quel changement).
+    fn remettre(&self, _instantane: &Instantane) {}
+
+    /// Les Paramètres vont se fermer : le logiciel enregistre ce qui attend. `false` refuse la
+    /// fermeture (l'enregistrement a échoué : la fenêtre reste ouverte, et
+    /// [`Reglages::dessiner_pied`] dit pourquoi) ; sans effet quand `imposee` (le logiciel se
+    /// ferme). Toujours appelé, même fenêtre réduite. À ne pas refuser pour toujours : si rien
+    /// ne peut plus être enregistré (le logiciel s'arrête), rendre `true`.
+    fn peut_fermer(&self, _imposee: bool) -> bool {
+        true
+    }
 
     /// La place des Paramètres retenue (gauche, haut, largeur, hauteur, en pixels).
     fn place_parametres(&self) -> Option<place::Place> {

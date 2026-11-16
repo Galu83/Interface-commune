@@ -157,6 +157,18 @@ pub trait Contenu: Send + 'static {
     /// `egui::CentralPanel` (ou [`crate::dessin::fond`]) les donne.
     fn dessiner(&mut self, ui: &mut egui::Ui, cadre: &mut Cadre<'_>);
 
+    /// La fenêtre va se fermer : le contenu enregistre ce qui attend, et peut **refuser**
+    /// (`false`) si l'enregistrement a échoué : la fenêtre reste ouverte, et le contenu montre
+    /// pourquoi. Toujours appelé, quelle que soit la façon de fermer, même fenêtre réduite.
+    ///
+    /// `imposee` : la fermeture ne se discute pas ([`AutresFenetres::fermer`] ou
+    /// [`AutresFenetres::tout_fermer`] : le logiciel se ferme, la session se termine) ; la
+    /// réponse est alors ignorée, mais le contenu a pu enregistrer. Pour la croix, Alt+F4 ou
+    /// la barre des tâches, `imposee` est `false` et le refus garde la fenêtre.
+    fn peut_fermer(&mut self, _imposee: bool) -> bool {
+        true
+    }
+
     /// La fenêtre se ferme ; `place` : sa dernière place (pixels), à retenir.
     fn fermee(&mut self, _place: Option<Place>) {}
 }
@@ -224,6 +236,8 @@ struct Fenetre {
     voilee: Option<bool>,
     devant: bool,
     fermer: bool,
+    /// Le contenu a déjà été consulté sur cette fermeture (`Contenu::peut_fermer`).
+    consulte: bool,
 }
 
 /// Ce que la fenêtre devient après une image.
@@ -240,8 +254,16 @@ pub const IMAGES_CACHEES: u32 = 2;
 impl Fenetre {
     fn image(&mut self, ui: &mut egui::Ui, classe: ViewportClass, palette: &Palette) -> Apres {
         let ctx = ui.ctx().clone();
-        if self.fermer || ui.input(|i| i.viewport().close_requested()) {
+        if self.fermer {
             return Apres::Fermer;
+        }
+        if ui.input(|i| i.viewport().close_requested()) {
+            // La croix, Alt+F4, la barre des tâches : le contenu enregistre, ou refuse.
+            if self.contenu.peut_fermer(false) {
+                self.consulte = true;
+                return Apres::Fermer;
+            }
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
         }
         self.images = self.images.saturating_add(1);
         let reelle = !matches!(classe, ViewportClass::EmbeddedWindow);
@@ -424,6 +446,7 @@ impl AutresFenetres {
                         voilee: None,
                         devant: false,
                         fermer: false,
+                        consulte: false,
                     })),
                 );
                 true
@@ -520,6 +543,10 @@ impl AutresFenetres {
             }
         }
         let mut f = verrou(f);
+        if !f.consulte {
+            // Fermée par le logiciel ou par son contenu : le refus ne compte pas.
+            let _ = f.contenu.peut_fermer(true);
+        }
         let place = f.place();
         f.contenu.fermee(place);
     }
@@ -615,6 +642,94 @@ mod tests {
         fn fermee(&mut self, _place: Option<Place>) {
             self.trace.0.lock().unwrap().push(format!("{} fermée", self.nom));
         }
+    }
+
+    /// Un contenu qui refuse de se fermer tant que son enregistrement échoue.
+    struct Refuse {
+        trace: Trace,
+        enregistre: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl Contenu for Refuse {
+        fn dessiner(&mut self, ui: &mut egui::Ui, _: &mut Cadre<'_>) {
+            ui.label("refuse");
+        }
+
+        fn peut_fermer(&mut self, imposee: bool) -> bool {
+            let ok = self.enregistre.load(std::sync::atomic::Ordering::Relaxed);
+            self.trace
+                .0
+                .lock()
+                .unwrap()
+                .push(format!("peut_fermer imposée {imposee} → {ok}"));
+            ok
+        }
+
+        fn fermee(&mut self, _place: Option<Place>) {
+            self.trace.0.lock().unwrap().push("fermée".into());
+        }
+    }
+
+    /// La croix passe par le crochet : refusée, la fenêtre reste ouverte (et l'ordre
+    /// d'annuler la fermeture part) ; acceptée, elle se ferme, sans second appel. Fermée par
+    /// le logiciel, le crochet est appelé quand même (imposée), et son refus est ignoré.
+    #[test]
+    fn crochet_de_fermeture_avec_refus() {
+        let ctx = contexte();
+        let f = AutresFenetres::default();
+        let trace = Trace::default();
+        let enregistre = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        f.ouvrir(
+            "p",
+            Ouverture::new("P", [200.0, 100.0]),
+            Refuse {
+                trace: trace.clone(),
+                enregistre: enregistre.clone(),
+            },
+        );
+        let _ = image(&ctx, &f);
+        let _ = image(&ctx, &f);
+        CROIX.with(|c| c.borrow_mut().push(id_de("p")));
+        let _ = image(&ctx, &f);
+        assert!(f.ouverte("p"), "refusée : reste ouverte");
+        assert!(
+            super::essais::ORDRES.with(|o| o
+                .borrow()
+                .iter()
+                .any(|(i, c)| *i == id_de("p") && matches!(c, ViewportCommand::CancelClose))),
+            "l'ordre d'annuler la fermeture part"
+        );
+        enregistre.store(true, std::sync::atomic::Ordering::Relaxed);
+        let _ = image(&ctx, &f);
+        assert!(f.cles().is_empty(), "acceptée : fermée");
+        CROIX.with(|c| c.borrow_mut().clear());
+        assert_eq!(
+            trace.0.lock().unwrap().clone(),
+            vec![
+                "peut_fermer imposée false → false",
+                "peut_fermer imposée false → true",
+                "fermée"
+            ]
+        );
+        // Imposée : le contenu est consulté, sa réponse ne retient rien.
+        enregistre.store(false, std::sync::atomic::Ordering::Relaxed);
+        let trace = Trace::default();
+        f.ouvrir(
+            "q",
+            Ouverture::new("Q", [200.0, 100.0]),
+            Refuse {
+                trace: trace.clone(),
+                enregistre,
+            },
+        );
+        let _ = image(&ctx, &f);
+        f.tout_fermer();
+        let _ = image(&ctx, &f);
+        assert!(f.cles().is_empty());
+        assert_eq!(
+            trace.0.lock().unwrap().clone(),
+            vec!["peut_fermer imposée true → false", "fermée"]
+        );
     }
 
     /// Une deuxième fenêtre s'ouvre puis se ferme dans la même boucle, sans en créer une

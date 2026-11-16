@@ -338,9 +338,7 @@ fn destinataire(msg: u32, wp: usize, taskbar_created: u32) -> Destinataire {
     match msg {
         WM_TIMER if wp == MINUTERIE_ICONE => Destinataire::Bibliotheque,
         WM_ICONE | WM_COMMANDE | WM_OUVRIR_PARAMETRES | WM_MENU_DE_SECOURS | WM_COPYDATA | WM_CLOSE
-        | WM_DESTROY => {
-            Destinataire::Bibliotheque
-        }
+        | WM_DESTROY => Destinataire::Bibliotheque,
         m if m == taskbar_created && m != 0 => Destinataire::Bibliotheque,
         WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE => Destinataire::LesDeux,
         _ => Destinataire::Logiciel,
@@ -1252,7 +1250,7 @@ mod essais {
         assert_eq!(decoder_arguments(b"abc"), None);
         assert_eq!(decoder_arguments(&[0xFF, 0]), None);
         assert_eq!(decoder_arguments(&vec![b'a'; ARGUMENTS_OCTETS_MAX + 1]), None);
-        assert_eq!(decoder_arguments(&vec![0u8; ARGUMENTS_MAX + 1]), None);
+        assert_eq!(decoder_arguments(&[0u8; ARGUMENTS_MAX + 1]), None);
     }
 
     /// Un `WM_COPYDATA` sans la marque, vide ou mal fait n'est pas lu ; avec elle, il l'est.

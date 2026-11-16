@@ -104,6 +104,10 @@ impl Contenu for ContenuParametres {
         self.parametres.dessiner(ui, p, &*l);
     }
 
+    fn peut_fermer(&mut self, imposee: bool) -> bool {
+        self.reglages.peut_fermer(imposee)
+    }
+
     fn fermee(&mut self, place: Option<Place>) {
         if let Some(p) = place {
             self.reglages.retenir_place(p);
@@ -192,12 +196,18 @@ impl eframe::App for Seuls {
         } else if !self.montree {
             ctx.request_repaint();
         }
-        if ui.input(|i| i.viewport().close_requested())
-            && let Some(h) = self.hwnd
-            && let Some(r) = systeme::rect_fenetre(h)
-        {
-            self.contenu
-                .fermee(place_valable([r[0], r[1], r[2] - r[0], r[3] - r[1]]));
+        if ui.input(|i| i.viewport().close_requested()) {
+            if self.contenu.peut_fermer(false) {
+                if let Some(h) = self.hwnd
+                    && let Some(r) = systeme::rect_fenetre(h)
+                {
+                    self.contenu
+                        .fermee(place_valable([r[0], r[1], r[2] - r[0], r[3] - r[1]]));
+                }
+            } else {
+                // Enregistrement refusé : la fenêtre reste ouverte.
+                ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            }
         }
         let p = self.apparence.palette.clone();
         let mut cadre = Cadre::new(&p, self.hwnd, self.images, self.montree);

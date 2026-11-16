@@ -172,6 +172,36 @@ pub enum Valeur {
 /// Un changement d'un groupe : la clé, la valeur d'avant, celle d'après.
 pub type Changement = (String, Valeur, Valeur);
 
+/// L'état d'un **brouillon entier** de réglages, pris avant un changement et rendu au logiciel
+/// par « Annuler » ([`crate::Reglages::instantane`], [`crate::Reglages::remettre`]). Le
+/// logiciel y met ce qu'il veut (souvent une copie de ses réglages) et le relit par
+/// [`Instantane::get`].
+#[derive(Clone)]
+pub struct Instantane(std::sync::Arc<dyn std::any::Any + Send + Sync>);
+
+impl Instantane {
+    pub fn new<T: std::any::Any + Send + Sync>(valeur: T) -> Instantane {
+        Instantane(std::sync::Arc::new(valeur))
+    }
+
+    /// Ce que le logiciel y a mis, s'il est de ce type.
+    pub fn get<T: std::any::Any>(&self) -> Option<&T> {
+        self.0.downcast_ref()
+    }
+}
+
+impl std::fmt::Debug for Instantane {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Instantane(..)")
+    }
+}
+
+impl PartialEq for Instantane {
+    fn eq(&self, autre: &Instantane) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &autre.0)
+    }
+}
+
 /// La bulle « Annuler » reste ce temps après un changement.
 pub const DUREE_ANNULER: Duration = Duration::from_secs(6);
 
@@ -184,6 +214,8 @@ pub struct Annulable {
     pub avant: Valeur,
     /// Les autres réglages d'un groupe de changements (clé, valeur d'avant), défaits avec lui.
     pub autres: Vec<(String, Valeur)>,
+    /// Un brouillon entier : son état d'avant (la clé et `avant` ne servent alors pas).
+    pub instantane: Option<Instantane>,
     quand: Instant,
 }
 
@@ -217,9 +249,42 @@ impl Annulation {
                 titre: titre.to_string(),
                 avant,
                 autres: Vec::new(),
+                instantane: None,
                 quand: maintenant,
             });
         }
+    }
+
+    /// Un brouillon entier vient d'être changé : `avant` est son état au début de l'image.
+    /// Plusieurs changements de suite (une frappe) ne font qu'un : « Annuler » revient à l'état
+    /// d'avant le premier.
+    pub fn changer_brouillon(&mut self, titre: &str, avant: Instantane, maintenant: Instant) {
+        if let Some(a) = &mut self.annulable
+            && a.instantane.is_some()
+            && maintenant.saturating_duration_since(a.quand) < DUREE_ANNULER
+        {
+            a.quand = maintenant;
+            return;
+        }
+        self.annulable = Some(Annulable {
+            cle: String::new(),
+            titre: titre.to_string(),
+            avant: Valeur::Booleen(false),
+            autres: Vec::new(),
+            instantane: Some(avant),
+            quand: maintenant,
+        });
+    }
+
+    /// « Annuler » est cliqué sur un brouillon entier : son état d'avant, à rendre au logiciel
+    /// ([`crate::Reglages::remettre`]). Rien si la bulle n'est pas celle d'un brouillon, ou a
+    /// déjà disparu.
+    pub fn annuler_brouillon(&mut self, maintenant: Instant) -> Option<Instantane> {
+        let est_brouillon = self.a_annuler(maintenant).is_some_and(|a| a.instantane.is_some());
+        if !est_brouillon {
+            return None;
+        }
+        self.annulable.take().and_then(|a| a.instantane)
     }
 
     /// Plusieurs réglages changés d'un seul geste (clé, avant, après) : une seule bulle, et
@@ -237,6 +302,7 @@ impl Annulation {
             titre: titre.to_string(),
             avant,
             autres: avants.collect(),
+            instantane: None,
             quand: maintenant,
         });
     }
@@ -258,6 +324,11 @@ impl Annulation {
     /// logiciel (une seule, sauf pour un groupe). Rien si la bulle a déjà disparu.
     pub fn annuler(&mut self, maintenant: Instant) -> Vec<(String, Valeur)> {
         match self.annulable.take() {
+            Some(a) if a.instantane.is_some() => {
+                // Un brouillon entier ne se défait que par `annuler_brouillon`.
+                self.annulable = Some(a);
+                Vec::new()
+            }
             Some(a) if maintenant.saturating_duration_since(a.quand) < DUREE_ANNULER => {
                 let mut tout = vec![(a.cle, a.avant)];
                 tout.extend(a.autres);
@@ -288,6 +359,30 @@ mod tests {
 
     /// L'Accueil en premier, les pages propres, puis toujours Général, Mise à jour, À propos,
     /// avec ces noms et ces icônes (E713, E895, E946).
+    #[test]
+    fn annuler_un_brouillon_entier() {
+        let t = Instant::now();
+        let mut a = Annulation::default();
+        let pas = |ms| t + Duration::from_millis(ms);
+        a.changer_brouillon("Réglages", Instantane::new(vec![1, 2]), t);
+        // Une frappe de plus : « Annuler » garde l'état d'avant la première.
+        a.changer_brouillon("Réglages", Instantane::new(vec![9, 9]), pas(300));
+        assert!(a.a_annuler(pas(300)).is_some());
+        // Un brouillon ne se défait pas réglage par réglage.
+        assert!(a.annuler(pas(400)).is_empty());
+        let avant = a.annuler_brouillon(pas(400)).unwrap();
+        assert_eq!(avant.get::<Vec<i32>>(), Some(&vec![1, 2]));
+        assert_eq!(avant.get::<String>(), None);
+        assert!(a.annuler_brouillon(pas(400)).is_none());
+        // Trop tard : la bulle a disparu.
+        a.changer_brouillon("Réglages", Instantane::new(1), t);
+        assert!(a.annuler_brouillon(t + DUREE_ANNULER).is_none());
+        // Un réglage seul n'est pas un brouillon.
+        a.changer("x", "X", Valeur::Booleen(false), &Valeur::Booleen(true), t);
+        assert!(a.annuler_brouillon(t).is_none());
+        assert_eq!(a.annuler(t).len(), 1);
+    }
+
     #[test]
     fn ordre_des_pages() {
         let n = navigation(&crate::textes::FRANCAIS, true, &propres());
