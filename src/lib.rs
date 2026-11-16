@@ -35,6 +35,7 @@ pub mod fenetres;
 pub mod icones;
 pub mod menu;
 pub mod mesures;
+pub mod nuancier;
 pub mod parametres;
 pub mod place;
 pub mod polices;

@@ -13,6 +13,7 @@
 | `src/toutes_faites.rs` | la fenêtre simple et la fenêtre de lecture |
 | `src/menu.rs` | l'ordre du petit menu |
 | `src/parametres/` | les Paramètres : modèle (pages, Annuler), dessin, fenêtre |
+| `src/nuancier.rs` | le nuancier : pastille de couleur, grille, bouton qui ouvre la grille (choisir une couleur sans taper de code) |
 | `src/dessin.rs`, `icones.rs` | cartes, interrupteurs, bandeau, boutons, champ de raccourci ; les icônes communes |
 | `src/place.rs`, `clics.rs`, `systeme.rs` | placement près de la barre des tâches, clics de l'icône, appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme) |
 | `src/capture.rs` | captures PNG du volet, du petit menu et des Paramètres pour la documentation, sans fenêtre |
