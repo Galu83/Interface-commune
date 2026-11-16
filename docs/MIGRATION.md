@@ -28,6 +28,16 @@ de travail par projet, sur sa branche.
   Les Paramètres s'ouvrent aussi dans cette boucle (plus de deuxième boucle, plus d'erreur
   « EventLoop can't be recreated »). `Liens::devant` disparaît ; `Liens::page_voulue` est
   partagé.
+- **Plusieurs icônes, la boucle du logiciel** (`zone`, pour PowerPeek). Un logiciel qui
+  garde sa boucle de messages crée `Zone::creer(nom, graine)` sur son fil : `poser(id,
+  &Image, infobulle)` ajoute ou change une icône (GUID stable tiré de `graine`, du chemin du
+  programme et de `id`), `retirer(id)`, `notifier(id, titre, texte, Niveau)` pose la
+  notification sur cette icône, `rect(id)`. Après chaque `DispatchMessageW`, `evenements()`
+  rend les gestes : l'icône, le `Message` (appui, relâche, double-clic, sélection, clavier,
+  menu contextuel, clic sur la notification), le point du geste et la place de l'icône ;
+  `Message::geste()` le passe à `clics::Clics`. L'Explorateur redémarré : les icônes sont
+  remises seules. `menu_windows(point, &[LigneMenu])` : le menu gris de Windows de secours,
+  avec cases cochées, lignes grisées et sous-menus. `horloge::Horloge` ne change pas.
 - **Les Paramètres sans l'icône.** `parametres::fenetre::ouvrir` devient `ouvrir_seuls`
   (fenêtre principale de sa boucle) ; dans la boucle d'un logiciel qui a la sienne :
   `parametres::fenetre::ouvrir_dans_boucle(&autres, &reglages, &page_voulue, page)`, avec

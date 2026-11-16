@@ -6,6 +6,8 @@
 //!   ([`theme`], [`apparence`], [`polices`]) ;
 //! - l'icône près de l'horloge : clic gauche, le volet ; clic droit, le petit menu ;
 //!   double-clic, les Paramètres ; clavier ([`clics`], et `horloge` sous Windows) ;
+//!   plusieurs icônes à la fois pour un logiciel qui garde sa boucle de messages (`zone`
+//!   sous Windows) ;
 //! - le volet et le petit menu, dans une seule fenêtre préparée au repos et animée
 //!   ([`fenetres`], [`surface`], [`menu`], et `volet` sous Windows) ;
 //! - le squelette des Paramètres ([`parametres`]) : en-tête, navigation, pages Général,
@@ -50,6 +52,9 @@ pub mod horloge;
 pub mod systeme;
 #[cfg(windows)]
 pub mod volet;
+#[cfg(windows)]
+#[allow(unsafe_code)]
+pub mod zone;
 
 pub use parametres::modele::{Instantane, Page, Valeur};
 pub use textes::{Langue, Textes};

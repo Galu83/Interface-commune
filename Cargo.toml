@@ -49,7 +49,7 @@ windows = { version = "0.62", features = [
 proptest = { version = "1", default-features = false, features = ["std"] }
 
 [lints.rust]
-# Pas d'`unsafe` hors des deux modules qui appellent Windows (`systeme`, `horloge`).
+# Pas d'`unsafe` hors des trois modules qui appellent Windows (`systeme`, `horloge`, `zone`).
 unsafe_code = "deny"
 
 [lints.clippy]

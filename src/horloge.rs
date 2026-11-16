@@ -30,10 +30,6 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM,
 };
-use windows::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateBitmap, CreateDIBSection, DIB_RGB_COLORS, DeleteObject,
-    HGDIOBJ,
-};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::CreateMutexW;
@@ -47,13 +43,13 @@ use windows::Win32::UI::Shell::{
     NOTIFYICONIDENTIFIER, Shell_NotifyIconGetRect, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
-    DestroyMenu, DestroyWindow, DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW,
-    GetWindowLongPtrW, HICON, ICONINFO, KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
-    PostQuitMessage, RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG,
-    SendMessageTimeoutW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA,
-    WM_DESTROY, WM_ENDSESSION, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu, DestroyWindow,
+    DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW, HICON,
+    KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
+    RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetForegroundWindow,
+    SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_ENDSESSION,
+    WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -685,59 +681,10 @@ fn fabriquer_icone(logiciel: &dyn Logiciel, barre_sombre: bool) -> Option<HICON>
     let px = logiciel
         .icone_etat(taille as u32, barre_sombre)
         .unwrap_or_else(|| (logiciel.identite().icone)(taille as u32, barre_sombre));
-    if px.len() != (taille * taille * 4) as usize {
-        return None;
-    }
-    let info = BITMAPINFO {
-        bmiHeader: BITMAPINFOHEADER {
-            biSize: size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: taille,
-            // Négatif : lignes de haut en bas.
-            biHeight: -taille,
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
-    // SAFETY: `info` décrit une image 32 bits de `taille`² pixels ; Windows alloue `bits`
-    // (taille × taille × 4 octets), où l'on copie exactement `px` (taille vérifiée plus
-    // haut). Les deux images sont détruites après CreateIconIndirect, qui en fait sa copie.
-    unsafe {
-        let couleur = CreateDIBSection(None, &info, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
-        if bits.is_null() {
-            let _ = DeleteObject(HGDIOBJ(couleur.0));
-            return None;
-        }
-        std::ptr::copy_nonoverlapping(px.as_ptr(), bits.cast::<u8>(), px.len());
-        let masque_octets = vec![0u8; (taille as usize).div_ceil(16) * 2 * taille as usize];
-        let masque = CreateBitmap(taille, taille, 1, 1, Some(masque_octets.as_ptr().cast()));
-        let ii = ICONINFO {
-            fIcon: true.into(),
-            hbmMask: masque,
-            hbmColor: couleur,
-            ..Default::default()
-        };
-        let icone = CreateIconIndirect(&ii).ok();
-        let _ = DeleteObject(HGDIOBJ(couleur.0));
-        let _ = DeleteObject(HGDIOBJ(masque.0));
-        icone
-    }
+    crate::zone::icone_windows(taille, &px)
 }
 
-fn copier(dest: &mut [u16], texte: &str) {
-    let mut n = 0;
-    for (d, c) in dest.iter_mut().zip(texte.encode_utf16()) {
-        *d = c;
-        n += 1;
-    }
-    let fin = n.min(dest.len().saturating_sub(1));
-    if let Some(d) = dest.get_mut(fin) {
-        *d = 0;
-    }
-}
+use crate::zone::copier;
 
 fn donnees_icone(h: HWND) -> NOTIFYICONDATAW {
     NOTIFYICONDATAW {
