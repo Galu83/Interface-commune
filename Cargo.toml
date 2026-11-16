@@ -18,6 +18,8 @@ egui = { version = "0.37", default-features = false }
 # Lecture des polices de Windows pour le contrôle « chaque caractère existe » (déjà dans
 # l'arbre d'egui, même version).
 skrifa = { version = "0.44", default-features = false, features = ["std"] }
+# L'écriture des captures en PNG (déjà dans l'arbre d'eframe, même version, même licence).
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
 # Les fenêtres : egui dessiné par OpenGL (glow).

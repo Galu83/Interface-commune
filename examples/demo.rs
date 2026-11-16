@@ -14,7 +14,7 @@ mod demo {
     use interface_commune::apparence::couleur;
     use interface_commune::autres_fenetres::{Cadre, Contenu, Ouverture};
     use interface_commune::briques::Brique;
-    use interface_commune::horloge::{Horloge, Poste, instance_unique};
+    use interface_commune::horloge::{Horloge, Poste, Reveil, instance_unique_avec};
     use interface_commune::parametres::Contexte;
     use interface_commune::theme::couverture;
     use interface_commune::toutes_faites::{self, Bouton, Champ, Lecture, ReponseLecture, Simple, Ton};
@@ -224,11 +224,25 @@ mod demo {
     }
 
     pub fn principal() {
-        let Ok(_verrou) = instance_unique("Exemple-interface-commune") else {
+        let args: Vec<String> = std::env::args().collect();
+        // Un second lancement transmet ses arguments (`--parametres a_propos`) à l'instance en
+        // cours, qui ouvre la page ; sans argument, il ouvre simplement les Paramètres.
+        let reveil = match args.get(1..) {
+            Some(a) if !a.is_empty() => Reveil::Arguments(a.to_vec()),
+            _ => Reveil::Parametres,
+        };
+        let Ok(_verrou) = instance_unique_avec("Exemple-interface-commune", &reveil) else {
             return;
         };
-        let args: Vec<String> = std::env::args().collect();
-        let horloge = Horloge::new("Exemple-interface-commune");
+        let horloge = Horloge::new("Exemple-interface-commune").sans_fantome();
+        let pour_les_arguments = horloge.poste();
+        let horloge = horloge.recevoir_arguments(move |recus| {
+            let mut tout = vec![String::new()];
+            tout.extend(recus);
+            if let Some(page) = parametres::modele::page_demandee(&tout) {
+                pour_les_arguments.ouvrir_parametres(page.as_deref());
+            }
+        });
         let exemple = std::sync::Arc::new(Exemple {
             identite: Identite {
                 nom: "Exemple".into(),

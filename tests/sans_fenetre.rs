@@ -936,3 +936,68 @@ fn brouillon_entier_pied_de_page_et_fermeture() {
         "le refus est rendu tel quel, la fenêtre l'ignore"
     );
 }
+
+/// Les captures pour la documentation : le volet, le petit menu et chaque page des Paramètres,
+/// en clair et en sombre, en PNG, sans aucune fenêtre. Le dossier peut être choisi par
+/// `CAPTURES_VERS` (pour les regarder à la main) ; sinon un dossier temporaire.
+#[test]
+fn captures_pour_la_documentation() {
+    use interface_commune::capture::{self, Options};
+    if polices::polices().is_err() {
+        // Sans les polices de Windows, une capture serait sans texte : elle le refuse.
+        assert!(capture::volet(&Demo::new(), Options::default()).is_err());
+        return;
+    }
+    let demo = Demo::new();
+    let clair = capture::volet(&demo, Options::default()).expect("volet");
+    let sombre = capture::volet(
+        &demo,
+        Options {
+            sombre: true,
+            ..Options::default()
+        },
+    )
+    .expect("volet sombre");
+    assert_eq!((clair.largeur, clair.hauteur), (sombre.largeur, sombre.hauteur));
+    assert!(
+        (LARGEUR as u32..=LARGEUR_MAX as u32).contains(&clair.largeur),
+        "{}",
+        clair.largeur
+    );
+    assert_ne!(clair.rvba, sombre.rvba, "le thème change l'image");
+    // Le texte est dessiné : plus d'une couleur dans l'image.
+    let couleurs: std::collections::HashSet<[u8; 4]> =
+        clair.rvba.as_chunks::<4>().0.iter().copied().collect();
+    assert!(couleurs.len() > 8, "{} couleurs", couleurs.len());
+    // L'échelle 2 donne deux fois plus de pixels.
+    let net = capture::volet(
+        &demo,
+        Options {
+            echelle: 2.0,
+            ..Options::default()
+        },
+    )
+    .expect("volet net");
+    assert_eq!(net.largeur, clair.largeur * 2);
+
+    let dossier = std::env::var_os("CAPTURES_VERS")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::temp_dir().join(format!("interface-commune-captures-{}", std::process::id()))
+        });
+    let faites = capture::toutes(&demo, &dossier, 1.0).expect("captures");
+    // Volet + petit menu + Accueil, 2 pages propres, Général, Mise à jour, À propos : 8 × 2 thèmes.
+    assert_eq!(faites.len(), 2 * (2 + 6), "{faites:?}");
+    for f in &faites {
+        let octets = std::fs::read(f).expect("fichier");
+        assert_eq!(&octets[..8], b"\x89PNG\r\n\x1a\n", "{f:?}");
+    }
+    assert!(
+        faites
+            .iter()
+            .any(|f| f.ends_with("parametres-mise-a-jour-sombre.png"))
+    );
+    if std::env::var_os("CAPTURES_VERS").is_none() {
+        let _ = std::fs::remove_dir_all(&dossier);
+    }
+}

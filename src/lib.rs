@@ -26,6 +26,7 @@
 pub mod apparence;
 pub mod autres_fenetres;
 pub mod briques;
+pub mod capture;
 pub mod clics;
 pub mod dessin;
 pub mod fenetres;

@@ -771,6 +771,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
+ "image",
  "proptest",
  "raw-window-handle",
  "skrifa",
