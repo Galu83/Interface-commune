@@ -115,6 +115,27 @@ impl Contenu for ContenuParametres {
     }
 }
 
+/// La fenêtre des Paramètres ouverte (son HWND), pour s'en servir de propriétaire : un
+/// sélecteur ou une boîte qui s'ouvre au-dessus d'elle et la bloque tant qu'elle est ouverte.
+/// À appeler sur le fil des fenêtres (celui des méthodes de [`Reglages`]) ; `None` si elle
+/// n'est pas ouverte.
+pub fn fenetre_parametres(l: &dyn Reglages) -> Option<isize> {
+    systeme::fenetre_du_fil(&Parametres::titre_fenetre(l))
+}
+
+/// Le sélecteur de dossier de Windows, **au-dessus des Paramètres** (qui sont son
+/// propriétaire : il ne passe jamais derrière eux et les bloque pendant qu'il est ouvert) :
+/// le dossier choisi, ou `None` si l'utilisateur annule. À appeler sur le fil des fenêtres,
+/// par exemple pour `Reglages::action(cles::DOSSIER)`. `depart` : le dossier montré d'abord,
+/// s'il est sur un disque de ce PC ; `titre` : le titre de la boîte.
+pub fn choisir_dossier(
+    l: &dyn Reglages,
+    depart: Option<&std::path::Path>,
+    titre: &str,
+) -> Option<std::path::PathBuf> {
+    systeme::choisir_dossier(fenetre_parametres(l), depart, titre)
+}
+
 /// Ouvre les Paramètres à cette page parmi les fenêtres d'une boucle ; déjà ouverts, ils
 /// vont à cette page et passent devant. `voulue` : partagée avec le logiciel, pour changer
 /// de page plus tard.

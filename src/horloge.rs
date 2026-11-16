@@ -482,6 +482,7 @@ pub struct Horloge {
     reception: Reception,
     messages: Option<Recepteur>,
     arguments: Option<RecepteurArguments>,
+    sans_fantome: bool,
 }
 
 impl Horloge {
@@ -498,7 +499,17 @@ impl Horloge {
             reception,
             messages: None,
             arguments: None,
+            sans_fantome: false,
         }
+    }
+
+    /// Windows ne remplace jamais une fenêtre du logiciel par son « fantôme » (cadre gris,
+    /// « Ne répond pas ») quand elle est occupée un moment : voir
+    /// [`crate::systeme::sans_fantome`]. À choisir pour un logiciel dont les fenêtres peuvent
+    /// être retenues par un travail long, qu'on ne veut pas voir arrêter de force.
+    pub fn sans_fantome(mut self) -> Horloge {
+        self.sans_fantome = true;
+        self
     }
 
     /// Reçoit les arguments qu'un second lancement transmet ([`Reveil::Arguments`] de
@@ -534,7 +545,11 @@ impl Horloge {
             reception,
             messages,
             arguments,
+            sans_fantome,
         } = self;
+        if sans_fantome {
+            crate::systeme::sans_fantome();
+        }
         if let Some(page) = parametres {
             let _ = poste.demandes.send(Demande::Parametres(page));
         }
@@ -543,12 +558,32 @@ impl Horloge {
             .name("fenêtres".into())
             .spawn(move || fil_des_fenetres(l2, liens2, reception))
             .map_err(|e| e.to_string())?;
+        let pour_noter = logiciel.clone();
         let r = boucle(&nom, logiciel, poste.clone(), messages, arguments);
         poste.liens.tout_fermer();
         let _ = poste.demandes.send(Demande::Quitter);
-        let _ = fil.join();
+        if !attendre_la_fin(fil, ATTENTE_FERMETURE) {
+            pour_noter.noter("Une fenêtre ne répond plus : le logiciel se ferme sans l'attendre.".into());
+        }
         r
     }
+}
+
+/// Le temps qu'une fenêtre qui ne répond plus peut retenir la fermeture du logiciel.
+pub const ATTENTE_FERMETURE: Duration = Duration::from_secs(5);
+
+/// Attend la fin d'un fil au plus `delai` ; rend faux (et le laisse partir seul) s'il n'a pas
+/// fini : le programme se ferme quand même, rien ne le retient.
+fn attendre_la_fin(fil: std::thread::JoinHandle<()>, delai: Duration) -> bool {
+    let fin = Instant::now() + delai;
+    while !fil.is_finished() {
+        if Instant::now() >= fin {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let _ = fil.join();
+    true
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1275,6 +1310,27 @@ mod essais {
         copie.lpData = std::ptr::null_mut();
         assert_eq!(lire_arguments(&raw const copie as isize), None);
         assert_eq!(lire_arguments(0), None);
+    }
+
+    /// Une fenêtre qui ne répond plus ne retient pas la fermeture au-delà du délai.
+    #[test]
+    fn fenetre_bloquee_ne_retient_pas_la_fermeture() {
+        let (lacher, attend) = std::sync::mpsc::channel::<()>();
+        let bloque = std::thread::spawn(move || {
+            let _ = attend.recv();
+        });
+        let debut = Instant::now();
+        assert!(!attendre_la_fin(bloque, Duration::from_millis(150)));
+        let duree = debut.elapsed();
+        assert!(
+            duree >= Duration::from_millis(150) && duree < Duration::from_secs(3),
+            "{duree:?}"
+        );
+        let _ = lacher.send(());
+        // Un fil qui finit vite est attendu et joint.
+        let vite = std::thread::spawn(|| ());
+        assert!(attendre_la_fin(vite, Duration::from_secs(5)));
+        assert_eq!(ATTENTE_FERMETURE, Duration::from_secs(5));
     }
 
     /// Un second lancement ne fait rien quand c'est ce qu'on lui a dit, et un seul logiciel

@@ -1,7 +1,9 @@
 //! Ce qui parle à Windows pour les fenêtres : le thème et l'accent, les coins arrondis et la
 //! barre de titre sombre (DWM), la place, l'opacité (fondu), « Effets d'animation », le
-//! réveil du fil des fenêtres. Chaque `unsafe` est commenté.
+//! réveil du fil des fenêtres, le sélecteur de dossier, `DisableProcessWindowsGhosting`.
+//! Chaque `unsafe` est commenté.
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use windows::Win32::Foundation::{COLORREF, CloseHandle, HANDLE, HWND, LPARAM, POINT, RECT, WAIT_FAILED};
@@ -12,6 +14,7 @@ use windows::Win32::Graphics::Dwm::{
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
 };
+use windows::Win32::Storage::FileSystem::GetDriveTypeW;
 use windows::Win32::System::Registry::{
     HKEY_CURRENT_USER, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RegGetValueW,
 };
@@ -25,7 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, ShowWindowAsync,
     SystemParametersInfoW, WS_EX_LAYERED,
 };
-use windows::core::{BOOL, PCWSTR, w};
+use windows::core::{BOOL, HSTRING, PCWSTR, w};
 
 use crate::place::Rect;
 use crate::theme::{ChoixWindows, Rgb};
@@ -392,4 +395,235 @@ pub fn centree(taille: [i32; 2]) -> Option<[i32; 2]> {
     unsafe { GetCursorPos(&mut p) }.ok()?;
     let (_, t) = ecran_autour(p.x, p.y)?;
     Some(crate::place::centrer(taille, t))
+}
+
+// ---------------------------------------------------------------------------------------
+// Le sélecteur de dossier
+
+/// Le sélecteur de dossier de Windows (« Choisir… ») : le dossier choisi, ou `None` si
+/// l'utilisateur annule. `proprietaire` : la fenêtre (HWND) au-dessus de laquelle il s'ouvre,
+/// qu'il bloque tant qu'il est ouvert (pour les Paramètres :
+/// [`crate::parametres::fenetre::choisir_dossier`]) ; `depart` : le dossier montré d'abord,
+/// s'il est sur un disque de ce PC ([`dossier_de_depart`]). Seulement des dossiers du disque
+/// (pas de bibliothèque ni d'emplacement virtuel). À appeler sur le fil des fenêtres : la
+/// boîte tient ses propres messages pendant qu'elle est ouverte.
+pub fn choisir_dossier(proprietaire: Option<isize>, depart: Option<&Path>, titre: &str) -> Option<PathBuf> {
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoCreateInstance,
+        CoInitializeEx, CoTaskMemFree, CoUninitialize,
+    };
+    use windows::Win32::UI::Shell::{
+        FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, FileOpenDialog, IFileOpenDialog, IShellItem,
+        SHCreateItemFromParsingName, SIGDN_FILESYSPATH,
+    };
+    // SAFETY: COM est initialisé pour ce fil (et libéré à la fin s'il l'a été ici) ; la
+    // boîte de dialogue et les éléments sont des objets COM comptés par le crate `windows`,
+    // libérés à la fin de leur portée ; les chaînes passées vivent pendant chaque appel ; le
+    // texte rendu par `GetDisplayName` est copié, puis libéré une seule fois par
+    // `CoTaskMemFree`. La fenêtre propriétaire est celle du logiciel, vivante pendant l'appel.
+    unsafe {
+        let com = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).is_ok();
+        let choisi = (|| {
+            let dialogue: IFileOpenDialog =
+                CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+            let options = dialogue.GetOptions().ok()?;
+            dialogue
+                .SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)
+                .ok()?;
+            let _ = dialogue.SetTitle(&HSTRING::from(titre));
+            // Toujours un dossier de départ, sur un disque de ce PC : sans lui, Windows
+            // rouvrirait de lui-même le dernier dossier choisi, peut-être un partage réseau
+            // muet, qui ferait attendre ce fil de 20 à 60 s.
+            if let Some(d) = dossier_de_depart(depart) {
+                let element: Option<IShellItem> =
+                    SHCreateItemFromParsingName(&HSTRING::from(d.as_os_str()), None).ok();
+                if let Some(e) = element {
+                    let _ = dialogue.SetFolder(&e);
+                }
+            }
+            // Une erreur si l'utilisateur annule.
+            dialogue.Show(proprietaire.map(hwnd)).ok()?;
+            let texte = dialogue
+                .GetResult()
+                .ok()?
+                .GetDisplayName(SIGDN_FILESYSPATH)
+                .ok()?;
+            let chemin = texte.to_string().ok();
+            CoTaskMemFree(Some(texte.0 as *const _));
+            chemin.map(PathBuf::from)
+        })();
+        if com {
+            CoUninitialize();
+        }
+        choisi
+    }
+}
+
+/// Le dossier montré d'abord par le sélecteur : `voulu` s'il est sur un disque de ce PC,
+/// sinon le profil de l'utilisateur, sinon la racine du disque du système. Toujours un
+/// dossier local et sûr (jamais un partage réseau, qui peut faire attendre le fil).
+pub fn dossier_de_depart(voulu: Option<&Path>) -> Option<PathBuf> {
+    let profil = std::env::var_os("USERPROFILE").map(PathBuf::from);
+    let systeme = std::env::var_os("SystemDrive").map(|d| {
+        let mut r = d.to_string_lossy().into_owned();
+        r.push('\\');
+        PathBuf::from(r)
+    });
+    voulu
+        .map(Path::to_path_buf)
+        .into_iter()
+        .chain(profil)
+        .chain(systeme)
+        .find(|d| disque_local(d) && d.is_dir())
+}
+
+/// Un chemin sur un disque fixe de ce PC (`C:\…`) : le seul genre de dossier regardé depuis
+/// le fil des fenêtres. Jamais un chemin réseau ou de périphérique (`\\…`, `//…`), ni un
+/// lecteur réseau (`Z:\…` relié à un partage, qui peut ne pas répondre), ni un lecteur
+/// amovible ou de CD (qui peut se faire attendre), ni un chemin qui passe par un point de
+/// redirection (lien symbolique ou jonction, qui peut mener à un partage réseau).
+pub fn disque_local(d: &Path) -> bool {
+    /// `DRIVE_FIXED` de Windows (un disque du PC).
+    const DRIVE_FIXED: u32 = 3;
+    let Some(racine) = racine_de_lecteur(d) else {
+        return false;
+    };
+    // SAFETY: chaîne terminée par zéro, vivante pendant l'appel. Pour une racine de lecteur
+    // (`Z:\`), Windows répond d'après sa table des lecteurs, sans attendre le réseau
+    // (`tests::disque_local_repond_vite`).
+    let fixe = unsafe { GetDriveTypeW(&HSTRING::from(racine)) == DRIVE_FIXED };
+    fixe && sans_redirection(d)
+}
+
+/// Aucun dossier du chemin (de la racine vers le bout) n'est un point de redirection : lien
+/// symbolique ou jonction. Chacun est regardé sans être suivi (`symlink_metadata`), et on
+/// s'arrête au premier : on ne passe jamais au travers. Un dossier qui n'existe pas (encore)
+/// arrête la recherche sans refus ; une autre erreur compte comme une redirection.
+fn sans_redirection(d: &Path) -> bool {
+    let mut parties: Vec<&Path> = d.ancestors().collect();
+    parties.reverse();
+    // La racine (`C:\`) elle-même n'est jamais une redirection.
+    for p in parties.into_iter().skip(1) {
+        match std::fs::symlink_metadata(p) {
+            // Rust range parmi les liens les jonctions et les liens symboliques, pas les
+            // fichiers de OneDrive à la demande.
+            Ok(m) if m.file_type().is_symlink() => return false,
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return true,
+            Err(_) => return false,
+        }
+    }
+    true
+}
+
+/// `C:\` pour `C:\…` ou `C:/…` ; `None` pour tout autre chemin (réseau, relatif…).
+fn racine_de_lecteur(d: &Path) -> Option<String> {
+    let b = d.to_str()?.as_bytes();
+    (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
+        .then(|| format!("{}:\\", char::from(b[0])))
+}
+
+// ---------------------------------------------------------------------------------------
+// Des fenêtres qui ne « gèlent » pas
+
+/// Avant toute fenêtre : Windows ne remplace jamais une fenêtre du logiciel par son « fantôme »
+/// (cadre gris, « (Ne répond pas) », bouton qui ferme le logiciel de force), pour tout le
+/// processus. Pour un logiciel qui fait un travail long pendant que sa fenêtre est ouverte
+/// (un changement d'écran, un pilote de carte graphique qui retient le dessin) : ce n'est pas
+/// un blocage, et la fermer de force arrêterait le travail en cours. Facultatif :
+/// [`crate::horloge::Horloge::sans_fantome`] l'appelle au bon moment.
+pub fn sans_fantome() {
+    use windows::Win32::UI::WindowsAndMessaging::DisableProcessWindowsGhosting;
+    // SAFETY: simple appel sans paramètre, pour tout le processus.
+    unsafe { DisableProcessWindowsGhosting() };
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+    use super::*;
+    use std::time::Instant;
+
+    /// Le sélecteur ne regarde jamais un chemin réseau depuis le fil des fenêtres : seulement
+    /// un disque fixe de ce PC.
+    #[test]
+    fn chemins_reseau_reconnus() {
+        for reseau in [
+            r"\\serveur\partage",
+            r"\\?\C:\x",
+            r"\\.\C:\x",
+            "//serveur/partage",
+            r"Installateurs\x",
+            "C:",
+            "",
+        ] {
+            assert_eq!(racine_de_lecteur(Path::new(reseau)), None, "{reseau}");
+            assert!(!disque_local(Path::new(reseau)), "{reseau}");
+        }
+        assert_eq!(
+            racine_de_lecteur(Path::new(r"Z:\Installateurs")).as_deref(),
+            Some(r"Z:\")
+        );
+        assert_eq!(
+            racine_de_lecteur(Path::new("d:/Installateurs")).as_deref(),
+            Some(r"d:\")
+        );
+        // Le disque du système est un disque fixe.
+        let systeme = std::env::var("SystemRoot").expect("SystemRoot");
+        assert!(disque_local(Path::new(&systeme)), "{systeme}");
+    }
+
+    /// Un chemin qui passe par un lien ou une jonction n'est pas regardé comme local : il peut
+    /// mener à un partage réseau. Aucune fenêtre ne s'ouvre pendant l'essai.
+    #[test]
+    fn redirection_jamais_locale() {
+        use std::os::windows::process::CommandExt;
+        /// `CREATE_NO_WINDOW` : aucune fenêtre ne s'ouvre.
+        const SANS_FENETRE: u32 = 0x0800_0000;
+        let d = std::env::temp_dir().join(format!("interface-commune-jonction-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let cible = d.join("cible");
+        std::fs::create_dir_all(cible.join("dedans")).expect("dossier");
+        let jonction = d.join("jonction");
+        let fait = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&jonction)
+            .arg(&cible)
+            .creation_flags(SANS_FENETRE)
+            .output()
+            .expect("mklink");
+        assert!(fait.status.success(), "{fait:?}");
+        assert!(disque_local(&cible.join("dedans")), "un vrai dossier");
+        assert!(disque_local(&d.join("pas-encore-cree")), "pas encore créé");
+        assert!(!disque_local(&jonction), "la jonction elle-même");
+        assert!(
+            !disque_local(&jonction.join("dedans")),
+            "au travers de la jonction"
+        );
+        // Le sélecteur part alors du profil de l'utilisateur.
+        let profil = PathBuf::from(std::env::var("USERPROFILE").expect("profil"));
+        assert_eq!(dossier_de_depart(Some(&jonction)), Some(profil.clone()));
+        assert_eq!(
+            dossier_de_depart(Some(Path::new(r"\\serveur\partage"))),
+            Some(profil.clone())
+        );
+        assert_eq!(dossier_de_depart(None), Some(profil));
+        assert_eq!(dossier_de_depart(Some(&cible)), Some(cible.clone()));
+        // Retirer la jonction ne touche pas à sa cible.
+        std::fs::remove_dir(&jonction).expect("jonction retirée");
+        assert!(cible.join("dedans").is_dir());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Savoir si un lecteur est un disque fixe n'attend pas le réseau : toutes les lettres,
+    /// lecteurs réseau compris (même injoignables), en bien moins d'une seconde.
+    #[test]
+    fn disque_local_repond_vite() {
+        let debut = Instant::now();
+        for lettre in 'A'..='Z' {
+            let _ = disque_local(Path::new(&format!(r"{lettre}:\Installateurs")));
+        }
+        let duree = debut.elapsed();
+        assert!(duree < Duration::from_secs(1), "{duree:?}");
+    }
 }
