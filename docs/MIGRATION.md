@@ -93,6 +93,51 @@ de travail par projet, sur sa branche.
 - **Licences** : copier `docs/LICENCES.md` (avis MIT d'egui et des crates sans fichier de
   licence) dans l'avis de licence livré avec le logiciel.
 
+## Les manques de KVMSoft, couverts (branche `manques-kvmsoft`)
+
+Tout est facultatif et a une valeur par défaut qui ne change rien. KVMSoft peut retirer ses
+contournements :
+
+- **Instance unique avec arguments** : `horloge::instance_unique_avec(nom, &Reveil)` avec
+  `Reveil::Arguments(vec!["--choisir=2"…])` (transmis à l'instance en cours), `Reveil::Rien`
+  (le démarrage automatique en double : rien du tout, sans chercher la fenêtre) ou
+  `Reveil::Parametres` (l'ancien comportement). L'instance en cours les reçoit par
+  `Horloge::recevoir_arguments(|args| …)` (sur le fil de l'icône, à rendre vite : le second
+  lancement attend 3 s au plus). **À retirer de `systeme.rs`** : `instance_deja_la`,
+  `instance_unique` (et son `FindWindowW`/`PostMessageW`), `WM_CHOISIR` et son traitement dans
+  `Horloge::recevoir_messages` ; `--choisir=N` devient un argument transmis (`--choisir=N`
+  relu par `recevoir_arguments`). Les arguments sont bornés (16, 4 Ko), marqués et vérifiés.
+- **Fermeture des Paramètres** : `Reglages::peut_fermer(imposee)`, toujours appelé (croix,
+  Alt+F4, barre des tâches, fenêtre réduite, `fermer`, `tout_fermer`) ; `false` garde la fenêtre
+  ouverte (pas pour `imposee`, quand le logiciel se ferme : la réponse est alors ignorée).
+  **À retirer** : l'enregistrement accroché à `retenir_place`, le « dernier signe de vie »
+  (`SILENCE`) qui devinait la fermeture ; `peut_fermer` appelle
+  `enregistrer_maintenant()` et rend son résultat (`true` si le service est arrêté : rien ne
+  partira plus). `retenir_place` ne garde que la place.
+- **Brouillon entier et pied de page** : `Reglages::instantane()` (le brouillon, cloné au début
+  de chaque image), `Reglages::remettre(&Instantane)` (« Annuler »), `Contexte::brouillon_modifie
+  (titre)` (une page a changé le brouillon : une seule bulle « Annuler » qui le remet d'un
+  coup) et `Reglages::dessiner_pied` (sous **toutes** les pages, communes comprises : refus en
+  rouge, avis du service, « Annuler mes changements »). **À retirer** : `Annulation` de KVMSoft
+  (`interface/annulation.rs`), `avant_image`, `bulle_annuler`, le `pied` dessiné par les pages
+  (il passe dans `dessiner_pied`).
+- **Sélecteur de dossier** : `parametres::fenetre::choisir_dossier(&reglages, depart, titre)`
+  (propriétaire : la fenêtre des Paramètres), ou `systeme::choisir_dossier(Some(hwnd), …)` ;
+  `systeme::dossier_de_depart` et `systeme::disque_local` (disque du PC seulement, jamais un
+  partage réseau ni un lien) y sont aussi. **À retirer de `systeme.rs`** : `choisir_dossier`,
+  `dossier_de_depart`, `disque_local`, `sans_redirection`, `racine_de_lecteur` et leurs essais
+  (repris tels quels dans la bibliothèque).
+- **Fenêtres qui ne « gèlent » pas** : `Horloge::sans_fantome()` (ou `systeme::sans_fantome()`
+  avant toute fenêtre) ; et une fenêtre bloquée ne retient pas la fermeture du logiciel plus
+  de 5 s (`horloge::ATTENTE_FERMETURE`, le logiciel le note). **À retirer** :
+  `systeme::sans_fantome` et son appel dans `main.rs` (devenu `.sans_fantome()` sur l'icône).
+- **Captures pour la documentation** : le module `capture` (`volet`, `petit_menu`,
+  `parametres`, `toutes`) fait des PNG sans ouvrir aucune fenêtre, avec un logiciel de données
+  inventées ; il remplace l'ancien `--capture=<dossier>` de KVMSoft (qui avait déjà disparu
+  avec `interface/capture.rs`). Pour le rétablir : `--capture=<dossier>` appelle
+  `capture::toutes(&kvm_simule, dossier, 1.0)`. Il ne fait ni la fenêtre « est prête » ni
+  `toutes_faites` (à dessiner avec `capture::` si besoin plus tard).
+
 ## KVMSoft (le plus simple : la bibliothèque en vient)
 
 - Remplacer par la bibliothèque : `theme.rs` (sauf le dessin de l'icône, qui reste dans

@@ -13,7 +13,8 @@
 | `src/menu.rs` | l'ordre du petit menu |
 | `src/parametres/` | les Paramètres : modèle (pages, Annuler), dessin, fenêtre |
 | `src/dessin.rs`, `icones.rs` | cartes, interrupteurs, bandeau, boutons, champ de raccourci ; les icônes communes |
-| `src/place.rs`, `clics.rs`, `systeme.rs` | placement près de la barre des tâches, clics de l'icône, appels à Windows |
+| `src/place.rs`, `clics.rs`, `systeme.rs` | placement près de la barre des tâches, clics de l'icône, appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme) |
+| `src/capture.rs` | captures PNG du volet, du petit menu et des Paramètres pour la documentation, sans fenêtre |
 | `src/verification.rs` | contrôles des polices, pour les tests des logiciels |
 | `tests/` | volet, menu et Paramètres sans fenêtre ; polices ; avis de licence à jour |
 | `docs/LICENCES.md` | avis MIT des crates publiées sans fichier de licence (egui…) |

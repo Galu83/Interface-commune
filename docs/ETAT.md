@@ -22,6 +22,15 @@
     démarrage grisé, recherches coupées, « Automatique », licences, « Annuler » en groupe),
     fenêtre « est prête » toute faite.
   - tests, clippy, cargo deny verts sur le PC, sans aucune fenêtre ouverte.
+- **Fait sur `manques-kvmsoft`** (les manques vus par KVMSoft, `docs/MIGRATION.md`) : instance
+  unique qui transmet ses arguments (`Reveil`, `recevoir_arguments`), fermeture des Paramètres
+  refusable (`peut_fermer`), brouillon entier avec « Annuler » (`instantane`, `remettre`,
+  `brouillon_modifie`) et pied de page (`dessiner_pied`), sélecteur de dossier au-dessus des
+  Paramètres, `sans_fantome`, fermeture bornée à 5 s, captures PNG pour la documentation
+  (`capture`). **Pas vérifié** : le refus de fermeture d'une fenêtre réduite et la
+  transmission des arguments entre deux vrais processus (interdit sans fenêtre visible) ; les
+  essais couvrent le crochet (faux moteur de fenêtres), le codage des arguments et la lecture
+  d'un `WM_COPYDATA`.
 - **Pas vérifié** : l'affichage dans de vraies fenêtres (interdit pendant les essais
   automatiques). À essayer à la main avec l'exemple (`cargo run --example demo`, petit menu :
   « Ouvrir une fenêtre », « Fenêtre simple », « Fenêtre de lecture », Paramètres).
