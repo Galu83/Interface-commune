@@ -149,6 +149,10 @@ de travail par projet, sur sa branche.
   propre boucle, `parametres::fenetre::ouvrir_dans_boucle` avec ses `AutresFenetres`
   (dessinées par sa fenêtre principale), ou `Parametres::dessiner` dans une fenêtre à lui.
   Le titre de la fenêtre est « <logiciel> Settings » en anglais.
+- Branche `powerpeek-appareil` : la brique `Appareil` prend `plus: PlusAppareil` (image de
+  l'appareil dans une tuile, couleur de la barre, texte du niveau, éclair de charge, appareil
+  éteint, bouton « Oublier », aide sur le niveau) ; `PlusAppareil::default()` garde l'appareil
+  simple. Nouvelles mesures `VOLET_TUILE` (44) et `VOLET_BOUTON` (22), icône `ECLAIR`.
 - Retirer ensuite son ancien code de Paramètres ; l'icône, le volet et le petit menu de la
   bibliothèque (`Logiciel`) restent un choix pour plus tard.
 

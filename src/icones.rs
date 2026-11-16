@@ -52,9 +52,11 @@ pub const LICENCE: char = '\u{E8D7}';
 
 /// Un raccourci clavier.
 pub const CLAVIER: char = '\u{E765}';
+/// Un appareil en charge : l'éclair devant son niveau (volet).
+pub const ECLAIR: char = '\u{E945}';
 
 /// Toutes les icônes communes, pour le contrôle des polices.
-pub const TOUTES: [char; 22] = [
+pub const TOUTES: [char; 23] = [
     REGLAGES,
     MISE_A_JOUR,
     A_PROPOS,
@@ -77,4 +79,5 @@ pub const TOUTES: [char; 22] = [
     RETOUR,
     LICENCE,
     CLAVIER,
+    ECLAIR,
 ];

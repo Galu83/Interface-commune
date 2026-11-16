@@ -50,6 +50,10 @@ pub const VOLET_RACCOURCI: f32 = 24.0;
 /// Hauteur de la barre d'un appareil, et de sa sous-ligne.
 pub const VOLET_BARRE: f32 = 4.0;
 pub const VOLET_SOUS_LIGNE: f32 = 18.0;
+/// La tuile de l'image d'un appareil (son icône dessinée par le logiciel), et la hauteur du
+/// petit bouton de sa sous-ligne (« Oublier »).
+pub const VOLET_TUILE: f32 = 44.0;
+pub const VOLET_BOUTON: f32 = 22.0;
 /// La ligne du bas : marge à gauche, et la roue dentée.
 pub const VOLET_MARGE_BAS: f32 = 10.0;
 pub const VOLET_ROUE: f32 = 36.0;
