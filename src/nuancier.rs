@@ -154,6 +154,66 @@ mod tests {
         assert_eq!(rien, None);
     }
 
+    /// Une image du bouton, qui ouvre la grille dans une bulle ; rend le choix et le centre du bouton.
+    fn image_bouton(ctx: &Context, events: Vec<Event>) -> Option<Rgb> {
+        let p = palette();
+        let g = grille_d_essai();
+        let mut choix = None;
+        let mut rendu = ctx.run_ui(
+            RawInput {
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 400.0))),
+                ..Default::default()
+            },
+            |ui| {
+                choix = bouton_nuancier(ui, &p, Rgb(9, 9, 9), "Bon niveau", &g);
+            },
+        );
+        rendu.textures_delta.clear();
+        choix
+    }
+
+    #[test]
+    fn the_button_opens_the_grid_and_a_click_inside_closes_it() {
+        let ctx = Context::default();
+        let bouton = pos2(ZONE / 2.0, ZONE / 2.0);
+        let evenement = |pos, pressed| Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        let _ = image_bouton(&ctx, vec![]);
+        let _ = image_bouton(&ctx, vec![Event::PointerMoved(bouton)]);
+        let _ = image_bouton(&ctx, vec![evenement(bouton, true)]);
+        assert_eq!(image_bouton(&ctx, vec![evenement(bouton, false)]), None);
+        assert!(egui::Popup::is_any_open(&ctx), "la bulle devrait être ouverte");
+        // Un clic sur la première pastille de la bulle donne sa couleur et ferme la bulle.
+        // La bulle prend sa place à l'image suivante, une fois mesurée.
+        let _ = image_bouton(&ctx, vec![]);
+        let _ = image_bouton(&ctx, vec![]);
+        let bulle = ctx
+            .memory(|m| {
+                m.areas()
+                    .visible_layer_ids()
+                    .into_iter()
+                    .filter(|l| l.order == egui::Order::Foreground)
+                    .filter_map(|l| m.area_rect(l.id))
+                    .last()
+            })
+            .expect("la bulle a un emplacement");
+        let au = bulle.min + vec2(20.0, 20.0);
+        let _ = image_bouton(&ctx, vec![Event::PointerMoved(au)]);
+        let _ = image_bouton(&ctx, vec![evenement(au, true)]);
+        let gagne = image_bouton(&ctx, vec![evenement(au, false)]);
+        assert_eq!(gagne, Some(Rgb(255, 0, 0)), "bulle en {bulle:?}");
+        let _ = image_bouton(&ctx, vec![]);
+        assert!(
+            !egui::Popup::is_any_open(&ctx),
+            "la bulle doit se fermer après le choix"
+        );
+    }
+
     #[test]
     fn screen_readers_get_a_name_with_the_code() {
         assert_eq!(code(Rgb(1, 2, 255)), "#0102FF");
