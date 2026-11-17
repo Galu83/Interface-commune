@@ -167,6 +167,11 @@ pub struct Communs {
     pub langue: Option<(String, Vec<String>)>,
     /// « Notifications » (clé `general.notifications`).
     pub notifications: Option<bool>,
+    /// « Journal détaillé (dépannage) » (clé `general.journal_detaille`) ; `None` : pas montré.
+    /// Le logiciel le coupe seul après 24 h (point 7 des règles de sécurité).
+    pub journal_detaille: Option<bool>,
+    /// « Effacer le journal » (action `journal.effacer`, après confirmation) est montré.
+    pub journal_effacable: bool,
     pub mise_a_jour: EtatMiseAJour,
     /// Le dossier des installateurs, tel qu'il s'affiche (raccourci, sans le profil).
     pub dossier_installateurs: String,
@@ -191,6 +196,10 @@ pub mod cles {
     pub const DEMARRAGE: &str = "general.demarrage";
     pub const LANGUE: &str = "general.langue";
     pub const NOTIFICATIONS: &str = "general.notifications";
+    /// « Journal détaillé (dépannage) » (interrupteur, page Général).
+    pub const JOURNAL_DETAILLE: &str = "general.journal_detaille";
+    /// « Effacer le journal », après confirmation.
+    pub const JOURNAL_EFFACER: &str = "journal.effacer";
     /// « Ouvrir le journal » (page Général et petit menu).
     pub const JOURNAL: &str = "journal";
     /// « Rétablir les réglages par défaut », après confirmation.

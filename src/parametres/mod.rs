@@ -120,6 +120,8 @@ pub struct Parametres {
     avant_image: Option<modele::Instantane>,
     /// « Rétablir les réglages par défaut » attend sa confirmation.
     pub confirmer_retablir: bool,
+    /// « Effacer le journal » attend sa confirmation.
+    pub confirmer_effacer: bool,
     /// Les textes avec lesquels la navigation a été faite (une autre langue la refait).
     textes: Textes,
     logo: Option<Logo>,
@@ -139,6 +141,7 @@ impl Parametres {
             redemarrage: None,
             avant_image: None,
             confirmer_retablir: false,
+            confirmer_effacer: false,
             textes,
             logo: None,
         }
@@ -384,6 +387,7 @@ impl Parametres {
                 self.page = i;
                 self.sous_page = None;
                 self.confirmer_retablir = false;
+                self.confirmer_effacer = false;
             }
             ui.add_space(2.0);
         }
@@ -602,11 +606,56 @@ impl Parametres {
         }
         // Les cartes propres au logiciel, avant le journal.
         self.avec_contexte(ui, p, l, |l, ui, c| l.dessiner_general(ui, c));
-        carte(ui, p, icones::JOURNAL, t.journal, t.journal_explication, |ui| {
-            if bouton(ui, p, None, t.ouvrir_le_journal, Genre::Normal).clicked() {
-                l.action(cles::JOURNAL);
+        if self.confirmer_effacer {
+            carte_large(
+                ui,
+                p,
+                icones::JOURNAL,
+                t.effacer_journal_question,
+                t.effacer_journal_explication,
+                260.0,
+                |ui| {
+                    if bouton(ui, p, None, t.non, Genre::Normal).clicked() {
+                        self.confirmer_effacer = false;
+                    }
+                    if bouton(ui, p, None, t.oui_effacer, Genre::Danger).clicked() {
+                        self.confirmer_effacer = false;
+                        l.action(cles::JOURNAL_EFFACER);
+                    }
+                },
+            );
+        } else {
+            carte(ui, p, icones::JOURNAL, t.journal, t.journal_explication, |ui| {
+                if bouton(ui, p, None, t.ouvrir_le_journal, Genre::Normal).clicked() {
+                    l.action(cles::JOURNAL);
+                }
+                if c.journal_effacable && bouton(ui, p, None, t.effacer_le_journal, Genre::Danger).clicked() {
+                    self.confirmer_effacer = true;
+                }
+            });
+        }
+        if let Some(actif) = c.journal_detaille {
+            let mut v = actif;
+            carte(
+                ui,
+                p,
+                icones::JOURNAL,
+                t.journal_detaille,
+                t.journal_detaille_explication,
+                |ui| {
+                    interrupteur_ecrit(ui, p, &t, &mut v);
+                },
+            );
+            if v != actif {
+                self.changer(
+                    l,
+                    cles::JOURNAL_DETAILLE,
+                    t.journal_detaille,
+                    Valeur::Booleen(actif),
+                    Valeur::Booleen(v),
+                );
             }
-        });
+        }
         titre_section(ui, t.remise_a_zero);
         if self.confirmer_retablir {
             let explication = l.retablir_explication();
