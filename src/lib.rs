@@ -39,6 +39,7 @@ pub mod nuancier;
 pub mod parametres;
 pub mod place;
 pub mod polices;
+pub mod seuils;
 pub mod surface;
 pub mod textes;
 pub mod theme;
