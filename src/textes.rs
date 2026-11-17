@@ -52,6 +52,8 @@ pub struct Textes {
     pub langue_explication: &'static str,
     pub notifications: &'static str,
     pub notifications_explication: &'static str,
+    /// Le bouton « Essayer » de la carte « Notifications ».
+    pub essayer: &'static str,
     pub journal: &'static str,
     pub journal_explication: &'static str,
     /// « Journal détaillé (dépannage) » : l'interrupteur, et ce qu'il fait.
@@ -136,6 +138,7 @@ pub const FRANCAIS: Textes = Textes {
     langue_explication: "La langue de l'interface.",
     notifications: "Notifications",
     notifications_explication: "Une bulle près de l'horloge quand quelque chose demande ton attention.",
+    essayer: "Essayer",
     journal: "Journal",
     journal_explication: "Ce que le logiciel a fait, pour comprendre un souci.",
     journal_detaille: "Journal détaillé (dépannage)",
@@ -205,6 +208,7 @@ pub const ANGLAIS: Textes = Textes {
     langue_explication: "The language of the interface.",
     notifications: "Notifications",
     notifications_explication: "A bubble near the clock when something needs your attention.",
+    essayer: "Try",
     journal: "Log",
     journal_explication: "What the app has done, to understand a problem.",
     journal_detaille: "Detailed log (troubleshooting)",
@@ -326,6 +330,7 @@ mod tests {
                 t.langue_explication,
                 t.notifications,
                 t.notifications_explication,
+                t.essayer,
                 t.journal,
                 t.journal_explication,
                 t.journal_detaille,

@@ -775,6 +775,37 @@ fn journal_detaille_et_effacer_avec_confirmation() {
     assert!(texte(&v, t.oui_effacer).is_some());
 }
 
+/// Notifications : le bouton « Essayer » ne se montre que si le logiciel le demande, et
+/// seulement avec la carte « Notifications » ; sans lui, la page ne change pas.
+#[test]
+fn notifications_essayer_seulement_si_demande() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let t = Textes::default();
+    let base = Demo::new().communs();
+    let essai = |notifications: Option<bool>, notifications_essai: bool| {
+        let l = Variante(
+            Demo::new(),
+            Communs {
+                notifications,
+                notifications_essai,
+                ..base.clone()
+            },
+        );
+        let mut s = Parametres::new(&l, Some("general"));
+        let v = image_parametres(&mut s, &l);
+        (
+            texte(&v, t.notifications).is_some(),
+            texte(&v, t.essayer).is_some(),
+        )
+    };
+    assert_eq!(essai(Some(false), false), (true, false));
+    assert_eq!(essai(Some(false), true), (true, true));
+    assert_eq!(essai(Some(true), true), (true, true));
+    assert_eq!(essai(None, true), (false, false));
+}
+
 /// Mise à jour : l'interrupteur des recherches, « Automatique », la carte propre après le
 /// dossier ; recherches coupées : une information, ni recherche ni dossier.
 #[test]

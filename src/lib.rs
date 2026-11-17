@@ -168,6 +168,10 @@ pub struct Communs {
     pub langue: Option<(String, Vec<String>)>,
     /// « Notifications » (clé `general.notifications`).
     pub notifications: Option<bool>,
+    /// Un bouton « Essayer » à côté de l'interrupteur « Notifications » (action
+    /// `general.notifications_essayer`) : le logiciel envoie alors une bulle d'essai. Sans
+    /// effet quand `notifications` est `None`.
+    pub notifications_essai: bool,
     /// « Journal détaillé (dépannage) » (clé `general.journal_detaille`) ; `None` : pas montré.
     /// Le logiciel le coupe seul après 24 h (point 7 des règles de sécurité).
     pub journal_detaille: Option<bool>,
@@ -197,6 +201,8 @@ pub mod cles {
     pub const DEMARRAGE: &str = "general.demarrage";
     pub const LANGUE: &str = "general.langue";
     pub const NOTIFICATIONS: &str = "general.notifications";
+    /// « Essayer » : le logiciel envoie une bulle d'essai (carte « Notifications »).
+    pub const NOTIFICATIONS_ESSAYER: &str = "general.notifications_essayer";
     /// « Journal détaillé (dépannage) » (interrupteur, page Général).
     pub const JOURNAL_DETAILLE: &str = "general.journal_detaille";
     /// « Effacer le journal », après confirmation.

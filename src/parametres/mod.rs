@@ -592,6 +592,9 @@ impl Parametres {
                 t.notifications_explication,
                 |ui| {
                     interrupteur_ecrit(ui, p, &t, &mut v);
+                    if c.notifications_essai && bouton(ui, p, None, t.essayer, Genre::Normal).clicked() {
+                        l.action(cles::NOTIFICATIONS_ESSAYER);
+                    }
                 },
             );
             if v != actif {
