@@ -735,6 +735,46 @@ fn demarrage_grise_et_retablir_du_logiciel() {
     assert!(texte(&v, "Les dispositions inventées sont effacées.").is_some());
 }
 
+/// Journal : l'interrupteur « Journal détaillé » et « Effacer le journal » ne se montrent que
+/// si le logiciel les donne ; l'effacement passe par une question de confirmation.
+#[test]
+fn journal_detaille_et_effacer_avec_confirmation() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let t = Textes::default();
+    let base = Demo::new().communs();
+    let sans = Variante(
+        Demo::new(),
+        Communs {
+            journal_detaille: None,
+            journal_effacable: false,
+            ..base.clone()
+        },
+    );
+    let mut s = Parametres::new(&sans, Some("general"));
+    let v = image_parametres(&mut s, &sans);
+    assert!(texte(&v, t.journal_detaille).is_none());
+    assert!(texte(&v, t.effacer_le_journal).is_none());
+    let avec = Variante(
+        Demo::new(),
+        Communs {
+            journal_detaille: Some(false),
+            journal_effacable: true,
+            ..base
+        },
+    );
+    let mut s = Parametres::new(&avec, Some("general"));
+    let v = image_parametres(&mut s, &avec);
+    assert!(texte(&v, t.journal_detaille).is_some());
+    assert!(texte(&v, t.effacer_le_journal).is_some());
+    assert!(texte(&v, t.oui_effacer).is_none());
+    s.confirmer_effacer = true;
+    let v = image_parametres(&mut s, &avec);
+    assert!(texte(&v, t.effacer_journal_question).is_some());
+    assert!(texte(&v, t.oui_effacer).is_some());
+}
+
 /// Mise à jour : l'interrupteur des recherches, « Automatique », la carte propre après le
 /// dossier ; recherches coupées : une information, ni recherche ni dossier.
 #[test]
