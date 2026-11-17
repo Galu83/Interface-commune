@@ -40,6 +40,7 @@ pub mod parametres;
 pub mod place;
 pub mod polices;
 pub mod seuils;
+pub mod sonde;
 pub mod surface;
 pub mod textes;
 pub mod theme;

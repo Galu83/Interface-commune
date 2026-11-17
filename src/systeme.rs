@@ -442,6 +442,7 @@ pub fn choisir_dossier(proprietaire: Option<isize>, depart: Option<&Path>, titre
                 }
             }
             // Une erreur si l'utilisateur annule.
+            let _imbriquee = crate::sonde::imbriquee("sélecteur de dossier");
             dialogue.Show(proprietaire.map(hwnd)).ok()?;
             let texte = dialogue
                 .GetResult()

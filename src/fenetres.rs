@@ -246,7 +246,10 @@ impl Reception {
             match self.reception.try_recv() {
                 Ok(d) => return Some(d),
                 Err(TryRecvError::Disconnected) => return None,
-                Err(TryRecvError::Empty) => self.reveil.attendre(1_000),
+                Err(TryRecvError::Empty) => {
+                    crate::sonde::battement();
+                    self.reveil.attendre(1_000);
+                }
             }
         }
     }
@@ -299,6 +302,8 @@ pub trait Ouvreur {
 /// refaite que si elle a été fermée (par Windows, ou une erreur).
 pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: &Reception) {
     loop {
+        crate::sonde::battement();
+        crate::sonde::etape("boucle des fenêtres");
         if liens.quitter.load(Ordering::Acquire) {
             break;
         }

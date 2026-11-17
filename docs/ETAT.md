@@ -31,6 +31,9 @@
   transmission des arguments entre deux vrais processus (interdit sans fenêtre visible) ; les
   essais couvrent le crochet (faux moteur de fenêtres), le codage des arguments et la lecture
   d'un `WM_COPYDATA`.
+- **Fait sur `kvmsoft-sonde`** : la sonde des fils (`src/sonde.rs`, `docs/MIGRATION.md`) pour
+  trouver une icône muette. **Pas vérifié** : un vrai blocage de l'icône ou du volet (la logique
+  est essayée avec des fils simulés ; les points d'appel ne l'ont pas été en fenêtres réelles).
 - **Pas vérifié** : l'affichage dans de vraies fenêtres (interdit pendant les essais
   automatiques). À essayer à la main avec l'exemple (`cargo run --example demo`, petit menu :
   « Ouvrir une fenêtre », « Fenêtre simple », « Fenêtre de lecture », Paramètres).

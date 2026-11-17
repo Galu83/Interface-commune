@@ -259,6 +259,7 @@ pub fn ouvrir_seuls(
     let place = o.place;
     let mut options = crate::volet::options(o.constructeur());
     options.centered = place.is_none();
+    let _imbriquee = crate::sonde::imbriquee("fenêtre des Paramètres (seule)");
     eframe::run_native(
         &nom,
         options,

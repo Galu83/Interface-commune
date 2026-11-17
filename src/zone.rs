@@ -625,6 +625,7 @@ impl Zone {
             let mut n = 0usize;
             remplir(m, lignes, &mut n);
             let _ = SetForegroundWindow(self.fenetre);
+            let _imbriquee = crate::sonde::imbriquee("TrackPopupMenu (menu de la zone)");
             let c = TrackPopupMenu(
                 m,
                 TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,

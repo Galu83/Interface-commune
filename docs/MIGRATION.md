@@ -211,6 +211,29 @@ contournements :
 - Retirer ensuite son ancien code de Paramètres ; l'icône, le volet et le petit menu de la
   bibliothèque (`Logiciel`) restent un choix pour plus tard.
 
+## La sonde des fils (branche `kvmsoft-sonde`, pour tous)
+
+Une icône qui ne réagit plus alors que la fenêtre cachée répond encore, c'est un fil pris. La
+bibliothèque a maintenant `sonde`, active **par défaut**, sans rien à changer dans un projet :
+- une ligne au journal (`Logiciel::noter`) à chaque clic reçu par l'icône (gauche, droit,
+  double), avec l'heure UTC ;
+- une ligne au début et une à la fin (la durée) de chaque appel qui fait tourner sa propre
+  boucle de messages : menu de secours de Windows, menu de la zone, sélecteur de dossier,
+  fenêtre des Paramètres seule ;
+- un chien de garde, un seul fil pour tous : les fils « icône » (sa boucle de messages) et
+  « fenêtres » (le volet) ont chacun un compteur de battements ; toutes les 5 s il est lu, et un
+  compteur immobile depuis 15 s donne une ligne (une seule par blocage) avec **la dernière
+  étape** du fil (changement de contexte OpenGL, dessin, `Shell_NotifyIcon`…) et, si le fil est
+  dans une boucle imbriquée, laquelle et depuis combien de temps ; une autre ligne dit quand il
+  repart, avec la durée totale.
+Les lignes ne portent jamais rien de l'utilisateur : seulement des noms écrits dans le code.
+Coût : un compteur atomique et un petit verrou sans attente par étape.
+
+Pour un projet : rien d'obligatoire. `sonde::regler(Delais { pas, blocage })` change les délais
+(avant `Horloge::lancer`) ; un fil à soi qui a sa boucle s'inscrit avec `sonde::inscrire`,
+bat avec `sonde::battement()`, pose `sonde::etape("…")` avant un appel à risque et entoure un
+appel à boucle propre de `sonde::imbriquee("…")`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

@@ -48,7 +48,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
     RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetForegroundWindow,
     SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_ENDSESSION,
+    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_ENDSESSION, WM_NULL,
     WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
@@ -549,6 +549,9 @@ impl Horloge {
         if let Some(page) = parametres {
             let _ = poste.demandes.send(Demande::Parametres(page));
         }
+        // La sonde des fils écrit dans le journal du logiciel (clics, boucles imbriquées, blocages).
+        let pour_la_sonde = logiciel.clone();
+        crate::sonde::brancher_le_journal(move |ligne| pour_la_sonde.noter(ligne));
         let (l2, liens2) = (logiciel.clone(), poste.liens.clone());
         let fil = std::thread::Builder::new()
             .name("fenêtres".into())
@@ -643,6 +646,18 @@ impl Ouvreur for Fenetres {
 }
 
 fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: Reception) {
+    // Surveillé : une image demandée le réveille s'il dort (le volet caché ne tourne qu'à la demande).
+    let pour_reveiller = liens.clone();
+    let _surveille = crate::sonde::inscrire(
+        "fenêtres",
+        Some(Box::new(move || {
+            if let Ok(c) = pour_reveiller.contexte.lock()
+                && let Some(c) = c.as_ref()
+            {
+                c.request_repaint();
+            }
+        })),
+    );
     match crate::polices::polices() {
         Ok(polices) => {
             let mut f = Fenetres {
@@ -735,6 +750,7 @@ impl Principal {
         copier(&mut d.szTip, &self.infobulle);
         d.Anonymous.uVersion = NOTIFYICON_VERSION_4;
         // SAFETY: `d` est local, complet et de la taille annoncée.
+        crate::sonde::etape("Shell_NotifyIcon (ajout de l'icône)");
         unsafe {
             let _ = Shell_NotifyIconW(NIM_ADD, &d);
             let _ = Shell_NotifyIconW(NIM_SETVERSION, &d);
@@ -746,6 +762,7 @@ impl Principal {
         d.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         d.hIcon = self.icone.unwrap_or_default();
         copier(&mut d.szTip, &self.infobulle);
+        crate::sonde::etape("Shell_NotifyIcon (changement de l'icône)");
         // SAFETY: comme ci-dessus.
         let _ = unsafe { Shell_NotifyIconW(NIM_MODIFY, &d) };
     }
@@ -789,6 +806,7 @@ impl Principal {
                         Niveau::Avertissement => NIIF_WARNING,
                         Niveau::Erreur => NIIF_ERROR,
                     } | NIIF_RESPECT_QUIET_TIME;
+                    crate::sonde::etape("Shell_NotifyIcon (notification)");
                     // SAFETY: comme `ajouter_icone`.
                     let _ = unsafe { Shell_NotifyIconW(NIM_MODIFY, &d) };
                 }
@@ -826,6 +844,14 @@ impl Principal {
     }
 
     fn geste(&mut self, e: crate::clics::Evenement, ancre: [i32; 2]) {
+        crate::sonde::etape("geste sur l'icône");
+        crate::sonde::clic(match e {
+            crate::clics::Evenement::Selection => "gauche",
+            crate::clics::Evenement::Clavier => "clavier",
+            crate::clics::Evenement::MenuContextuel => "droit",
+            crate::clics::Evenement::DoubleClic => "double",
+            crate::clics::Evenement::Relache => "relâché",
+        });
         let clic = Instant::now();
         match self.clics.recevoir(e, clic, temps_double_clic()) {
             Geste::Rien => {}
@@ -934,6 +960,7 @@ impl Principal {
                 }
             }
             let _ = SetForegroundWindow(self.fenetre);
+            let _imbriquee = crate::sonde::imbriquee("TrackPopupMenu (menu de secours)");
             let c = TrackPopupMenu(
                 m,
                 TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN,
@@ -1137,6 +1164,16 @@ fn boucle(
         .map_err(|e| e.to_string())?
     };
     poste.liens.fenetre.store(fenetre.0 as isize, Ordering::Release);
+    // Surveillé : sa boucle de messages bat à chaque message ; un message vide (WM_NULL) posté par
+    // la surveillance le tire de son attente.
+    let h_reveil = fenetre.0 as isize;
+    let _surveille = crate::sonde::inscrire(
+        "icône",
+        Some(Box::new(move || {
+            // SAFETY: PostMessageW n'attend rien et accepte une fenêtre déjà détruite (il échoue).
+            let _ = unsafe { PostMessageW(Some(hwnd(h_reveil)), WM_NULL, WPARAM(0), LPARAM(0)) };
+        })),
+    );
     // SAFETY: nom constant ; « TaskbarCreated » est diffusé quand l'Explorateur redémarre.
     let taskbar_created = unsafe { RegisterWindowMessageW(windows::core::w!("TaskbarCreated")) };
     let mut p = Principal {
@@ -1163,9 +1200,13 @@ fn boucle(
     let mut m = MSG::default();
     // SAFETY: boucle des messages classique de ce fil, sur un MSG local.
     unsafe {
+        crate::sonde::etape("attente d'un message");
         while GetMessageW(&mut m, None, 0, 0).as_bool() {
+            crate::sonde::battement();
+            crate::sonde::etape("traitement d'un message");
             let _ = TranslateMessage(&m);
             DispatchMessageW(&m);
+            crate::sonde::etape("attente d'un message");
         }
     }
     // SAFETY: plus aucun message ne lira l'état (fenêtre détruite, ou sans état désormais).

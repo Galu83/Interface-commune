@@ -641,6 +641,8 @@ impl eframe::App for Volet<'_> {
 
     /// Appelé avant chaque image, et seul quand la fenêtre est cachée : lit les demandes.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        crate::sonde::battement();
+        crate::sonde::etape("volet : début de l'image");
         if self.liens.quitter.load(Ordering::Acquire) {
             self.cacher_tout_de_suite(ctx);
             self.sortie_voulue = None;
@@ -665,6 +667,7 @@ impl eframe::App for Volet<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        crate::sonde::etape("volet : dessin de l'image");
         let ctx = ui.ctx().clone();
         if self.hwnd.is_none() {
             self.hwnd = hwnd_de(frame);
@@ -702,6 +705,7 @@ impl eframe::App for Volet<'_> {
         // Voilée tant qu'elle n'est pas ouverte pour de bon : eframe montre d'office une
         // fenêtre à sa première image, même préparée cachée. Fait avant la fin de l'image,
         // donc avant que la demande de la montrer soit appliquée.
+        crate::sonde::etape("volet : voile et fenêtre (appels à Windows)");
         let voile = voilee(&self.etape);
         if let Some(h) = self.hwnd
             && self.voilee != Some(voile)
@@ -711,7 +715,10 @@ impl eframe::App for Volet<'_> {
         }
         // Les Paramètres et les autres fenêtres, à chaque image de la fenêtre principale
         // (une fenêtre qui n'y est pas dessinée est détruite par egui).
+        crate::sonde::etape("autres fenêtres : création, dessin, destruction");
         self.liens.autres.montrer(&ctx, &p);
+        // La suite est à eframe : dessin OpenGL et échange des tampons (SwapBuffers).
+        crate::sonde::etape("volet : après le dessin, OpenGL et SwapBuffers");
     }
 }
 
@@ -748,6 +755,7 @@ pub fn veiller(
         .with_visible(false);
     let (l2, liens2) = (logiciel.clone(), liens.clone());
     let nom = logiciel.identite().nom.clone();
+    crate::sonde::etape("volet : création de la fenêtre et du contexte OpenGL");
     let r = eframe::run_native(
         &nom,
         options(viewport),
