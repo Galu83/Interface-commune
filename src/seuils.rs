@@ -237,7 +237,9 @@ pub fn barre_seuils(
                 None => voulu += pas,
             }
         }
-        if deplacer(seuils, i, voulu, options.ecart_min, max) {
+        // Rien n'est demandé : une valeur écrite à la main (deux limites au même endroit, une limite au
+        // bout) reste telle quelle, elle n'est jamais bornée du seul fait d'être montrée.
+        if voulu != i32::from(seuils[i]) && deplacer(seuils, i, voulu, options.ecart_min, max) {
             reponse.change = true;
         }
         reponse.glisse |= r.dragged();
@@ -477,6 +479,24 @@ mod tests {
         assert_eq!(s, [49, 50], "la fin, c'est contre l'autre limite");
         let _ = image(&ctx, vec![touche(Key::Home, Modifiers::NONE)], &mut s);
         assert_eq!(s, [0, 50]);
+    }
+
+    /// Des seuils écrits à la main (collés l'un à l'autre, contre un bout) sont dessinés tels quels :
+    /// la barre ne les change pas toute seule.
+    #[test]
+    fn values_that_are_already_there_are_never_corrected_by_being_drawn() {
+        let ctx = Context::default();
+        for mut s in [[0u8, 0], [100, 100], [50, 50], [0, 100]] {
+            let avant = s;
+            let r = image(&ctx, vec![], &mut s);
+            let r2 = image(&ctx, vec![], &mut s);
+            assert_eq!(
+                (r, r2),
+                (ReponseSeuils::default(), ReponseSeuils::default()),
+                "{avant:?}"
+            );
+            assert_eq!(s, avant);
+        }
     }
 
     #[test]
