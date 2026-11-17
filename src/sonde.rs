@@ -36,6 +36,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -125,13 +126,27 @@ pub struct Fil {
     nom: &'static str,
     battements: AtomicU64,
     etat: Mutex<EtatDuFil>,
-    /// Réveille le fil s'il dort (un fil à l'arrêt entre deux messages ne bat pas tout seul) ;
-    /// appelé par la surveillance après chaque lecture.
-    reveil: Option<Box<dyn Fn() + Send + Sync>>,
+    /// Le signal qui réveille le fil s'il dort (un fil à l'arrêt entre deux messages ne bat pas
+    /// tout seul). Le réveil lui-même tourne sur un petit fil à part : la surveillance envoie
+    /// le signal (`try_send`) sans jamais attendre, même si ce réveil reste pris dans un verrou.
+    reveil: Option<SyncSender<()>>,
 }
 
 impl Fil {
     fn nouveau(nom: &'static str, reveil: Option<Box<dyn Fn() + Send + Sync>>) -> Arc<Fil> {
+        // Le petit fil du réveil s'arrête quand le fil est lâché (le canal se ferme).
+        let reveil = reveil.and_then(|r| {
+            let (tx, rx) = sync_channel::<()>(1);
+            std::thread::Builder::new()
+                .name(format!("sonde : réveil {nom}"))
+                .spawn(move || {
+                    while rx.recv().is_ok() {
+                        r();
+                    }
+                })
+                .ok()
+                .map(|_| tx)
+        });
         Arc::new(Fil {
             nom,
             battements: AtomicU64::new(0),
@@ -324,6 +339,19 @@ impl Surveillance {
     }
 }
 
+impl Surveillance {
+    /// Un tour, puis le signal de réveil de chaque fil (il a un pas entier pour battre avant le
+    /// tour suivant). Le signal n'attend jamais : un réveil bloqué n'arrête que lui.
+    fn tour_et_reveils(&mut self, maintenant: Instant, fils: &[Arc<Fil>], ecrire: &mut dyn FnMut(String)) {
+        self.tour(maintenant, fils, ecrire);
+        for f in fils {
+            if let Some(r) = &f.reveil {
+                let _ = r.try_send(());
+            }
+        }
+    }
+}
+
 /// Lance l'unique fil de surveillance (une seule fois pour le programme).
 fn demarrer_la_surveillance() {
     static UNE_FOIS: OnceLock<()> = OnceLock::new();
@@ -334,13 +362,7 @@ fn demarrer_la_surveillance() {
             loop {
                 std::thread::sleep(d.pas);
                 let fils: Vec<Arc<Fil>> = FILS.lock().unwrap_or_else(PoisonError::into_inner).clone();
-                s.tour(Instant::now(), &fils, &mut noter);
-                // Après la lecture : le fil a un pas entier pour battre avant la suivante.
-                for f in &fils {
-                    if let Some(r) = &f.reveil {
-                        r();
-                    }
-                }
+                s.tour_et_reveils(Instant::now(), &fils, &mut noter);
             }
         });
     });
@@ -350,6 +372,17 @@ fn demarrer_la_surveillance() {
 mod essais {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    /// Les essais qui touchent à l'état global (journal, fils inscrits, délais) se suivent, avec
+    /// des délais courts : la surveillance réelle n'est lancée qu'une fois pour le programme.
+    static GLOBAL: Mutex<()> = Mutex::new(());
+
+    fn courts() {
+        regler(Delais {
+            pas: Duration::from_millis(50),
+            blocage: Duration::from_millis(200),
+        });
+    }
 
     fn tour(s: &mut Surveillance, t: Instant, fils: &[Arc<Fil>]) -> Vec<String> {
         let mut v = Vec::new();
@@ -440,6 +473,8 @@ mod essais {
     /// global.)
     #[test]
     fn la_garde_ecrit_debut_et_fin_et_rend_l_etat() {
+        let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+        courts();
         let lignes: Arc<Mutex<Vec<String>>> = Arc::default();
         let l2 = lignes.clone();
         brancher_le_journal(move |l| l2.lock().unwrap().push(l));
@@ -471,6 +506,84 @@ mod essais {
         let fil = inscription.fil.clone();
         drop(inscription);
         assert!(!FILS.lock().unwrap().iter().any(|f| Arc::ptr_eq(f, &fil)));
+        *SORTIE.write().unwrap() = None;
+    }
+
+    /// Un réveil qui reste pris pour toujours (un verrou jamais rendu) n'empêche pas la
+    /// surveillance de dire le blocage d'un autre fil, et ne la fait jamais attendre.
+    #[test]
+    fn un_reveil_bloque_ne_bloque_pas_la_surveillance() {
+        let t0 = Instant::now();
+        let verrou: Arc<Mutex<()>> = Arc::default();
+        let garde = verrou.lock().unwrap();
+        let v2 = verrou.clone();
+        let a = Fil::nouveau("fenêtres", Some(Box::new(move || drop(v2.lock()))));
+        let b = Fil::nouveau("icône", None);
+        b.battre();
+        b.poser("attente d'un message");
+        let fils = [a.clone(), b.clone()];
+        let mut s = Surveillance::new(Duration::from_secs(15));
+        let mut lignes = Vec::new();
+        let debut = Instant::now();
+        for i in 0..5u64 {
+            a.battre();
+            s.tour_et_reveils(t0 + Duration::from_secs(5 * i), &fils, &mut |l| lignes.push(l));
+        }
+        assert!(
+            debut.elapsed() < Duration::from_secs(5),
+            "la surveillance a attendu"
+        );
+        assert_eq!(lignes.len(), 1, "{lignes:?}");
+        assert!(lignes[0].contains("« icône »"), "{lignes:?}");
+        drop(garde);
+    }
+
+    /// La vraie boucle de surveillance, avec des délais courts : un fil inscrit qui ne bat
+    /// plus est dit une fois, puis dit reparti. (Seul essai qui lance la boucle réelle.)
+    #[test]
+    fn la_boucle_reelle_dit_le_blocage_et_la_reprise() {
+        let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+        courts();
+        let lignes: Arc<Mutex<Vec<String>>> = Arc::default();
+        let l2 = lignes.clone();
+        brancher_le_journal(move |l| l2.lock().unwrap().push(l));
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let fil = std::thread::spawn(move || {
+            let _i = inscrire("fil d'essai", None);
+            battement();
+            etape("étape d'essai");
+            // Bloqué : plus de battement, jusqu'au signal.
+            let _ = rx.recv();
+            // Reparti : il bat de nouveau, jusqu'à ce que l'essai ferme le canal.
+            while !matches!(rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Disconnected)) {
+                battement();
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+        let attendre = |f: &dyn Fn(&[String]) -> bool| {
+            for _ in 0..100 {
+                if f(&lignes.lock().unwrap()) {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            false
+        };
+        assert!(attendre(&|v| v.iter().any(|l| l
+            .contains("« fil d'essai » ne répond plus")
+            && l.contains("étape d'essai"))));
+        tx.send(()).unwrap();
+        assert!(attendre(&|v| v
+            .iter()
+            .any(|l| l.contains("« fil d'essai » repart"))));
+        drop(tx);
+        fil.join().unwrap();
+        let v = lignes.lock().unwrap().clone();
+        let n = v
+            .iter()
+            .filter(|l| l.contains("« fil d'essai » ne répond plus"))
+            .count();
+        assert_eq!(n, 1, "{v:?}");
         *SORTIE.write().unwrap() = None;
     }
 

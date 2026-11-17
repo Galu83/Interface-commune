@@ -651,7 +651,7 @@ fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: R
     let _surveille = crate::sonde::inscrire(
         "fenêtres",
         Some(Box::new(move || {
-            if let Ok(c) = pour_reveiller.contexte.lock()
+            if let Ok(c) = pour_reveiller.contexte.try_lock()
                 && let Some(c) = c.as_ref()
             {
                 c.request_repaint();
