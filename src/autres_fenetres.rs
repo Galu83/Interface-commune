@@ -63,6 +63,9 @@ pub struct Ouverture {
     pub cadre: bool,
     /// Prendre le focus en se montrant.
     pub focus: bool,
+    /// Sans `place`, la bibliothèque centre la fenêtre sur l'écran de la souris à chaque
+    /// image cachée ; `false` : le contenu la pose lui-même (près d'une zone, par exemple).
+    pub centree: bool,
 }
 
 impl Ouverture {
@@ -80,6 +83,7 @@ impl Ouverture {
             barre_des_taches: true,
             cadre: true,
             focus: true,
+            centree: true,
         }
     }
 
@@ -127,6 +131,13 @@ impl Ouverture {
         self
     }
 
+    /// Le contenu pose lui-même la fenêtre (`systeme::poser` sur le `hwnd` du `Cadre`) : la
+    /// bibliothèque ne la centre pas avant de la montrer.
+    pub fn pose_par_le_contenu(mut self) -> Ouverture {
+        self.centree = false;
+        self
+    }
+
     /// Ce qu'egui reçoit : la fenêtre est toujours créée cachée.
     pub fn constructeur(&self) -> ViewportBuilder {
         let mut b = ViewportBuilder::default()
@@ -166,6 +177,13 @@ pub trait Contenu: Send + 'static {
     /// réponse est alors ignorée, mais le contenu a pu enregistrer. Pour la croix, Alt+F4 ou
     /// la barre des tâches, `imposee` est `false` et le refus garde la fenêtre.
     fn peut_fermer(&mut self, _imposee: bool) -> bool {
+        true
+    }
+
+    /// Le contenu est prêt à être vu (sa taille est connue, ce qu'il attend est arrivé) ?
+    /// Tant que non, la fenêtre reste cachée, même après ses deux images ; on la redessine
+    /// jusqu'à ce que oui. Par défaut : toujours prêt.
+    fn prete(&self) -> bool {
         true
     }
 
@@ -272,16 +290,28 @@ impl Fenetre {
             self.windows(palette);
         }
         if !self.montree {
-            if self.images >= IMAGES_CACHEES || !reelle {
+            if reelle && (self.images < IMAGES_CACHEES || !self.contenu.prete()) {
+                ctx.request_repaint();
+            } else {
                 self.montree = true;
                 #[cfg(windows)]
                 self.voiler(false);
-                ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-                if self.ouverture.focus {
-                    ctx.send_viewport_cmd(ViewportCommand::Focus);
+                #[cfg(windows)]
+                let sans_focus = !self.ouverture.focus && self.hwnd.is_some();
+                #[cfg(not(windows))]
+                let sans_focus = false;
+                if sans_focus {
+                    // Jamais le premier plan : `Visible(true)` activerait la fenêtre.
+                    #[cfg(windows)]
+                    if let Some(h) = self.hwnd {
+                        crate::systeme::montrer_sans_activer(h);
+                    }
+                } else {
+                    ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+                    if self.ouverture.focus {
+                        ctx.send_viewport_cmd(ViewportCommand::Focus);
+                    }
                 }
-            } else {
-                ctx.request_repaint();
             }
         }
         if std::mem::take(&mut self.devant) {
@@ -320,9 +350,22 @@ impl Fenetre {
     fn windows(&mut self, palette: &Palette) {
         use crate::systeme;
         if self.hwnd.is_none() {
-            self.hwnd = systeme::fenetre_du_fil(&self.titre);
+            let mut prises = verrou(&PRISES);
+            self.hwnd = systeme::fenetre_du_fil(&self.titre, &prises);
+            if let Some(h) = self.hwnd {
+                prises.push(h);
+            }
         }
         let Some(h) = self.hwnd else { return };
+        // winit réécrit les styles de la fenêtre à chaque changement de ses réglages (visibilité,
+        // boutons…) : ceux qu'il ne connaît pas sont donc reposés à chaque image (sans effet si
+        // déjà faits), avant de la montrer.
+        if !self.ouverture.focus {
+            systeme::sans_focus(h, !self.ouverture.barre_des_taches);
+        }
+        if !self.ouverture.cadre {
+            systeme::sans_cadre(h);
+        }
         if !self.montree {
             // Préparée cachée : voilée dès qu'elle existe (eframe la montrerait d'office).
             self.voiler(true);
@@ -336,13 +379,14 @@ impl Fenetre {
             // autre écran, la fois suivante lui rend sa taille.
             match self.ouverture.place {
                 Some(p) => systeme::poser(h, p),
-                None => {
+                None if self.ouverture.centree => {
                     if let Some(t) = systeme::taille_fenetre(h)
                         && let Some(p) = systeme::centree(t)
                     {
                         systeme::deplacer(h, p[0], p[1], false);
                     }
                 }
+                None => {}
             }
         }
     }
@@ -374,6 +418,10 @@ impl Fenetre {
 
 type Partagee = Arc<Mutex<Fenetre>>;
 
+/// Les fenêtres de Windows déjà attribuées à une fenêtre du logiciel (deux fenêtres du même titre
+/// ne se confondent pas).
+static PRISES: Mutex<Vec<isize>> = Mutex::new(Vec::new());
+
 #[derive(Default)]
 struct Registre {
     fenetres: BTreeMap<String, Partagee>,
@@ -385,6 +433,9 @@ struct Registre {
 pub struct AutresFenetres {
     registre: Arc<Mutex<Registre>>,
     contexte: Arc<Mutex<Option<egui::Context>>>,
+    /// La fenêtre principale de la boucle (le volet, cachée au repos), 0 tant qu'elle n'est pas
+    /// prête : une demande venue d'un autre fil la réveille.
+    racine: Arc<std::sync::atomic::AtomicIsize>,
 }
 
 fn verrou<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -406,11 +457,20 @@ impl AutresFenetres {
         self.reveiller();
     }
 
-    /// Réveille la fenêtre principale, pour qu'elle ouvre, ferme ou redessine.
+    /// La fenêtre principale de la boucle (0 : aucune), fixée par le volet.
+    pub(crate) fn racine(&self, h: isize) {
+        self.racine.store(h, std::sync::atomic::Ordering::Release);
+    }
+
+    /// Réveille la fenêtre principale, pour qu'elle ouvre, ferme ou redessine. Cachée au repos,
+    /// elle ne répond pas à une simple demande de dessin venue d'un autre fil : elle est
+    /// montrée voilée (rien n'apparaît), dessine, puis se recache.
     pub fn reveiller(&self) {
         if let Some(c) = verrou(&self.contexte).as_ref() {
             c.request_repaint_of(ViewportId::ROOT);
         }
+        #[cfg(windows)]
+        crate::systeme::reveiller(self.racine.load(std::sync::atomic::Ordering::Acquire));
     }
 
     /// Ouvre la fenêtre de cette clé (une seule à la fois par clé). Déjà ouverte : elle passe
@@ -546,6 +606,9 @@ impl AutresFenetres {
         if !f.consulte {
             // Fermée par le logiciel ou par son contenu : le refus ne compte pas.
             let _ = f.contenu.peut_fermer(true);
+        }
+        if let Some(h) = f.hwnd {
+            verrou(&PRISES).retain(|x| *x != h);
         }
         let place = f.place();
         f.contenu.fermee(place);
@@ -730,6 +793,48 @@ mod tests {
             trace.0.lock().unwrap().clone(),
             vec!["peut_fermer imposée true → false", "fermée"]
         );
+    }
+
+    /// Un contenu pas prêt garde sa fenêtre cachée, même après ses deux images ; elle se montre
+    /// à l'image qui suit le moment où il l'est.
+    #[test]
+    fn un_contenu_pas_pret_garde_sa_fenetre_cachee() {
+        struct Attend(Arc<std::sync::atomic::AtomicBool>, Trace);
+        impl Contenu for Attend {
+            fn dessiner(&mut self, ui: &mut egui::Ui, cadre: &mut Cadre<'_>) {
+                ui.label("attend");
+                self.1
+                    .0
+                    .lock()
+                    .unwrap()
+                    .push(format!("image {} montrée {}", cadre.image, cadre.montree));
+            }
+            fn prete(&self) -> bool {
+                self.0.load(std::sync::atomic::Ordering::Acquire)
+            }
+        }
+        let ctx = contexte();
+        let f = AutresFenetres::default();
+        f.lier(Some(ctx.clone()));
+        let (pret, trace) = (
+            Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            Trace::default(),
+        );
+        f.ouvrir(
+            "carte",
+            Ouverture::new("Carte", [300.0, 200.0]).sans_focus(),
+            Attend(pret.clone(), trace.clone()),
+        );
+        for _ in 0..4 {
+            let _ = image(&ctx, &f);
+        }
+        assert!(f.a_faire(), "pas prête : encore cachée");
+        pret.store(true, std::sync::atomic::Ordering::Release);
+        let _ = image(&ctx, &f);
+        assert!(!f.a_faire(), "prête : montrée");
+        let t = trace.0.lock().unwrap().clone();
+        assert_eq!(t[3], "image 4 montrée false", "{t:?}");
+        assert_eq!(t[4], "image 5 montrée true", "{t:?}");
     }
 
     /// Une deuxième fenêtre s'ouvre puis se ferme dans la même boucle, sans en créer une

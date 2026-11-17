@@ -120,7 +120,7 @@ impl Contenu for ContenuParametres {
 /// À appeler sur le fil des fenêtres (celui des méthodes de [`Reglages`]) ; `None` si elle
 /// n'est pas ouverte.
 pub fn fenetre_parametres(l: &dyn Reglages) -> Option<isize> {
-    systeme::fenetre_du_fil(&Parametres::titre_fenetre(l))
+    systeme::fenetre_du_fil(&Parametres::titre_fenetre(l), &[])
 }
 
 /// Le sélecteur de dossier de Windows, **au-dessus des Paramètres** (qui sont son

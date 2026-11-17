@@ -21,12 +21,14 @@ use windows::Win32::System::Registry::{
 use windows::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, SetEvent};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumThreadWindows, GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, GetWindowTextW,
-    GetWindowThreadProcessId, HWND_TOPMOST, IsWindow, LWA_ALPHA, MSG, MsgWaitForMultipleObjects, PM_NOREMOVE,
-    PM_QS_SENDMESSAGE, PeekMessageW, QS_SENDMESSAGE, SPI_GETCLIENTAREAANIMATION, SW_HIDE, SW_SHOWNOACTIVATE,
-    SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetForegroundWindow,
+    EnumThreadWindows, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
+    GetWindowTextW, GetWindowThreadProcessId, HWND_TOPMOST, IsWindow, LWA_ALPHA, MSG,
+    MsgWaitForMultipleObjects, PM_NOREMOVE, PM_QS_SENDMESSAGE, PeekMessageW, QS_SENDMESSAGE,
+    SPI_GETCLIENTAREAANIMATION, SW_HIDE, SW_SHOWNOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_NOZORDER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetForegroundWindow,
     SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, ShowWindowAsync,
-    SystemParametersInfoW, WS_EX_LAYERED,
+    SystemParametersInfoW, WS_CAPTION, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_MAXIMIZEBOX,
+    WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
 };
 use windows::core::{BOOL, HSTRING, PCWSTR, w};
 
@@ -188,6 +190,60 @@ pub fn voiler(h: isize, voile: bool) -> bool {
 pub fn premier_plan(h: isize) {
     // SAFETY: fenêtre d'egui vivante ; Windows refuse sans dommage s'il n'est pas d'accord.
     let _ = unsafe { SetForegroundWindow(hwnd(h)) };
+}
+
+/// La fenêtre ne prend plus jamais le premier plan (`WS_EX_NOACTIVATE`) : un clic dessus
+/// laisse le clavier à l'application d'en dessous. `outil` : aussi `WS_EX_TOOLWINDOW` (ni
+/// bouton dans la barre des tâches, ni Alt+Tab). Vrai si Windows a gardé le style.
+pub fn sans_focus(h: isize, outil: bool) -> bool {
+    let voulu = WS_EX_NOACTIVATE.0 as isize | if outil { WS_EX_TOOLWINDOW.0 as isize } else { 0 };
+    // SAFETY: lecture d'un style ; une poignée périmée renvoie 0 sans effet.
+    let avant = unsafe { GetWindowLongPtrW(hwnd(h), GWL_EXSTYLE) };
+    if avant & voulu != voulu {
+        // SAFETY: écriture d'un style sur une fenêtre de ce processus (sinon Windows refuse).
+        unsafe { SetWindowLongPtrW(hwnd(h), GWL_EXSTYLE, avant | voulu) };
+    }
+    // SAFETY: même lecture que ci-dessus.
+    let apres = unsafe { GetWindowLongPtrW(hwnd(h), GWL_EXSTYLE) };
+    apres & voulu == voulu
+}
+
+/// Retire la barre de titre et le cadre de Windows (la fenêtre devient un simple rectangle) :
+/// `Decorations(false)` de winit ne le fait pas toujours après la création, et un autre
+/// réglage de winit (boutons, visibilité) peut les remettre ; l'appel est sans effet quand
+/// c'est déjà fait, donc à refaire à chaque image cachée. Vrai si la fenêtre est sans cadre.
+pub fn sans_cadre(h: isize) -> bool {
+    let cadre = (WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX).0 as isize;
+    // SAFETY: lecture d'un style ; une poignée périmée renvoie 0 sans effet.
+    let avant = unsafe { GetWindowLongPtrW(hwnd(h), GWL_STYLE) };
+    let apres = (avant & !cadre) | WS_POPUP.0 as isize;
+    if apres != avant {
+        // SAFETY: écriture d'un style sur une fenêtre de ce processus (sinon Windows refuse),
+        // puis recalcul du cadre sans bouger, ni changer la taille, ni prendre le premier plan.
+        unsafe {
+            SetWindowLongPtrW(hwnd(h), GWL_STYLE, apres);
+            let _ = SetWindowPos(
+                hwnd(h),
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+        }
+    }
+    // SAFETY: même lecture que ci-dessus.
+    let fini = unsafe { GetWindowLongPtrW(hwnd(h), GWL_STYLE) };
+    fini & cadre == 0
+}
+
+/// Montre la fenêtre sans la mettre au premier plan (`SW_SHOWNOACTIVATE`) : la commande
+/// `Visible(true)` de winit utilise `SW_SHOW`, qui l'active et prend le clavier à
+/// l'application où l'on écrit, même avec `WS_EX_NOACTIVATE`.
+pub fn montrer_sans_activer(h: isize) {
+    // SAFETY: simples valeurs ; une poignée périmée est refusée par Windows, sans effet.
+    let _ = unsafe { ShowWindow(hwnd(h), SW_SHOWNOACTIVATE) };
 }
 
 /// Cache la fenêtre tout de suite (sans attendre l'image suivante d'egui) : une fenêtre
@@ -356,18 +412,34 @@ pub fn poser(h: isize, p: crate::place::Place) {
     };
 }
 
-/// La fenêtre de ce fil qui porte ce titre. Les autres fenêtres d'egui (« viewports ») ne
-/// donnent pas leur HWND : on les retrouve par leur titre, parmi les seules fenêtres du fil
-/// des fenêtres.
-pub fn fenetre_du_fil(titre: &str) -> Option<isize> {
-    struct Recherche {
+/// La classe des fenêtres de winit (toutes celles d'egui). Les fenêtres cachées que le pilote
+/// OpenGL crée dans le programme (« NVOGLDC invisible », « __wglDummyWindowFodder ») sont d'une
+/// autre classe : elles ne sont jamais prises pour une fenêtre du logiciel.
+const CLASSE_WINIT: &str = "Window Class";
+
+/// La fenêtre de ce fil qui porte ce titre, de la classe de winit, et que `prises` ne compte pas
+/// déjà (deux fenêtres du même titre ne se confondent pas). Les autres fenêtres d'egui
+/// (« viewports ») ne donnent pas leur HWND : on les retrouve par leur titre, parmi les seules
+/// fenêtres du fil des fenêtres. Jamais une fenêtre qu'on n'a pas créée n'est rendue.
+pub fn fenetre_du_fil(titre: &str, prises: &[isize]) -> Option<isize> {
+    struct Recherche<'a> {
         titre: Vec<u16>,
+        prises: &'a [isize],
         trouvee: isize,
     }
     extern "system" fn chaque(h: HWND, lp: LPARAM) -> BOOL {
         // SAFETY: `lp` est le `&mut Recherche` donné à EnumThreadWindows plus bas, vivant et
         // utilisé nulle part ailleurs pendant l'appel ; le titre est lu dans un tampon local.
-        let r = unsafe { &mut *(lp.0 as *mut Recherche) };
+        let r = unsafe { &mut *(lp.0 as *mut Recherche<'_>) };
+        if r.prises.contains(&(h.0 as isize)) {
+            return BOOL::from(true);
+        }
+        let mut classe = [0u16; 64];
+        // SAFETY: fenêtre donnée par Windows ; tampon local de la taille annoncée.
+        let c = unsafe { GetClassNameW(h, &mut classe) };
+        if String::from_utf16_lossy(classe.get(..c.max(0) as usize).unwrap_or(&[])) != CLASSE_WINIT {
+            return BOOL::from(true);
+        }
         let mut tampon = [0u16; 256];
         // SAFETY: fenêtre donnée par Windows ; tampon local de la taille annoncée.
         let n = unsafe { GetWindowTextW(h, &mut tampon) };
@@ -379,6 +451,7 @@ pub fn fenetre_du_fil(titre: &str) -> Option<isize> {
     }
     let mut r = Recherche {
         titre: titre.encode_utf16().collect(),
+        prises,
         trouvee: 0,
     };
     // SAFETY: `chaque` ne garde pas le pointeur au-delà de l'appel (EnumThreadWindows rend la

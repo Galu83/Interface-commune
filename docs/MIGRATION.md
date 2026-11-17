@@ -100,6 +100,21 @@ de travail par projet, sur sa branche.
   menu, Paramètres, autres fenêtres) reste voilée (`DWMWA_CLOAK`) jusqu'à son ouverture pour de
   bon ; eframe 0.37 la montrait d'office à sa première image. Vocalis peut retirer son
   contournement `voile_volet.rs`.
+- **Fenêtres flottantes** (Vocalis : carte de réponse, pastille, panneau de traduction) :
+  `Ouverture::sans_focus` pose `WS_EX_NOACTIVATE` (et `WS_EX_TOOLWINDOW` sans barre des tâches) et
+  montre la fenêtre par `SW_SHOWNOACTIVATE` (`systeme::sans_focus`, `systeme::montrer_sans_activer`) :
+  elle ne prend jamais le clavier. `Contenu::prete` (vrai par défaut) garde la fenêtre cachée tant
+  que le contenu n'est pas prêt (taille connue, place attendue) ; `Ouverture::pose_par_le_contenu`
+  : la bibliothèque ne centre pas la fenêtre, le contenu la pose lui-même (près d'une zone).
+  `AutresFenetres::ouvrir`, `fermer` et `redessiner`, appelés depuis un autre fil quand la boucle
+  est au repos (volet caché), réveillent maintenant la fenêtre principale (`systeme::reveiller`) :
+  sans cela, la fenêtre demandée ne se dessinait pas. Une fenêtre `sans_cadre` ou `sans_focus`
+  est reposée à chaque image cachée (`systeme::sans_cadre`, `systeme::sans_focus`) : winit réécrit
+  les styles de la fenêtre à chaque changement de ses réglages (visibilité, boutons) et efface ceux
+  qu'il ne connaît pas. `systeme::fenetre_du_fil(titre, prises)` ne rend qu'une fenêtre de la classe de
+  winit et pas déjà attribuée à une autre : une fenêtre cachée étrangère du même titre (celles que
+  le pilote OpenGL de NVIDIA crée dans chaque programme) n'est jamais prise pour une fenêtre du
+  logiciel, donc jamais montrée.
 - **Licences** : copier `docs/LICENCES.md` (avis MIT d'egui et des crates sans fichier de
   licence) dans l'avis de licence livré avec le logiciel.
 
