@@ -323,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn a_limit_stays_between_its_neighbours() {
+    fn une_limite_reste_entre_ses_voisines() {
         let mut s = [20u8, 50];
         assert!(deplacer(&mut s, 0, 90, 1, 100));
         assert_eq!(s, [49, 50]);
@@ -340,20 +340,20 @@ mod tests {
     }
 
     #[test]
-    fn two_limits_may_touch_without_a_gap() {
+    fn deux_limites_peuvent_se_toucher() {
         let mut s = [20u8, 50];
         assert!(deplacer(&mut s, 0, 80, 0, 100));
         assert_eq!(s, [50, 50]);
     }
 
     #[test]
-    fn values_are_written_with_a_non_breaking_space() {
+    fn les_nombres_ont_une_espace_insecable() {
         assert_eq!(texte_valeur(30, "%"), "30\u{a0}%");
         assert_eq!(texte_valeur(30, ""), "30");
     }
 
     #[test]
-    fn text_on_a_zone_is_readable() {
+    fn le_texte_sur_une_zone_est_lisible() {
         assert_eq!(texte_sur(Rgb(255, 255, 0)), Rgb(0, 0, 0));
         assert_eq!(texte_sur(Rgb(0, 40, 160)), Rgb(255, 255, 255));
     }
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn dragging_a_handle_moves_its_limit_and_tells_when_it_is_released() {
+    fn glisser_une_poignee_deplace_sa_limite_et_dit_le_relachement() {
         let ctx = Context::default();
         let mut s = [20u8, 50];
         let _ = image(&ctx, vec![], &mut s);
@@ -430,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    fn a_handle_dragged_past_the_other_stops_next_to_it() {
+    fn une_poignee_poussee_contre_l_autre_s_arrete_a_cote() {
         let ctx = Context::default();
         let mut s = [20u8, 50];
         let _ = image(&ctx, vec![], &mut s);
@@ -463,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    fn arrows_page_keys_and_home_end_move_the_focused_handle() {
+    fn fleches_pages_debut_et_fin_deplacent_la_poignee() {
         let ctx = Context::default();
         let mut s = [20u8, 50];
         focaliser(&ctx, &mut s);
@@ -484,7 +484,7 @@ mod tests {
     /// Des seuils écrits à la main (collés l'un à l'autre, contre un bout) sont dessinés tels quels :
     /// la barre ne les change pas toute seule.
     #[test]
-    fn values_that_are_already_there_are_never_corrected_by_being_drawn() {
+    fn des_valeurs_dessinees_ne_sont_jamais_corrigees() {
         let ctx = Context::default();
         for mut s in [[0u8, 0], [100, 100], [50, 50], [0, 100]] {
             let avant = s;
@@ -500,7 +500,7 @@ mod tests {
     }
 
     #[test]
-    fn nothing_moves_without_focus_or_pointer() {
+    fn rien_ne_bouge_sans_focus_ni_souris() {
         let ctx = Context::default();
         let mut s = [20u8, 50];
         let _ = image(&ctx, vec![], &mut s);
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "une limite entre deux zones")]
-    fn the_limits_must_match_the_zones() {
+    fn les_limites_vont_avec_les_zones() {
         let ctx = Context::default();
         let p = palette();
         let _ = ctx.run_ui(RawInput::default(), |ui| {
