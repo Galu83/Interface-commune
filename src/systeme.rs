@@ -617,6 +617,78 @@ mod tests {
     #![allow(clippy::expect_used, clippy::unwrap_used)]
     use super::*;
     use std::time::Instant;
+    use windows::Win32::Foundation::{LRESULT, WPARAM};
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassW, WINDOW_EX_STYLE, WNDCLASSW,
+        WS_OVERLAPPED,
+    };
+
+    extern "system" fn procedure(h: HWND, m: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+        // SAFETY: les paramètres viennent de Windows et sont rendus tels quels à la procédure par défaut.
+        unsafe { DefWindowProcW(h, m, w, l) }
+    }
+
+    /// Une fenêtre jamais montrée, de cette classe, avec ce titre, sur le fil qui appelle.
+    fn cachee(classe: &str, titre: &str) -> isize {
+        let c: Vec<u16> = classe.encode_utf16().chain(std::iter::once(0)).collect();
+        let t: Vec<u16> = titre.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: modules et textes locaux terminés par 0, vivants pendant les appels ; la classe
+        // n'a besoin que de la procédure par défaut ; la fenêtre est détruite par l'essai.
+        unsafe {
+            let instance = GetModuleHandleW(None).unwrap();
+            let classe_w = WNDCLASSW {
+                lpfnWndProc: Some(procedure),
+                hInstance: instance.into(),
+                lpszClassName: PCWSTR(c.as_ptr()),
+                ..Default::default()
+            };
+            // Déjà enregistrée par un autre essai : sans importance.
+            let _ = RegisterClassW(&classe_w);
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                PCWSTR(c.as_ptr()),
+                PCWSTR(t.as_ptr()),
+                WS_OVERLAPPED,
+                0,
+                0,
+                100,
+                50,
+                None,
+                None,
+                Some(instance.into()),
+                None,
+            )
+            .unwrap()
+            .0 as isize
+        }
+    }
+
+    /// `fenetre_du_fil` ne rend jamais une fenêtre d'une autre classe que celle de winit (ex. « NVOGLDC
+    /// invisible », créée cachée par le pilote OpenGL de NVIDIA dans chaque programme), même au
+    /// même titre ; deux fenêtres de winit du même titre ne se confondent pas (`prises`).
+    /// Les fenêtres ne sont jamais montrées.
+    #[test]
+    fn fenetre_du_fil_ne_rend_que_les_fenetres_de_winit_pas_prises() {
+        let titre = "Titre d'essai de la fenetre du fil";
+        // L'étrangère est créée la première, puis deux fenêtres de winit au même titre.
+        let etrangere = cachee("STATIC", titre);
+        let premiere = cachee(CLASSE_WINIT, titre);
+        let deuxieme = cachee(CLASSE_WINIT, titre);
+        assert!(etrangere != 0 && premiere != 0 && deuxieme != 0);
+        let a = fenetre_du_fil(titre, &[]).expect("une fenêtre de winit");
+        assert_ne!(a, etrangere, "jamais la fenêtre étrangère");
+        assert!(a == premiere || a == deuxieme);
+        let b = fenetre_du_fil(titre, &[a]).expect("l'autre fenêtre de winit");
+        assert_ne!(b, etrangere, "jamais la fenêtre étrangère");
+        assert!(b != a && (b == premiere || b == deuxieme));
+        assert_eq!(fenetre_du_fil(titre, &[a, b]), None, "les deux prises : rien");
+        assert_eq!(fenetre_du_fil("Un autre titre", &[]), None);
+        for h in [etrangere, premiere, deuxieme] {
+            // SAFETY: fenêtres créées ci-dessus, sur ce fil.
+            let _ = unsafe { DestroyWindow(hwnd(h)) };
+        }
+    }
 
     /// Le sélecteur ne regarde jamais un chemin réseau depuis le fil des fenêtres : seulement
     /// un disque fixe de ce PC.
