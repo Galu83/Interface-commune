@@ -8,7 +8,8 @@
 //! ([`crate::autres_fenetres`]), même quand elle est cachée. Elle apparaît à sa place, prête
 //! et déjà visible dès sa première image, en un fondu court (`theme`), et sans fondu si
 //! « Effets d'animation » est coupé. Elle se ferme par Échap, un clic à côté ou la perte du
-//! focus, en fondu court.
+//! focus, en fondu court. Le clic à côté ne dépend pas du focus ([`Veilleur`]) : même si
+//! Windows refuse le focus à la fenêtre, un clic en dehors d'elle la ferme toujours.
 //!
 //! **Garde** : pendant les 250 premières ms ([`GARDE`]), un clic ou une touche ne choisit rien.
 //! Un clic sur une ligne cache la fenêtre ; ce qu'il demande n'est fait qu'une fois la
@@ -17,7 +18,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use eframe::egui::{self, FontDefinitions, Key, ViewportCommand};
@@ -25,7 +26,8 @@ use eframe::egui::{self, FontDefinitions, Key, ViewportCommand};
 use crate::Logiciel;
 use crate::apparence::{Apparence, couleur};
 use crate::fenetres::{
-    Demande, GARDE, GARDE_MAX, Garde, LENTE, Liens, Mesure, Ouvert, Reception, Suite, suite,
+    Appuis, Demande, GARDE, GARDE_MAX, Garde, LENTE, Liens, Mesure, Ouvert, Reception, Suite,
+    fermer_sur_appui, suite,
 };
 use crate::menu::Choix;
 use crate::place::{Rect, placer, placer_au_point};
@@ -234,6 +236,92 @@ fn ouvrir_parametres(liens: &Arc<Liens>, logiciel: &Arc<dyn Logiciel>, page: Opt
     crate::parametres::fenetre::ouvrir_dans(liens, logiciel, page);
 }
 
+/// Ce que le fil de veille de la souris lit : la fenêtre à surveiller (0 : aucune) et une
+/// génération, qui change à chaque nouvelle surveillance.
+#[derive(Default)]
+struct Veille {
+    fenetre: AtomicIsize,
+    generation: AtomicU64,
+    fin: AtomicBool,
+}
+
+/// Le filet « clic en dehors » : tant que le volet ou le petit menu est montré, un fil lit
+/// l'état des boutons de la souris toutes les [`PAS_DE_VEILLE`] et ferme la fenêtre à tout
+/// appui (gauche, droit ou milieu) **en dehors** d'elle. Il ne dépend pas du focus : si
+/// Windows refuse le focus (règles du premier plan), la fenêtre ne perd jamais un focus
+/// qu'elle n'a jamais eu, et resterait affichée. Pas de crochet système : un crochet souris
+/// bas niveau gèle la souris de tout le PC quand le fil qui le pose est bloqué (par exemple
+/// dans SwapBuffers). Le fil dort tant que rien n'est montré. Respecte la garde des premiers
+/// instants ([`fermer_sur_appui`]) ; un clic dedans ne ferme jamais.
+struct Veilleur {
+    veille: Arc<Veille>,
+    fil: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Le temps entre deux relevés de la souris (un clic dure bien plus longtemps).
+const PAS_DE_VEILLE: Duration = Duration::from_millis(15);
+
+impl Veilleur {
+    fn new(liens: Arc<Liens>) -> Veilleur {
+        let veille = Arc::new(Veille::default());
+        let v2 = veille.clone();
+        let fil = std::thread::Builder::new()
+            .name("clic-en-dehors".into())
+            .spawn(move || veiller_la_souris(&v2, &liens))
+            .ok();
+        Veilleur { veille, fil }
+    }
+
+    /// La fenêtre `h` vient d'être montrée : surveiller les clics en dehors d'elle.
+    fn activer(&self, h: isize) {
+        self.veille.fenetre.store(h, Ordering::Release);
+        self.veille.generation.fetch_add(1, Ordering::AcqRel);
+        if let Some(f) = &self.fil {
+            f.thread().unpark();
+        }
+    }
+
+    /// La fenêtre est fermée ou cachée : plus rien à surveiller.
+    fn desactiver(&self) {
+        self.veille.fenetre.store(0, Ordering::Release);
+    }
+}
+
+impl Drop for Veilleur {
+    fn drop(&mut self) {
+        self.veille.fin.store(true, Ordering::Release);
+        self.veille.fenetre.store(0, Ordering::Release);
+        if let Some(f) = &self.fil {
+            f.thread().unpark();
+        }
+    }
+}
+
+fn veiller_la_souris(veille: &Veille, liens: &Liens) {
+    // La surveillance en cours : sa génération, les appuis déjà vus et son début.
+    let mut suivi: Option<(u64, Appuis, Instant)> = None;
+    while !veille.fin.load(Ordering::Acquire) {
+        let generation = veille.generation.load(Ordering::Acquire);
+        let h = veille.fenetre.load(Ordering::Acquire);
+        if h == 0 {
+            suivi = None;
+            std::thread::park();
+            continue;
+        }
+        if suivi.as_ref().is_none_or(|s| s.0 != generation) {
+            suivi = Some((generation, Appuis::default(), Instant::now()));
+        }
+        if let Some((_, appuis, depuis)) = suivi.as_mut()
+            && appuis.nouvel_appui(systeme::bouton_enfonce())
+            && let (Some(p), Some(r)) = (systeme::position_souris(), systeme::rect_fenetre(h))
+            && fermer_sur_appui(p, r, depuis.elapsed())
+        {
+            liens.fermer_la_fenetre();
+        }
+        std::thread::sleep(PAS_DE_VEILLE);
+    }
+}
+
 struct Volet<'a> {
     logiciel: Arc<dyn Logiciel>,
     liens: Arc<Liens>,
@@ -262,6 +350,8 @@ struct Volet<'a> {
     premiere: Option<Demande>,
     /// L'opacité posée à la dernière image (pour les mesures).
     vue: u8,
+    /// Le filet « clic en dehors » (indépendant du focus).
+    veilleur: Veilleur,
 }
 
 impl Volet<'_> {
@@ -370,6 +460,7 @@ impl Volet<'_> {
 
     /// Cache la fenêtre (invisible pour la prochaine fois) ; plus rien n'est montré.
     fn cacher(&mut self, ctx: &egui::Context, surface: Surface) {
+        self.veilleur.desactiver();
         if let Some(h) = self.hwnd {
             if self.transparente {
                 systeme::transparente(h, 0);
@@ -556,6 +647,11 @@ impl Volet<'_> {
         if mesure.a_noter(premiere) {
             noter(&self.logiciel, mesure.phrase(m.surface, premiere));
         }
+        // Le filet « clic en dehors », qui ne dépend pas du focus (jamais en essai discret :
+        // la fenêtre n'y est pas montrée pour de vrai).
+        if !discret() {
+            self.veilleur.activer(h);
+        }
         self.etape = Etape::Montree {
             m,
             debut: maintenant,
@@ -574,6 +670,7 @@ impl Volet<'_> {
             Etape::Montree { m, .. } | Etape::MiseEnPlace { m, .. } => m.surface,
             _ => return,
         };
+        self.veilleur.desactiver();
         self.etape = Etape::Fermeture {
             surface,
             debut: Instant::now(),
@@ -920,6 +1017,7 @@ pub fn veiller(
             liens2.autres.lier(Some(cc.egui_ctx.clone()));
             // Une demande envoyée réveille cette fenêtre, même cachée.
             demandes.lecteur(Some(cc.egui_ctx.clone()));
+            let veilleur = Veilleur::new(liens2.clone());
             Ok(Box::new(Volet {
                 logiciel: l2,
                 liens: liens2,
@@ -939,6 +1037,7 @@ pub fn veiller(
                 creee_a,
                 premiere,
                 vue: 0,
+                veilleur,
             }))
         }),
     );

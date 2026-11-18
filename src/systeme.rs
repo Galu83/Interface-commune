@@ -19,7 +19,9 @@ use windows::Win32::System::Registry::{
     HKEY_CURRENT_USER, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RegGetValueW,
 };
 use windows::Win32::System::Threading::{CreateEventW, GetCurrentThreadId, SetEvent};
-use windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetAsyncKeyState, GetDoubleClickTime, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumThreadWindows, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
     GetWindowTextW, GetWindowThreadProcessId, HWND_TOPMOST, IsWindow, LWA_ALPHA, MSG,
@@ -461,13 +463,31 @@ pub fn fenetre_du_fil(titre: &str, prises: &[isize]) -> Option<isize> {
     (r.trouvee != 0).then_some(r.trouvee)
 }
 
-/// La place (gauche, haut) d'une fenêtre de cette taille (pixels), centrée sur la zone de
-/// travail de l'écran de la souris.
-pub fn centree(taille: [i32; 2]) -> Option<[i32; 2]> {
+/// La position de la souris sur l'écran, en pixels.
+pub fn position_souris() -> Option<[i32; 2]> {
     let mut p = POINT::default();
     // SAFETY: un POINT local.
     unsafe { GetCursorPos(&mut p) }.ok()?;
-    let (_, t) = ecran_autour(p.x, p.y)?;
+    Some([p.x, p.y])
+}
+
+/// Un bouton de la souris (gauche, droit ou milieu) est-il enfoncé en ce moment ? État réel
+/// des boutons, sans dépendre du focus ni d'une fenêtre : lisible depuis n'importe quel fil,
+/// sans crochet système.
+pub fn bouton_enfonce() -> bool {
+    [VK_LBUTTON, VK_RBUTTON, VK_MBUTTON].into_iter().any(|b| {
+        // SAFETY: simple lecture de l'état d'une touche virtuelle ; le bit de poids fort
+        // (valeur négative) dit « enfoncée ».
+        let etat = unsafe { GetAsyncKeyState(i32::from(b.0)) };
+        etat < 0
+    })
+}
+
+/// La place (gauche, haut) d'une fenêtre de cette taille (pixels), centrée sur la zone de
+/// travail de l'écran de la souris.
+pub fn centree(taille: [i32; 2]) -> Option<[i32; 2]> {
+    let [x, y] = position_souris()?;
+    let (_, t) = ecran_autour(x, y)?;
     Some(crate::place::centrer(taille, t))
 }
 

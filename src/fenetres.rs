@@ -802,6 +802,46 @@ impl Garde {
     }
 }
 
+/// Le point (pixels de l'écran) est-il en dehors de la fenêtre (gauche, haut, droite, bas) ?
+/// Le bord gauche et le bord haut sont dedans, le bord droit et le bord bas dehors (comme
+/// Windows).
+pub fn est_dehors(point: [i32; 2], fenetre: crate::place::Rect) -> bool {
+    let [x, y] = point;
+    !(fenetre[0] <= x && x < fenetre[2] && fenetre[1] <= y && y < fenetre[3])
+}
+
+/// Un appui de bouton de souris (gauche, droit ou milieu) à `point`, `depuis` l'ouverture de
+/// la fenêtre `fenetre`, doit-il la fermer ? Seulement un appui en dehors d'elle, et pas
+/// pendant la [`GARDE`] des premiers instants. Un appui dedans ne ferme jamais : c'est la
+/// fenêtre qui en fait ce qu'elle veut (choisir une ligne).
+pub fn fermer_sur_appui(point: [i32; 2], fenetre: crate::place::Rect, depuis: Duration) -> bool {
+    depuis >= GARDE && est_dehors(point, fenetre)
+}
+
+/// Repère les nouveaux appuis de bouton de souris dans une suite de relevés (« un bouton est
+/// enfoncé »), sans dépendre du focus : un appui est le passage de « aucun bouton » à « un
+/// bouton ». Un bouton déjà tenu au premier relevé ne compte pas ; il faut d'abord le
+/// relâcher.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Appuis {
+    tenu: bool,
+}
+
+impl Default for Appuis {
+    fn default() -> Appuis {
+        Appuis { tenu: true }
+    }
+}
+
+impl Appuis {
+    /// Ce relevé est-il un nouvel appui ?
+    pub fn nouvel_appui(&mut self, tenu: bool) -> bool {
+        let nouveau = tenu && !self.tenu;
+        self.tenu = tenu;
+        nouveau
+    }
+}
+
 /// Ce que la fenêtre du volet fait d'une demande reçue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Suite {
@@ -1329,6 +1369,55 @@ mod tests {
         assert_eq!(faux.preparations, 0);
         assert_eq!(faux.secours, 2);
         assert_eq!(faux.parametres, vec![None]);
+    }
+
+    /// Le filet « clic en dehors » : un appui dedans ne ferme jamais, un appui dehors ferme
+    /// (même sur les Paramètres, ou sur la barre où est l'icône), sauf pendant la garde des
+    /// premiers instants.
+    #[test]
+    fn clic_dedans_ou_dehors() {
+        let f = [100, 200, 400, 500];
+        // Dedans : bords gauche et haut compris, coin droit-bas exclu.
+        for p in [[100, 200], [250, 350], [399, 499], [100, 499], [399, 200]] {
+            assert!(!est_dehors(p, f), "{p:?}");
+            assert!(!fermer_sur_appui(p, f, Duration::from_secs(5)), "{p:?}");
+        }
+        // Dehors, de tous les côtés.
+        for p in [
+            [99, 300],
+            [400, 300],
+            [250, 199],
+            [250, 500],
+            [0, 0],
+            [-50, 300],
+            [1000, 900],
+        ] {
+            assert!(est_dehors(p, f), "{p:?}");
+            assert!(fermer_sur_appui(p, f, GARDE), "{p:?}");
+        }
+        // Garde : un appui dehors dans les premiers instants ne ferme rien.
+        assert!(!fermer_sur_appui([0, 0], f, Duration::ZERO));
+        assert!(!fermer_sur_appui([0, 0], f, GARDE - Duration::from_millis(1)));
+        // Un appui dedans ne ferme jamais, garde levée ou non.
+        assert!(!fermer_sur_appui([250, 350], f, Duration::ZERO));
+    }
+
+    /// Les appuis se repèrent au passage « aucun bouton » → « un bouton » ; un bouton déjà
+    /// tenu à l'ouverture ne ferme rien tant qu'il n'est pas relâché.
+    #[test]
+    fn appuis_de_souris() {
+        let mut a = Appuis::default();
+        assert!(!a.nouvel_appui(true), "déjà tenu à l'ouverture");
+        assert!(!a.nouvel_appui(true));
+        assert!(!a.nouvel_appui(false));
+        assert!(a.nouvel_appui(true), "nouvel appui");
+        assert!(!a.nouvel_appui(true), "toujours tenu : pas un deuxième appui");
+        assert!(!a.nouvel_appui(false));
+        assert!(a.nouvel_appui(true), "un autre appui");
+
+        let mut b = Appuis::default();
+        assert!(!b.nouvel_appui(false), "rien de tenu à l'ouverture");
+        assert!(b.nouvel_appui(true));
     }
 
     /// Avec les Paramètres ouverts, un clic sur l'icône ouvre le volet (clic gauche) ou le
