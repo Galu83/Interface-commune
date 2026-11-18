@@ -286,6 +286,13 @@ animation finie vers 90 ms. « Effets d'animation » coupés : opaques tout de s
 `Image::decalage` disparaissent ; `OUVERTURE_FONDU_MS`, `OUVERTURE_OPACITE_DE_DEPART` ;
 `ouverture(ms, effets)` ne prend plus la surface. `volet::observer` sert aux mesures seulement.
 
+Le symptôme « des fois, un moment sans rien, puis le menu d'un coup, sans animation » : quand
+l'échange de la première image (SwapBuffers) fait attendre, l'horloge de l'animation avançait
+quand même, et l'image suivante était déjà la dernière. Maintenant l'animation avance image
+par image, d'au plus 20 ms par image : elle se joue toujours en entier. Le journal note le
+délai du clic à la première image présentée (au-delà de 150 ms) et toute image de l'ouverture
+bloquée plus de 100 ms : de quoi voir quand et combien l'écran fait attendre.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

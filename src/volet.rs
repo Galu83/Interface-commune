@@ -182,6 +182,13 @@ enum Etape {
     Montree {
         m: Montrer,
         debut: Instant,
+        /// L'animation déjà jouée, avancée image par image ([`avancer`]) : un retard de
+        /// l'écran ne la fait jamais sauter à la fin.
+        anime: Duration,
+        /// La fin de l'image précédente.
+        derniere: Instant,
+        /// La première image montrée (celle qui lève le voile) a été présentée.
+        presentee: bool,
         finie: bool,
         /// La taille a changé (contenu nouveau) : la replacer contre la barre.
         replacer: bool,
@@ -536,6 +543,9 @@ impl Volet<'_> {
         self.etape = Etape::Montree {
             m,
             debut: maintenant,
+            anime: Duration::ZERO,
+            derniere: maintenant,
+            presentee: false,
             finie: false,
             replacer: false,
             garde: Garde::default(),
@@ -591,6 +601,9 @@ impl Volet<'_> {
         let Etape::Montree {
             m,
             debut,
+            anime,
+            derniere,
+            presentee,
             finie,
             replacer,
             garde,
@@ -599,8 +612,49 @@ impl Volet<'_> {
             return;
         };
         let Some(h) = self.hwnd else { return };
+        // Cette image commence quand la précédente a été échangée (SwapBuffers) : l'écart dit
+        // si l'écran a fait attendre.
+        let maintenant = Instant::now();
+        let ecart = maintenant.saturating_duration_since(derniere);
+        if !presentee {
+            // La première image montrée vient d'être présentée : le vrai délai du clic à
+            // l'écran.
+            let delai = maintenant.saturating_duration_since(m.clic);
+            if delai > LENTE {
+                noter(
+                    &self.logiciel,
+                    format!(
+                        "{} présenté à l'écran {} ms après le clic (l'échange de sa première image a pris {} ms).",
+                        quoi(m.surface),
+                        delai.as_millis(),
+                        ecart.as_millis()
+                    ),
+                );
+            }
+        } else if !finie && ecart > BLOQUEE {
+            noter(
+                &self.logiciel,
+                format!(
+                    "{} : une image de l'ouverture bloquée {} ms (échange des tampons).",
+                    quoi(m.surface),
+                    ecart.as_millis()
+                ),
+            );
+        }
+        let anime = if presentee { avancer(anime, ecart) } else { anime };
+        if let Etape::Montree {
+            anime: a,
+            derniere: d,
+            presentee: p,
+            ..
+        } = &mut self.etape
+        {
+            *a = anime;
+            *d = maintenant;
+            *p = true;
+        }
         if !finie {
-            let ms = u32::try_from(debut.elapsed().as_millis()).unwrap_or(u32::MAX);
+            let ms = u32::try_from(anime.as_millis()).unwrap_or(u32::MAX);
             let image = theme::ouverture(ms, self.effets);
             self.opacite(h, image);
             if let Etape::Montree { finie, .. } = &mut self.etape {
@@ -674,6 +728,25 @@ impl Volet<'_> {
         } else if action.is_some() {
             self.commencer_fermeture(&ctx, action);
         }
+    }
+}
+
+/// Le plus long pas de l'animation d'une image à la suivante : une image d'un écran à 50 Hz.
+/// Une image en retard (écran qui fait attendre) avance l'animation d'un pas seulement :
+/// l'ouverture se joue toujours en entier, jamais d'un coup à la fin.
+const PAS_MAX: Duration = Duration::from_millis(20);
+/// Une image de l'ouverture plus longue que ce temps est notée au journal.
+const BLOQUEE: Duration = Duration::from_millis(100);
+
+/// L'animation jouée après une image de plus, arrivée `ecart` après la précédente.
+fn avancer(anime: Duration, ecart: Duration) -> Duration {
+    anime + ecart.min(PAS_MAX)
+}
+
+fn quoi(s: Surface) -> &'static str {
+    match s {
+        Surface::Volet => "Volet",
+        Surface::Menu => "Petit menu",
     }
 }
 
@@ -888,6 +961,9 @@ mod essais {
         assert!(!voilee(&Etape::Montree {
             m,
             debut: maintenant,
+            anime: Duration::ZERO,
+            derniere: maintenant,
+            presentee: false,
             finie: false,
             replacer: false,
             garde: Garde::default(),
@@ -897,6 +973,24 @@ mod essais {
             debut: maintenant,
             puis: None,
         }));
+    }
+
+    /// Après un retard de l'écran (une image échangée 300 ms trop tard), l'animation ne saute
+    /// pas à la fin : elle n'avance que d'un pas, et se joue ensuite en entier.
+    #[test]
+    fn un_retard_ne_fait_pas_sauter_l_animation() {
+        let retard = avancer(Duration::ZERO, Duration::from_millis(300));
+        assert_eq!(retard, PAS_MAX);
+        let ms = u32::try_from(retard.as_millis()).unwrap_or(u32::MAX);
+        assert!(!theme::ouverture(ms, true).finie);
+        // Des images régulières à 60 Hz : finie en 5 ou 6 images, comme prévu.
+        let mut anime = Duration::ZERO;
+        let mut images = 0;
+        while !theme::ouverture(u32::try_from(anime.as_millis()).unwrap_or(u32::MAX), true).finie {
+            anime = avancer(anime, Duration::from_micros(16_667));
+            images += 1;
+        }
+        assert!((5..=6).contains(&images), "{images}");
     }
 
     /// Prête avant d'être montrée : le voile se lève à la fin de la dernière image de mise en

@@ -2,7 +2,8 @@
 //! (egui, OpenGL), mais voilée : rien ne s'affiche à l'écran et le clavier reste à
 //! l'application en cours. Un logiciel inventé ; aucune icône près de l'horloge.
 //!
-//! `cargo run --release --example mesure_ouverture` (Windows). Pour chaque ouverture :
+//! `cargo run --release --example mesure_ouverture [-- --retard]` (Windows ; `--retard` : la
+//! première image montrée retenue 300 ms, comme un SwapBuffers bloqué). Pour chaque ouverture :
 //! le délai du clic à la première image, le nombre d'images de mise en place, le temps
 //! jusqu'à la première image visible (opacité > 0), jusqu'à « lisible » (opacité ≥ 80 %),
 //! jusqu'à la fin de l'animation, et le plus long écart entre deux images.
@@ -89,9 +90,16 @@ mod mesure {
     pub fn lancer() {
         let images: Arc<Mutex<Vec<ImageVue>>> = Arc::default();
         let i2 = images.clone();
+        // `--retard` : la première image montrée de chaque ouverture est retenue 300 ms, comme
+        // un échange des tampons (SwapBuffers) qui fait attendre.
+        let retard = std::env::args().any(|a| a == "--retard");
         observer(Some(Box::new(move |i| {
             if let Ok(mut v) = i2.lock() {
+                let premiere_montree = !i.mise_en_place && v.iter().all(|i| i.mise_en_place);
                 v.push(i);
+                if retard && premiere_montree {
+                    std::thread::sleep(Duration::from_millis(300));
+                }
             }
         })));
         let liens = Arc::new(Liens::default());
