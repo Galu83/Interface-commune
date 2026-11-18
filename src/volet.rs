@@ -40,11 +40,27 @@ fn rang(s: Surface) -> usize {
     }
 }
 
+/// Écart entre deux images d'un fondu (ouverture ou fermeture) : environ 60 par seconde.
+/// Sans synchronisation verticale, rien d'autre ne cadence le dessin.
+pub const IMAGE_DE_FONDU: Duration = Duration::from_millis(16);
+
 /// Options communes des fenêtres : n'importe quel fil, fenêtre cachée jusqu'à sa mise en
 /// place.
+///
+/// Sans synchronisation verticale (`glow_options.vsync: false`) : avec elle, SwapBuffers attend le
+/// prochain rafraîchissement de l'écran. Quand un écran est retiré ou rendu (il passe à un
+/// autre PC, il se met en veille), Windows refait l'affichage et cette attente a duré des
+/// dizaines de secondes, voire des minutes : le fil des fenêtres restait bloqué dans
+/// SwapBuffers, et le volet comme le petit menu ne répondaient plus. Ces fenêtres ne
+/// dessinent qu'à la demande : elles n'ont pas besoin d'être cadencées par l'écran, et les
+/// fondus se cadencent eux-mêmes ([`IMAGE_DE_FONDU`]).
 pub fn options(viewport: egui::ViewportBuilder) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport,
+        glow_options: eframe::egui_glow::GlowConfiguration {
+            vsync: false,
+            ..Default::default()
+        },
         event_loop_builder: Some(Box::new(|b| {
             use winit::platform::windows::EventLoopBuilderExtWindows;
             b.with_any_thread(true);
@@ -591,7 +607,7 @@ impl Volet<'_> {
             if let (Some(h), true) = (self.hwnd, self.transparente) {
                 systeme::transparente(h, image.opacite);
             }
-            ctx.request_repaint();
+            ctx.request_repaint_after(IMAGE_DE_FONDU);
         }
     }
 
@@ -661,7 +677,7 @@ impl Volet<'_> {
                 *finie = image.finie;
             }
             if !image.finie {
-                ctx.request_repaint();
+                ctx.request_repaint_after(IMAGE_DE_FONDU);
             }
         } else if let Some(taille) = self.taille_a_changer(&ctx, h, m.surface) {
             // Le contenu a changé (un état, un message) : nouvelle taille, puis nouvelle place.
@@ -940,6 +956,18 @@ pub fn veiller(
 #[cfg(test)]
 mod essais {
     use super::*;
+
+    /// Volet, petit menu et Paramètres sans synchronisation verticale : avec elle, le fil des
+    /// fenêtres restait bloqué dans SwapBuffers pendant des minutes après le retrait d'un
+    /// écran (il passait à un autre PC), et rien ne s'ouvrait plus.
+    #[test]
+    fn fenetres_sans_synchronisation_verticale() {
+        let o = options(egui::ViewportBuilder::default());
+        assert!(!o.glow_options.vsync, "SwapBuffers ne doit pas attendre l'écran");
+        // Les fondus se cadencent eux-mêmes, sans tourner à vide.
+        assert!(IMAGE_DE_FONDU >= Duration::from_millis(10));
+        assert!(IMAGE_DE_FONDU <= Duration::from_millis(20));
+    }
 
     /// Préparée, cachée ou en train de se mettre en place : voilée (eframe la montre d'office
     /// à sa première image, et winit lui retire son opacité 0). Le voile ne se lève qu'à
