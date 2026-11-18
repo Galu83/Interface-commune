@@ -256,7 +256,18 @@ struct Fenetre {
     fermer: bool,
     /// Le contenu a déjà été consulté sur cette fermeture (`Contenu::peut_fermer`).
     consulte: bool,
+    /// Les créations ratées de suite (eframe n'a pas pu créer la fenêtre de Windows ou son
+    /// contexte OpenGL) : voir [`CREATIONS_MAX`].
+    ratees: u32,
+    /// Pas de nouvel essai de création avant cet instant (après une création ratée).
+    pas_avant: Option<std::time::Instant>,
 }
+
+/// Les créations ratées de suite après lesquelles une fenêtre est abandonnée (fermée).
+pub const CREATIONS_MAX: u32 = 3;
+
+/// L'attente avant un nouvel essai de création.
+const NOUVEL_ESSAI: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// Ce que la fenêtre devient après une image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,6 +281,18 @@ enum Apres {
 pub const IMAGES_CACHEES: u32 = 2;
 
 impl Fenetre {
+    /// Combien de temps la création attend encore avant son nouvel essai (`None` : elle peut
+    /// être tentée). Seule une fenêtre jamais dessinée attend : une fenêtre déjà créée est
+    /// dessinée à chaque image, egui détruirait celle qui ne l'est pas.
+    fn attente(&self, maintenant: std::time::Instant) -> Option<std::time::Duration> {
+        if self.images > 0 || self.montree {
+            return None;
+        }
+        self.pas_avant
+            .and_then(|t| t.checked_duration_since(maintenant))
+            .filter(|d| !d.is_zero())
+    }
+
     fn image(&mut self, ui: &mut egui::Ui, classe: ViewportClass, palette: &Palette) -> Apres {
         let ctx = ui.ctx().clone();
         if self.fermer {
@@ -510,6 +533,8 @@ impl AutresFenetres {
                         devant: false,
                         fermer: false,
                         consulte: false,
+                        ratees: 0,
+                        pas_avant: None,
                     })),
                 );
                 true
@@ -565,10 +590,37 @@ impl AutresFenetres {
     /// fenêtre doit s'ouvrir (encore cachée), passer devant ou se fermer : une fenêtre cachée
     /// sans fenêtre visible n'aurait sinon aucune image.
     pub fn a_faire(&self) -> bool {
-        verrou(&self.registre).fenetres.values().any(|f| {
-            let f = verrou(f);
-            !f.montree || f.devant || f.fermer
-        })
+        self.prochaine_image().is_some()
+    }
+
+    /// Dans combien de temps la fenêtre principale doit faire une image complète, même
+    /// cachée (`None` : rien à faire). `Some(0)` : tout de suite ; plus : une fenêtre dont la
+    /// création a raté attend son nouvel essai ([`NOUVEL_ESSAI`]) au lieu de le refaire à
+    /// chaque image.
+    pub fn prochaine_image(&self) -> Option<std::time::Duration> {
+        let maintenant = std::time::Instant::now();
+        verrou(&self.registre)
+            .fenetres
+            .values()
+            .filter_map(|f| {
+                let f = verrou(f);
+                if f.fermer {
+                    return Some(std::time::Duration::ZERO);
+                }
+                if let Some(d) = f.attente(maintenant) {
+                    return Some(d);
+                }
+                (!f.montree || f.devant).then_some(std::time::Duration::ZERO)
+            })
+            .min()
+    }
+
+    /// Essais : les fenêtres n'attendent plus leur nouvel essai de création.
+    #[cfg(test)]
+    fn sans_attente(&self) {
+        for f in verrou(&self.registre).fenetres.values() {
+            verrou(f).pas_avant = None;
+        }
     }
 
     /// Dessine les fenêtres ouvertes, à chaque image de la fenêtre principale, et ferme celles
@@ -584,16 +636,78 @@ impl AutresFenetres {
             let builder = verrou(&f).ouverture.constructeur();
             let apres = if verrou(&f).fermer {
                 Apres::Fermer
+            } else if let Some(d) = verrou(&f).attente(std::time::Instant::now()) {
+                // Création ratée : pas de nouvel essai avant l'heure (une fenêtre jamais
+                // dessinée n'existe pas encore pour egui : rien n'est détruit).
+                ctx.request_repaint_after_for(d, ViewportId::ROOT);
+                continue;
             } else {
-                ctx.show_viewport_immediate(id_de(&cle), builder, |ui, classe| {
-                    verrou(&f).image(ui, classe, palette)
-                })
+                self.image_ou_essai(ctx, &cle, &f, builder, palette)
             };
             if apres == Apres::Fermer {
                 self.retirer(&cle, &f);
                 // La fenêtre principale refait une image : la fenêtre fermée n'y est plus,
                 // egui la détruit.
                 ctx.request_repaint_of(ViewportId::ROOT);
+            }
+        }
+    }
+
+    /// Une image de la fenêtre ; si eframe n'a pas pu la créer, un nouvel essai plus tard.
+    ///
+    /// Quand eframe ne peut pas créer la fenêtre de Windows ou son contexte OpenGL (Windows
+    /// refait l'affichage : un écran retiré ou rendu, une carte graphique qui se relance), il
+    /// rend la main sans dessiner, et egui panique (« the user callback was never called »).
+    /// Sans ce garde-fou, la panique emportait toute la boucle des fenêtres (le volet et le
+    /// petit menu étaient recréés, à froid, au milieu du changement d'affichage). Ici, la
+    /// fenêtre attend [`NOUVEL_ESSAI`] et réessaie ; après [`CREATIONS_MAX`] échecs de suite,
+    /// elle est fermée. Une panique du contenu lui-même (son dessin a commencé) suit son cours.
+    fn image_ou_essai(
+        &self,
+        ctx: &egui::Context,
+        cle: &str,
+        f: &Partagee,
+        builder: ViewportBuilder,
+        palette: &Palette,
+    ) -> Apres {
+        let dessinee = std::cell::Cell::new(false);
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            ctx.show_viewport_immediate(id_de(cle), builder, |ui, classe| {
+                dessinee.set(true);
+                verrou(f).image(ui, classe, palette)
+            })
+        }));
+        match r {
+            Ok(apres) => {
+                let mut g = verrou(f);
+                g.ratees = 0;
+                g.pas_avant = None;
+                apres
+            }
+            Err(p) if dessinee.get() => std::panic::resume_unwind(p),
+            Err(_) => {
+                // Panique rattrapée : son lieu ne doit pas être pris, plus tard, pour celui
+                // d'une autre panique (la sonde le garde pour le journal).
+                let _ = crate::sonde::lieu_de_la_derniere_panique();
+                let (n, titre) = {
+                    let mut g = verrou(f);
+                    g.ratees = g.ratees.saturating_add(1);
+                    g.pas_avant = Some(std::time::Instant::now() + NOUVEL_ESSAI);
+                    (g.ratees, g.titre.clone())
+                };
+                if n >= CREATIONS_MAX {
+                    crate::sonde::noter(format!(
+                        "Fenêtre « {titre} » : Windows n'a pas pu la créer ({n} essais de suite) ; fermée."
+                    ));
+                    Apres::Fermer
+                } else {
+                    crate::sonde::noter(format!(
+                        "Fenêtre « {titre} » : Windows n'a pas pu la créer (essai {n} sur {CREATIONS_MAX}) ; nouvel essai dans {} ms.",
+                        NOUVEL_ESSAI.as_millis()
+                    ));
+                    ctx.request_repaint_after_for(NOUVEL_ESSAI, ViewportId::ROOT);
+                    Apres::Garder
+                }
             }
         }
     }
@@ -630,6 +744,9 @@ pub(crate) mod essais {
         pub(crate) static DESSINEES: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };
         /// Les fenêtres dont la croix est cliquée à la prochaine image.
         pub(crate) static CROIX: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };
+        /// Le faux moteur rate la création des fenêtres (il rend la main sans dessiner, comme
+        /// eframe quand Windows refuse la fenêtre ou son contexte OpenGL).
+        pub(crate) static CREATION_RATEE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         /// Les ordres que les fenêtres ont donnés (taille, titre…), depuis le début.
         pub(crate) static ORDRES: RefCell<Vec<(ViewportId, ViewportCommand)>> = const { RefCell::new(Vec::new()) };
     }
@@ -639,6 +756,9 @@ pub(crate) mod essais {
         let ctx = egui::Context::default();
         ctx.set_embed_viewports(false);
         egui::Context::set_immediate_viewport_renderer(|ctx, mut vp| {
+            if CREATION_RATEE.with(std::cell::Cell::get) {
+                return;
+            }
             DESSINEES.with(|d| d.borrow_mut().push(vp.ids.this));
             let mut input = egui::RawInput {
                 viewport_id: vp.ids.this,
@@ -681,7 +801,7 @@ pub(crate) mod essais {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::expect_used, clippy::unwrap_used)]
-    use super::essais::{CROIX, contexte, image};
+    use super::essais::{CREATION_RATEE, CROIX, contexte, image};
     use super::*;
 
     #[derive(Clone, Default)]
@@ -708,6 +828,75 @@ mod tests {
         fn fermee(&mut self, _place: Option<Place>) {
             self.trace.0.lock().unwrap().push(format!("{} fermée", self.nom));
         }
+    }
+
+    /// Le défaut corrigé : eframe ne peut pas créer la fenêtre (Windows refait l'affichage) et
+    /// ne dessine rien ; egui paniquait (« the user callback was never called ») et la panique
+    /// emportait la boucle des fenêtres. Maintenant : aucune panique, la fenêtre reste et
+    /// réessaie ; dessinée dès que la création réussit ; après trois échecs de suite, fermée.
+    #[test]
+    fn creation_ratee_sans_panique_puis_nouvel_essai() {
+        let ctx = contexte();
+        let f = AutresFenetres::default();
+        let trace = Trace::default();
+        f.ouvrir(
+            "p",
+            Ouverture::new("P", [200.0, 100.0]),
+            Essai {
+                nom: "p",
+                trace: trace.clone(),
+                fermer_a: None,
+            },
+        );
+        CREATION_RATEE.with(|c| c.set(true));
+        let (dessinees, _) = image(&ctx, &f);
+        assert!(dessinees.is_empty());
+        assert!(
+            f.ouverte("p"),
+            "une création ratée : la fenêtre attend un nouvel essai"
+        );
+        // Elle attend ~500 ms : les images qui suivent ne refont pas l'essai (ni ne le
+        // comptent comme un échec de plus), et la fenêtre principale est réveillée après
+        // l'attente, pas tout de suite.
+        let attente = f.prochaine_image().expect("un nouvel essai est à faire");
+        assert!(attente > std::time::Duration::from_millis(100), "{attente:?}");
+        assert!(attente <= NOUVEL_ESSAI, "{attente:?}");
+        for _ in 0..5 {
+            let _ = image(&ctx, &f);
+        }
+        assert!(f.ouverte("p"), "pas d'essai avant la fin de l'attente");
+        // La création réussit à l'essai suivant : dessinée, le compte repart.
+        f.sans_attente();
+        CREATION_RATEE.with(|c| c.set(false));
+        let (dessinees, _) = image(&ctx, &f);
+        assert_eq!(dessinees, vec![id_de("p")]);
+        assert!(trace.0.lock().unwrap().iter().any(|l| l.starts_with("p image")));
+        // Trois échecs de suite : fermée (son contenu l'apprend), la boucle continue.
+        CREATION_RATEE.with(|c| c.set(true));
+        for _ in 0..CREATIONS_MAX {
+            f.sans_attente();
+            let _ = image(&ctx, &f);
+        }
+        CREATION_RATEE.with(|c| c.set(false));
+        assert!(!f.ouverte("p"), "abandonnée après {CREATIONS_MAX} échecs");
+        assert!(trace.0.lock().unwrap().iter().any(|l| l == "p fermée"));
+    }
+
+    /// Une panique du contenu lui-même (son dessin a commencé) n'est pas prise pour une
+    /// création ratée : elle suit son cours (la boucle la rattrape plus haut).
+    #[test]
+    fn panique_du_contenu_suit_son_cours() {
+        struct Panique;
+        impl Contenu for Panique {
+            fn dessiner(&mut self, _: &mut egui::Ui, _: &mut Cadre<'_>) {
+                panic!("dessin (essai)");
+            }
+        }
+        let ctx = contexte();
+        let f = AutresFenetres::default();
+        f.ouvrir("q", Ouverture::new("Q", [200.0, 100.0]), Panique);
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| image(&ctx, &f)));
+        assert!(r.is_err());
     }
 
     /// Un contenu qui refuse de se fermer tant que son enregistrement échoue.

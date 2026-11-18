@@ -86,7 +86,7 @@ pub fn brancher_le_journal(f: impl Fn(String) + Send + Sync + 'static) {
     *SORTIE.write().unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(f));
 }
 
-fn noter(ligne: String) {
+pub(crate) fn noter(ligne: String) {
     let s = SORTIE.read().unwrap_or_else(PoisonError::into_inner).clone();
     if let Some(s) = s {
         s(ligne);

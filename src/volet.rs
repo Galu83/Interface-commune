@@ -886,12 +886,16 @@ impl eframe::App for Volet<'_> {
             return;
         }
         self.lire(ctx);
-        if self.liens.autres.a_faire() {
+        if let Some(dans) = self.liens.autres.prochaine_image() {
             // Une autre fenêtre à ouvrir, à amener devant ou à fermer : il faut une image
             // complète, même la fenêtre principale cachée (sans fenêtre visible, egui n'en
-            // ferait aucune).
+            // ferait aucune). Une création ratée attend son nouvel essai.
             ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
-            ctx.request_repaint();
+            if dans.is_zero() {
+                ctx.request_repaint();
+            } else {
+                ctx.request_repaint_after(dans);
+            }
         }
     }
 
