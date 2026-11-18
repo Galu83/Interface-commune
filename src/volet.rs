@@ -42,9 +42,20 @@ fn rang(s: Surface) -> usize {
 
 /// Options communes des fenêtres : n'importe quel fil, fenêtre cachée jusqu'à sa mise en
 /// place.
+///
+/// Sans synchronisation verticale (`glow_options.vsync: false`) : avec elle, SwapBuffers
+/// attend le prochain rafraîchissement de l'écran. Quand un écran est retiré ou rendu (il
+/// passe à un autre PC, il se met en veille), Windows refait l'affichage et cette attente a
+/// duré des dizaines de secondes, voire des minutes : le fil des fenêtres restait bloqué dans
+/// SwapBuffers, et le volet comme le petit menu ne répondaient plus. Ces fenêtres ne
+/// dessinent qu'à la demande ; les fondus se cadencent eux-mêmes ([`IMAGE_DE_FONDU`]).
 pub fn options(viewport: egui::ViewportBuilder) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport,
+        glow_options: eframe::egui_glow::GlowConfiguration {
+            vsync: false,
+            ..Default::default()
+        },
         event_loop_builder: Some(Box::new(|b| {
             use winit::platform::windows::EventLoopBuilderExtWindows;
             b.with_any_thread(true);
@@ -591,7 +602,7 @@ impl Volet<'_> {
             if let (Some(h), true) = (self.hwnd, self.transparente) {
                 systeme::transparente(h, image.opacite);
             }
-            ctx.request_repaint();
+            ctx.request_repaint_after(IMAGE_DE_FONDU);
         }
     }
 
@@ -661,7 +672,7 @@ impl Volet<'_> {
                 *finie = image.finie;
             }
             if !image.finie {
-                ctx.request_repaint();
+                ctx.request_repaint_after(IMAGE_DE_FONDU);
             }
         } else if let Some(taille) = self.taille_a_changer(&ctx, h, m.surface) {
             // Le contenu a changé (un état, un message) : nouvelle taille, puis nouvelle place.
@@ -735,6 +746,12 @@ impl Volet<'_> {
 /// Une image en retard (écran qui fait attendre) avance l'animation d'un pas seulement :
 /// l'ouverture se joue toujours en entier, jamais d'un coup à la fin.
 const PAS_MAX: Duration = Duration::from_millis(20);
+/// Écart demandé entre deux images d'un fondu (ouverture ou fermeture). Sans synchronisation
+/// verticale, rien d'autre ne cadence le dessin : sans lui, le fondu dessinerait sans arrêt.
+/// Plus court que [`PAS_MAX`], même arrondi par la minuterie de Windows (15,6 ms au plus) :
+/// une image à l'heure fait avancer l'animation de tout le temps écoulé, seule une image en
+/// retard est ramenée à un pas.
+pub const IMAGE_DE_FONDU: Duration = Duration::from_millis(10);
 /// Une image de l'ouverture plus longue que ce temps est notée au journal.
 const BLOQUEE: Duration = Duration::from_millis(100);
 
@@ -940,6 +957,31 @@ pub fn veiller(
 #[cfg(test)]
 mod essais {
     use super::*;
+
+    /// Volet, petit menu et Paramètres sans synchronisation verticale : avec elle, le fil des
+    /// fenêtres restait bloqué dans SwapBuffers pendant des minutes après le retrait d'un
+    /// écran (il passait à un autre PC), et rien ne s'ouvrait plus. Les fondus se cadencent
+    /// eux-mêmes, au rythme qu'attend l'animation image par image.
+    #[test]
+    fn fenetres_sans_synchronisation_verticale() {
+        let o = options(egui::ViewportBuilder::default());
+        assert!(!o.glow_options.vsync, "SwapBuffers ne doit pas attendre l'écran");
+        // Pas de dessin continu, mais une image à l'heure avance l'animation de tout le temps
+        // écoulé, minuterie de Windows comprise (15,6 ms au plus).
+        assert!(IMAGE_DE_FONDU >= Duration::from_millis(5));
+        let arrondie = IMAGE_DE_FONDU.max(Duration::from_micros(15_625));
+        assert!(arrondie < PAS_MAX);
+        assert_eq!(avancer(Duration::ZERO, arrondie), arrondie);
+        // Au rythme des fondus, l'ouverture se joue en entier, en moins de 10 images.
+        let mut anime = Duration::ZERO;
+        let mut images = 0;
+        while !theme::ouverture(u32::try_from(anime.as_millis()).unwrap_or(u32::MAX), true).finie {
+            anime = avancer(anime, arrondie);
+            images += 1;
+            assert!(images < 10, "ouverture trop longue au rythme des fondus");
+        }
+        assert!(images >= 2, "l'ouverture doit rester un fondu");
+    }
 
     /// Préparée, cachée ou en train de se mettre en place : voilée (eframe la montre d'office
     /// à sa première image, et winit lui retire son opacité 0). Le voile ne se lève qu'à
