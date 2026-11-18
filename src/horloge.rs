@@ -55,7 +55,7 @@ use windows::core::{HSTRING, PCWSTR};
 
 use crate::Logiciel;
 use crate::clics::{Clics, Geste, evenement};
-use crate::fenetres::{self, Demande, Demandes, Liens, Ouvert, Ouvreur, Reception};
+use crate::fenetres::{self, Clic, Demande, Demandes, Liens, Ouvreur, Reception, decider_le_clic};
 use crate::menu::{self, Choix};
 use crate::place::Rect;
 use crate::systeme::{choix_windows, hwnd, reveiller, temps_double_clic};
@@ -877,12 +877,12 @@ impl Principal {
             self.menu_de_secours(x, y);
             return;
         }
-        match liens.ouvert() {
-            Ouvert::Surface(s) if s == surface => liens.fermer_la_fenetre(),
-            Ouvert::Parametres => liens.mettre_devant(),
-            // Le clic sur l'icône vient de la fermer (perte du focus) : ne pas la rouvrir.
-            Ouvert::Rien if liens.juste_fermee(surface) => {}
-            Ouvert::Rien | Ouvert::Surface(_) => {
+        // Les Paramètres ouverts ne bloquent pas le clic : le volet ou le petit menu s'ouvre
+        // devant eux, qui restent ouverts derrière.
+        match decider_le_clic(liens.ouvert(), surface, liens.juste_fermee(surface)) {
+            Clic::Fermer => liens.fermer_la_fenetre(),
+            Clic::Ignorer => {}
+            Clic::Ouvrir => {
                 let d = match ancre {
                     None => Demande::Volet { icone, clic },
                     Some(ancre) => Demande::Menu { icone, ancre, clic },

@@ -66,6 +66,31 @@ pub enum Ouvert {
     Parametres,
 }
 
+/// Ce que fait un clic sur l'icône (volet ou petit menu).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Clic {
+    /// Ouvrir la surface demandée (la précédente, s'il y en a une, laisse la place).
+    Ouvrir,
+    /// La surface demandée est déjà montrée : la fermer.
+    Fermer,
+    /// Ne rien faire (le clic vient de fermer la surface en lui prenant le focus).
+    Ignorer,
+}
+
+/// La décision d'un clic sur l'icône pour `surface`, d'après ce qui est ouvert. Les Paramètres
+/// ouverts ne bloquent pas le clic : il se comporte comme si rien n'était ouvert (le volet ou
+/// le petit menu s'ouvre devant eux, qui restent ouverts derrière). `juste_fermee` : cette
+/// surface vient de se fermer (voir [`Liens::juste_fermee`]).
+pub fn decider_le_clic(ouvert: Ouvert, surface: Surface, juste_fermee: bool) -> Clic {
+    match ouvert {
+        Ouvert::Surface(s) if s == surface => Clic::Fermer,
+        Ouvert::Surface(_) => Clic::Ouvrir,
+        // Le clic sur l'icône vient de la fermer (perte du focus) : ne pas la rouvrir.
+        Ouvert::Rien | Ouvert::Parametres if juste_fermee => Clic::Ignorer,
+        Ouvert::Rien | Ouvert::Parametres => Clic::Ouvrir,
+    }
+}
+
 /// Ce que partagent le fil principal (l'icône), le fil des fenêtres et le logiciel.
 #[derive(Default)]
 pub struct Liens {
@@ -1306,8 +1331,60 @@ mod tests {
         assert_eq!(faux.parametres, vec![None]);
     }
 
-    /// Les Paramètres ouverts dans la boucle comptent comme « ouverts » pour l'icône (un
-    /// clic les ramène devant).
+    /// Avec les Paramètres ouverts, un clic sur l'icône ouvre le volet (clic gauche) ou le
+    /// petit menu (clic droit), comme quand rien n'est ouvert ; le cas « juste fermée » reste
+    /// respecté ; un clic sur la surface déjà montrée la ferme ; l'autre surface la remplace.
+    #[test]
+    fn clic_avec_les_parametres_ouverts() {
+        for surface in [Surface::Volet, Surface::Menu] {
+            let autre = if surface == Surface::Volet {
+                Surface::Menu
+            } else {
+                Surface::Volet
+            };
+            // Rien d'ouvert, ou seulement les Paramètres : même décision.
+            for ouvert in [Ouvert::Rien, Ouvert::Parametres] {
+                assert_eq!(decider_le_clic(ouvert, surface, false), Clic::Ouvrir);
+                assert_eq!(decider_le_clic(ouvert, surface, true), Clic::Ignorer);
+            }
+            assert_eq!(
+                decider_le_clic(Ouvert::Surface(surface), surface, false),
+                Clic::Fermer
+            );
+            assert_eq!(
+                decider_le_clic(Ouvert::Surface(autre), surface, false),
+                Clic::Ouvrir
+            );
+        }
+    }
+
+    /// Le volet ouvert devant les Paramètres : `ouvert()` rend la surface ; une fois la surface
+    /// fermée, il redonne les Paramètres (restés ouverts derrière).
+    #[test]
+    fn surface_devant_les_parametres_puis_retour() {
+        struct Rien;
+        impl crate::autres_fenetres::Contenu for Rien {
+            fn dessiner(&mut self, _: &mut egui::Ui, _: &mut crate::autres_fenetres::Cadre<'_>) {}
+        }
+        let liens = Liens::default();
+        liens.autres.ouvrir(
+            crate::parametres::CLE_FENETRE,
+            crate::autres_fenetres::Ouverture::new("Paramètres", [100.0, 100.0]),
+            Rien,
+        );
+        assert_eq!(liens.ouvert(), Ouvert::Parametres);
+        let clic = decider_le_clic(liens.ouvert(), Surface::Menu, liens.juste_fermee(Surface::Menu));
+        assert_eq!(clic, Clic::Ouvrir);
+        liens.mettre(Ouvert::Surface(Surface::Menu));
+        assert_eq!(liens.ouvert(), Ouvert::Surface(Surface::Menu));
+        assert!(liens.autres.ouverte(crate::parametres::CLE_FENETRE));
+        // Fermeture de la surface (perte du focus comprise) : les Paramètres sont toujours là.
+        liens.mettre(Ouvert::Rien);
+        assert_eq!(liens.ouvert(), Ouvert::Parametres);
+        assert!(liens.autres.ouverte(crate::parametres::CLE_FENETRE));
+    }
+
+    /// Les Paramètres ouverts dans la boucle comptent comme « ouverts » pour l'icône.
     #[test]
     fn parametres_ouverts_dans_la_boucle() {
         struct Rien;
