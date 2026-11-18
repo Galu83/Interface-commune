@@ -253,27 +253,53 @@ struct Veille {
 /// bas niveau gèle la souris de tout le PC quand le fil qui le pose est bloqué (par exemple
 /// dans SwapBuffers). Le fil dort tant que rien n'est montré. Respecte la garde des premiers
 /// instants ([`fermer_sur_appui`]) ; un clic dedans ne ferme jamais.
-struct Veilleur {
+///
+/// Public pour un logiciel qui a **son propre volet ou menu** (sa fenêtre à lui) : il crée un
+/// `Veilleur` avec ce qu'il faut faire pour fermer sa fenêtre, appelle [`Veilleur::activer`]
+/// quand elle est montrée (et placée) et [`Veilleur::desactiver`] quand elle est cachée ou
+/// fermée ; le `Veilleur` se retire seul quand il est détruit. `fermer` est appelée sur le fil
+/// de veille : elle doit seulement demander la fermeture (lever un drapeau, réveiller la
+/// fenêtre), jamais la faire elle-même.
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// use std::sync::atomic::{AtomicBool, Ordering};
+/// use interface_commune::volet::Veilleur;
+///
+/// let a_fermer = Arc::new(AtomicBool::new(false));
+/// let drapeau = a_fermer.clone();
+/// let veilleur = Veilleur::new(move || drapeau.store(true, Ordering::Release));
+/// # let hwnd = 0isize;
+/// // La fenêtre (son HWND) vient d'être montrée :
+/// veilleur.activer(hwnd);
+/// // À chaque image : `a_fermer.swap(false, Ordering::AcqRel)` dit de la fermer.
+/// // Elle est cachée ou fermée :
+/// veilleur.desactiver();
+/// ```
+pub struct Veilleur {
     veille: Arc<Veille>,
     fil: Option<std::thread::JoinHandle<()>>,
 }
 
 /// Le temps entre deux relevés de la souris (un clic dure bien plus longtemps).
-const PAS_DE_VEILLE: Duration = Duration::from_millis(15);
+pub const PAS_DE_VEILLE: Duration = Duration::from_millis(15);
 
 impl Veilleur {
-    fn new(liens: Arc<Liens>) -> Veilleur {
+    /// Crée le veilleur (son fil dort tant que rien n'est surveillé). `fermer` : ce qu'il faut
+    /// faire pour fermer la fenêtre quand un appui de souris tombe en dehors d'elle.
+    pub fn new(fermer: impl Fn() + Send + 'static) -> Veilleur {
         let veille = Arc::new(Veille::default());
         let v2 = veille.clone();
         let fil = std::thread::Builder::new()
             .name("clic-en-dehors".into())
-            .spawn(move || veiller_la_souris(&v2, &liens))
+            .spawn(move || veiller_la_souris(&v2, &fermer))
             .ok();
         Veilleur { veille, fil }
     }
 
-    /// La fenêtre `h` vient d'être montrée : surveiller les clics en dehors d'elle.
-    fn activer(&self, h: isize) {
+    /// La fenêtre `h` (son HWND) vient d'être montrée : surveiller les clics en dehors d'elle.
+    /// Les appuis des [`GARDE`] premières millisecondes, et un bouton déjà tenu, ne comptent pas.
+    pub fn activer(&self, h: isize) {
         self.veille.fenetre.store(h, Ordering::Release);
         self.veille.generation.fetch_add(1, Ordering::AcqRel);
         if let Some(f) = &self.fil {
@@ -282,7 +308,7 @@ impl Veilleur {
     }
 
     /// La fenêtre est fermée ou cachée : plus rien à surveiller.
-    fn desactiver(&self) {
+    pub fn desactiver(&self) {
         self.veille.fenetre.store(0, Ordering::Release);
     }
 }
@@ -297,7 +323,7 @@ impl Drop for Veilleur {
     }
 }
 
-fn veiller_la_souris(veille: &Veille, liens: &Liens) {
+fn veiller_la_souris(veille: &Veille, fermer: &dyn Fn()) {
     // La surveillance en cours : sa génération, les appuis déjà vus et son début.
     let mut suivi: Option<(u64, Appuis, Instant)> = None;
     while !veille.fin.load(Ordering::Acquire) {
@@ -316,7 +342,7 @@ fn veiller_la_souris(veille: &Veille, liens: &Liens) {
             && let (Some(p), Some(r)) = (systeme::position_souris(), systeme::rect_fenetre(h))
             && fermer_sur_appui(p, r, depuis.elapsed())
         {
-            liens.fermer_la_fenetre();
+            fermer();
         }
         std::thread::sleep(PAS_DE_VEILLE);
     }
@@ -1024,7 +1050,8 @@ pub fn veiller(
             liens2.autres.lier(Some(cc.egui_ctx.clone()));
             // Une demande envoyée réveille cette fenêtre, même cachée.
             demandes.lecteur(Some(cc.egui_ctx.clone()));
-            let veilleur = Veilleur::new(liens2.clone());
+            let pour_fermer = liens2.clone();
+            let veilleur = Veilleur::new(move || pour_fermer.fermer_la_fenetre());
             Ok(Box::new(Volet {
                 logiciel: l2,
                 liens: liens2,
@@ -1062,6 +1089,25 @@ pub fn veiller(
 #[cfg(test)]
 mod essais {
     use super::*;
+
+    /// Le veilleur public, sans fenêtre : sans appui de souris dehors, `fermer` n'est jamais
+    /// appelée ; une fenêtre qui n'existe pas n'est pas surveillée ; il se retire à sa
+    /// destruction (le fil se termine, sans attente).
+    #[test]
+    fn veilleur_public_sans_fenetre() {
+        let appels = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let a2 = appels.clone();
+        let v = Veilleur::new(move || {
+            a2.fetch_add(1, Ordering::AcqRel);
+        });
+        // Une poignée qui n'est pas une fenêtre : rien n'est lu, rien n'est fermé.
+        v.activer(0x7fff_fff0);
+        std::thread::sleep(PAS_DE_VEILLE * 4);
+        v.desactiver();
+        std::thread::sleep(PAS_DE_VEILLE * 2);
+        drop(v);
+        assert_eq!(appels.load(Ordering::Acquire), 0);
+    }
 
     /// Volet, petit menu et Paramètres sans synchronisation verticale : avec elle, le fil des
     /// fenêtres restait bloqué dans SwapBuffers pendant des minutes après le retrait d'un
