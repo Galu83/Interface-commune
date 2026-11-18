@@ -890,11 +890,14 @@ impl eframe::App for Volet<'_> {
             // Une autre fenêtre à ouvrir, à amener devant ou à fermer : il faut une image
             // complète, même la fenêtre principale cachée (sans fenêtre visible, egui n'en
             // ferait aucune). Une création ratée attend son nouvel essai.
-            ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
             if dans.is_zero() {
+                ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
                 ctx.request_repaint();
             } else {
-                ctx.request_repaint_after(dans);
+                // Une création différée est reprise par un réveil par message, jamais par
+                // une repeinture hors du contexte de winit (la fenêtre ne pourrait pas être
+                // créée) : voir `AutresFenetres::reveiller_dans`.
+                self.liens.autres.reveiller_dans(dans);
             }
         }
     }

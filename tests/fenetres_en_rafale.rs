@@ -47,8 +47,6 @@ impl Contenu for Vide {
 enum Phase {
     /// Les fenêtres du tour sont ouvertes ; on attend qu'elles soient dessinées.
     Ouvertes(Instant),
-    /// Elles sont fermées ; on attend qu'egui les ait toutes détruites.
-    Fermees,
     /// Tous les tours sont finis : la fenêtre principale se ferme.
     Fin,
 }
@@ -65,12 +63,18 @@ struct Rafale {
 }
 
 impl Rafale {
+    /// Les noms des fenêtres du tour : deux séries qui alternent, pour qu'un tour s'ouvre
+    /// pendant que les fenêtres du tour précédent (d'autres noms) se ferment.
+    fn cle(&self, tour: u32, i: usize) -> String {
+        format!("rafale-{}-{i}", tour % 2)
+    }
+
     fn ouvrir_le_tour(&mut self) {
         self.images.store(0, Ordering::Release);
         for i in 0..PAR_TOUR {
             self.autres.ouvrir(
-                &format!("rafale-{i}"),
-                Ouverture::new(&format!("Rafale {i}"), [60.0, 40.0])
+                &self.cle(self.tour, i),
+                Ouverture::new(&format!("Rafale {} {i}", self.tour % 2), [60.0, 40.0])
                     .sans_focus()
                     .pose_par_le_contenu(),
                 Vide {
@@ -95,16 +99,11 @@ impl eframe::App for Rafale {
                 // Chaque fenêtre a été dessinée au moins quatre fois (cachée, puis montrée).
                 let dessinees = self.images.load(Ordering::Acquire) >= 4 * PAR_TOUR as u32;
                 if dessinees || depuis.elapsed() > Duration::from_secs(20) {
+                    // Les fenêtres du tour se ferment, et celles du suivant s'ouvrent aussitôt,
+                    // dans la même image : aucune pause.
                     for i in 0..PAR_TOUR {
-                        self.autres.fermer(&format!("rafale-{i}"));
+                        self.autres.fermer(&self.cle(self.tour, i));
                     }
-                    self.phase = Phase::Fermees;
-                }
-            }
-            Phase::Fermees => {
-                // Aucune pause : le tour suivant commence dès que les fenêtres ont quitté la
-                // liste (egui les détruit à la fin de cette image).
-                if self.autres.cles().is_empty() {
                     self.tour += 1;
                     self.avance.store(self.tour, Ordering::Release);
                     if self.tour >= self.tours {
@@ -176,6 +175,15 @@ fn fenetres_ouvertes_et_fermees_sans_pause_ne_bloquent_jamais() {
         })
     };
 
+    // Le journal de la bibliothèque : aucune création de fenêtre ne doit rater.
+    let journal = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let j2 = journal.clone();
+    interface_commune::sonde::brancher_le_journal(move |l| {
+        if let Ok(mut j) = j2.lock() {
+            j.push(l);
+        }
+    });
+
     let viewport = egui::ViewportBuilder::default()
         .with_title("Essai en rafale")
         .with_position([-32_000.0, -32_000.0])
@@ -195,7 +203,7 @@ fn fenetres_ouvertes_et_fermees_sans_pause_ne_bloquent_jamais() {
                 palette: Palette::de(&ChoixWindows::default()),
                 tour: 0,
                 tours,
-                phase: Phase::Fermees,
+                phase: Phase::Fin,
                 images: Arc::new(AtomicU32::new(0)),
                 avance: a2,
             };
@@ -212,4 +220,9 @@ fn fenetres_ouvertes_et_fermees_sans_pause_ne_bloquent_jamais() {
     let _ = garde.join();
     resultat.expect("la boucle des fenêtres");
     assert_eq!(avance.load(Ordering::Acquire), tours, "tous les tours finis");
+    let lignes = journal.lock().expect("journal").clone();
+    assert!(
+        lignes.iter().all(|l| !l.contains("pas pu la créer")),
+        "une fenêtre n'a pas pu être créée : {lignes:#?}"
+    );
 }

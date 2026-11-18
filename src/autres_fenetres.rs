@@ -302,11 +302,6 @@ struct Destructions {
     derniere: Option<std::time::Instant>,
 }
 
-static DESTRUCTIONS: Mutex<Destructions> = Mutex::new(Destructions {
-    en_attente: Vec::new(),
-    derniere: None,
-});
-
 impl Destructions {
     /// Une fenêtre vient d'être retirée : egui va la détruire.
     fn retiree(&mut self, h: isize, maintenant: std::time::Instant) {
@@ -364,15 +359,6 @@ pub fn attente_apres_destruction(
         .filter(|d| !d.is_zero())
 }
 
-/// L'attente due aux destructions en cours, maintenant.
-fn attente_destruction() -> Option<std::time::Duration> {
-    #[cfg(windows)]
-    let existe = crate::systeme::fenetre_existe;
-    #[cfg(not(windows))]
-    let existe = |_: isize| false;
-    verrou(&DESTRUCTIONS).attente(std::time::Instant::now(), existe)
-}
-
 /// L'heure du dernier changement d'affichage de Windows.
 static AFFICHAGE_CHANGE: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
@@ -419,12 +405,16 @@ impl Fenetre {
     /// Combien de temps la création attend encore avant son nouvel essai (`None` : elle peut
     /// être tentée). Seule une fenêtre jamais dessinée attend : une fenêtre déjà créée est
     /// dessinée à chaque image, egui détruirait celle qui ne l'est pas.
-    fn attente(&self, maintenant: std::time::Instant) -> Option<std::time::Duration> {
+    fn attente(
+        &self,
+        maintenant: std::time::Instant,
+        destruction: Option<std::time::Duration>,
+    ) -> Option<std::time::Duration> {
         if self.images > 0 || self.montree {
             return None;
         }
         let essai = self.pas_avant.and_then(|t| t.checked_duration_since(maintenant));
-        attente_avant_creation(depuis_le_changement(), essai, attente_destruction())
+        attente_avant_creation(depuis_le_changement(), essai, destruction)
     }
 
     fn image(&mut self, ui: &mut egui::Ui, classe: ViewportClass, palette: &Palette) -> Apres {
@@ -596,6 +586,13 @@ pub struct AutresFenetres {
     /// La fenêtre principale de la boucle (le volet, cachée au repos), 0 tant qu'elle n'est pas
     /// prête : une demande venue d'un autre fil la réveille.
     racine: Arc<std::sync::atomic::AtomicIsize>,
+    /// Les fenêtres retirées qui n'ont pas encore disparu (les créations attendent).
+    destructions: Arc<Mutex<Destructions>>,
+    /// L'heure du réveil déjà programmé de la fenêtre principale ([`AutresFenetres::reveiller_dans`]).
+    reveil_a: Arc<Mutex<Option<std::time::Instant>>>,
+    /// Les réveils programmés qui ont sonné (essais).
+    #[cfg(test)]
+    reveils: Arc<std::sync::atomic::AtomicU32>,
 }
 
 fn verrou<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -733,6 +730,7 @@ impl AutresFenetres {
     /// chaque image.
     pub fn prochaine_image(&self) -> Option<std::time::Duration> {
         let maintenant = std::time::Instant::now();
+        let destruction = self.attente_destruction();
         verrou(&self.registre)
             .fenetres
             .values()
@@ -741,12 +739,57 @@ impl AutresFenetres {
                 if f.fermer {
                     return Some(std::time::Duration::ZERO);
                 }
-                if let Some(d) = f.attente(maintenant) {
+                if let Some(d) = f.attente(maintenant, destruction) {
                     return Some(d);
                 }
                 (!f.montree || f.devant).then_some(std::time::Duration::ZERO)
             })
             .min()
+    }
+
+    /// L'attente due aux destructions en cours, maintenant.
+    fn attente_destruction(&self) -> Option<std::time::Duration> {
+        #[cfg(windows)]
+        let existe = crate::systeme::fenetre_existe;
+        #[cfg(not(windows))]
+        let existe = |_: isize| false;
+        verrou(&self.destructions).attente(std::time::Instant::now(), existe)
+    }
+
+    /// Réveille la fenêtre principale dans `d`, **par [`AutresFenetres::reveiller`]** et pas
+    /// par une minuterie de repeinture d'egui.
+    ///
+    /// Une fenêtre ne peut être créée que dans une image que winit fait dans son
+    /// contexte (un message de la fenêtre) ; eframe peint les fenêtres cachées hors de ce
+    /// contexte (minuterie, toutes les 100 ms) : une création tentée là ne trouve pas la
+    /// boucle de winit, eframe rend la main sans dessiner et egui panique (« the user callback
+    /// was never called »). Le réveil de `reveiller` passe par un message de la fenêtre : il
+    /// est dans le bon contexte. Un seul réveil programmé à la fois (le plus proche) : s'il
+    /// reste quelque chose à attendre, l'image qu'il provoque en reprogramme un.
+    pub fn reveiller_dans(&self, d: std::time::Duration) {
+        let heure = std::time::Instant::now() + d;
+        {
+            let mut a = verrou(&self.reveil_a);
+            if a.is_some_and(|t| t <= heure) {
+                return;
+            }
+            *a = Some(heure);
+        }
+        let moi = self.clone();
+        let _ = std::thread::Builder::new()
+            .name("reveil-des-fenetres".into())
+            .spawn(move || {
+                std::thread::sleep(d);
+                {
+                    let mut a = verrou(&moi.reveil_a);
+                    if *a == Some(heure) {
+                        *a = None;
+                    }
+                }
+                #[cfg(test)]
+                moi.reveils.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                moi.reveiller();
+            });
     }
 
     /// Essais : les fenêtres n'attendent plus leur nouvel essai de création.
@@ -763,8 +806,9 @@ impl AutresFenetres {
     pub fn montrer(&self, ctx: &egui::Context, palette: &Palette) {
         // Une fenêtre retirée qui n'a pas encore disparu : constatée dès qu'elle disparaît, sans
         // attendre un clic.
-        if let Some(d) = attente_destruction() {
-            ctx.request_repaint_after_for(d, ViewportId::ROOT);
+        let destruction = self.attente_destruction();
+        if let Some(d) = destruction {
+            self.reveiller_dans(d);
         }
         let liste: Vec<(String, Partagee)> = verrou(&self.registre)
             .fenetres
@@ -775,10 +819,12 @@ impl AutresFenetres {
             let builder = verrou(&f).ouverture.constructeur();
             let apres = if verrou(&f).fermer {
                 Apres::Fermer
-            } else if let Some(d) = verrou(&f).attente(std::time::Instant::now()) {
-                // Création ratée : pas de nouvel essai avant l'heure (une fenêtre jamais
-                // dessinée n'existe pas encore pour egui : rien n'est détruit).
-                ctx.request_repaint_after_for(d, ViewportId::ROOT);
+            } else if let Some(d) = verrou(&f).attente(std::time::Instant::now(), destruction) {
+                // Création différée (nouvel essai, destruction en cours, changement
+                // d'affichage) : `show_viewport_immediate` n'est PAS appelée pour cette
+                // fenêtre dans cette image (une fenêtre jamais dessinée n'existe pas encore
+                // pour egui : rien n'est détruit), et un réveil par message la reprend.
+                self.reveiller_dans(d);
                 continue;
             } else {
                 let premiere = {
@@ -872,7 +918,7 @@ impl AutresFenetres {
                         "Fenêtre « {titre} » : Windows n'a pas pu la créer (essai {n} sur {CREATIONS_MAX}) ; nouvel essai dans {} ms.",
                         NOUVEL_ESSAI.as_millis()
                     ));
-                    ctx.request_repaint_after_for(NOUVEL_ESSAI, ViewportId::ROOT);
+                    self.reveiller_dans(NOUVEL_ESSAI);
                     Apres::Garder
                 }
             }
@@ -894,7 +940,7 @@ impl AutresFenetres {
         if let Some(h) = f.hwnd {
             verrou(&PRISES).retain(|x| *x != h);
             // egui détruit la fenêtre à la fin de l'image : les créations suivantes attendent.
-            verrou(&DESTRUCTIONS).retiree(h, std::time::Instant::now());
+            verrou(&self.destructions).retiree(h, std::time::Instant::now());
         }
         let place = f.place();
         f.contenu.fermee(place);
@@ -1125,6 +1171,50 @@ mod tests {
         let mut d = Destructions::default();
         d.retiree(30, t0);
         assert_eq!(d.attente(t0 + D::from_secs(1), |_| false), None);
+    }
+
+    /// Une création différée (une fenêtre vient d'être retirée) ne montre rien à egui :
+    /// `show_viewport_immediate` n'est pas appelée tant qu'on attend (sinon, hors du contexte de
+    /// winit, eframe rend la main sans dessiner et egui paniquait). La reprise vient d'un réveil
+    /// par message (`reveiller_dans`), pas d'une minuterie de repeinture ; puis la fenêtre est
+    /// créée et dessinée.
+    #[test]
+    fn creation_differee_jamais_montree_puis_reveillee() {
+        use std::time::{Duration as D, Instant};
+        let ctx = contexte();
+        let f = AutresFenetres::default();
+        f.ouvrir("d", Ouverture::new("D", [100.0, 100.0]), Vide);
+        // Une fenêtre vient d'être retirée : 100 ms de calme avant toute création.
+        verrou(&f.destructions).retiree(1, Instant::now());
+        for _ in 0..3 {
+            let (dessinees, _) = image(&ctx, &f);
+            assert!(
+                dessinees.is_empty(),
+                "création différée : rien à egui, {dessinees:?}"
+            );
+            assert!(f.ouverte("d"));
+        }
+        let attente = f.prochaine_image().expect("la création attend");
+        assert!(attente > D::ZERO && attente <= APRES_DESTRUCTION, "{attente:?}");
+        // Le réveil programmé sonne (par `reveiller`, pas par une repeinture d'egui).
+        let fin = Instant::now() + D::from_secs(2);
+        while f.reveils.load(std::sync::atomic::Ordering::Acquire) == 0 && Instant::now() < fin {
+            std::thread::sleep(D::from_millis(10));
+        }
+        assert!(
+            f.reveils.load(std::sync::atomic::Ordering::Acquire) >= 1,
+            "réveil programmé"
+        );
+        // Le calme passé : la fenêtre est créée et dessinée.
+        std::thread::sleep(APRES_DESTRUCTION + D::from_millis(50));
+        let (dessinees, _) = image(&ctx, &f);
+        assert_eq!(dessinees, vec![id_de("d")]);
+    }
+
+    /// Un contenu sans rien dedans.
+    struct Vide;
+    impl Contenu for Vide {
+        fn dessiner(&mut self, _: &mut egui::Ui, _: &mut Cadre<'_>) {}
     }
 
     /// Une panique du contenu lui-même (son dessin a commencé) n'est pas prise pour une
