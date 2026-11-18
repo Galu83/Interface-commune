@@ -12,7 +12,9 @@
 //! - ses propres notifications.
 //!
 //! Elle peut être ajoutée ou retirée à tout moment. Quand l'Explorateur redémarre, la zone
-//! remet seule toutes les icônes.
+//! remet seule toutes les icônes. Quand Windows change l'affichage (`WM_DISPLAYCHANGE`), elle
+//! le signale à [`crate::autres_fenetres::affichage_change`] : les fenêtres pas encore créées
+//! attendent alors 1 s.
 //!
 //! Un clic dit **quelle icône** et **où elle est** ([`Evenement`]). Le menu gris de Windows
 //! ([`Zone::menu_windows`]), avec cases cochées et sous-menus, sert de secours quand les
@@ -54,7 +56,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DestroyMenu, DestroyWindow, GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON, HMENU, ICONINFO,
     MENU_ITEM_FLAGS, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterClassW,
     RegisterWindowMessageW, SetForegroundWindow, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, TrackPopupMenu, WINDOW_EX_STYLE, WM_APP, WM_NULL, WNDCLASSW, WS_OVERLAPPED,
+    TPM_RIGHTBUTTON, TrackPopupMenu, WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_NULL, WNDCLASSW,
+    WS_OVERLAPPED,
 };
 use windows::core::{GUID, HSTRING, PCWSTR};
 
@@ -720,6 +723,12 @@ impl Drop for Zone {
 }
 
 extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if msg == WM_DISPLAYCHANGE {
+        // Windows refait l'affichage (écran retiré, rendu, autre résolution) : les fenêtres pas
+        // encore créées du logiciel attendent la fin de la reprise (1 s). Un logiciel qui n'a
+        // pas sa propre procédure de fenêtre en profite aussi. Traitement par défaut ensuite.
+        crate::autres_fenetres::affichage_change();
+    }
     // SAFETY: la valeur rangée est 0 ou l'adresse du `Partage` de la zone, valable jusqu'à
     // ce que `Drop` la remette à 0 ; les messages arrivent sur ce même fil.
     let partage = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } as *const RefCell<Partage>;

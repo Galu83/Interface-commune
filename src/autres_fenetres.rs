@@ -368,7 +368,9 @@ pub fn affichage_change() {
     *verrou(&AFFICHAGE_CHANGE) = Some(std::time::Instant::now());
 }
 
-fn depuis_le_changement() -> Option<std::time::Duration> {
+/// Le temps écoulé depuis le dernier changement d'affichage signalé par
+/// [`affichage_change`] (`None` : aucun depuis le lancement).
+pub fn depuis_le_changement() -> Option<std::time::Duration> {
     (*verrou(&AFFICHAGE_CHANGE)).map(|t| t.elapsed())
 }
 
