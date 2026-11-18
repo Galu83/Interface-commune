@@ -279,6 +279,100 @@ pub const REPRISE: std::time::Duration = std::time::Duration::from_secs(1);
 /// Un premier dessin après un changement d'affichage est mesuré au journal pendant ce temps.
 const SUIVI_DE_LA_REPRISE: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Une fenêtre retirée n'est détruite par egui qu'à la fin de l'image qui ne la dessine plus.
+/// Créer une autre fenêtre aussitôt après a fait bloquer sans fin `show_viewport_immediate`
+/// (un processeur très chargé, plusieurs fenêtres fermées puis ouvertes de suite). Aucune
+/// fenêtre n'est donc créée tant qu'une fenêtre retirée existe encore, ni pendant
+/// [`APRES_DESTRUCTION`] après la dernière destruction. Au plus [`DESTRUCTION_MAX`] d'attente
+/// pour une fenêtre qui ne disparaît pas.
+pub const DESTRUCTION_MAX: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Le temps laissé à Windows et au pilote graphique après la destruction d'une fenêtre,
+/// avant d'en créer une autre.
+pub const APRES_DESTRUCTION: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Le temps entre deux vérifications qu'une fenêtre retirée a disparu.
+const VERIFICATION: std::time::Duration = std::time::Duration::from_millis(10);
+
+/// Les fenêtres retirées (leur HWND et l'heure du retrait) qui existent encore, et l'heure
+/// de la dernière destruction constatée.
+#[derive(Default)]
+struct Destructions {
+    en_attente: Vec<(isize, std::time::Instant)>,
+    derniere: Option<std::time::Instant>,
+}
+
+static DESTRUCTIONS: Mutex<Destructions> = Mutex::new(Destructions {
+    en_attente: Vec::new(),
+    derniere: None,
+});
+
+impl Destructions {
+    /// Une fenêtre vient d'être retirée : egui va la détruire.
+    fn retiree(&mut self, h: isize, maintenant: std::time::Instant) {
+        self.en_attente.push((h, maintenant));
+        self.derniere = Some(maintenant);
+    }
+
+    /// Constate les destructions (`existe` : la fenêtre existe-t-elle encore ?) et rend
+    /// l'attente avant de pouvoir créer une fenêtre (`None` : maintenant).
+    fn attente(
+        &mut self,
+        maintenant: std::time::Instant,
+        existe: impl Fn(isize) -> bool,
+    ) -> Option<std::time::Duration> {
+        let mut derniere = self.derniere;
+        self.en_attente.retain(|&(h, retiree)| {
+            let depuis = maintenant.saturating_duration_since(retiree);
+            if depuis >= DESTRUCTION_MAX {
+                // Elle ne disparaît pas : on ne bloque pas pour toujours.
+                return false;
+            }
+            if existe(h) {
+                return true;
+            }
+            // Détruite. Constatée longtemps après son retrait (personne ne regardait) : la
+            // destruction date du retrait, pas d'aujourd'hui.
+            let quand = if depuis > APRES_DESTRUCTION {
+                retiree
+            } else {
+                maintenant
+            };
+            derniere = Some(derniere.map_or(quand, |d| d.max(quand)));
+            false
+        });
+        self.derniere = derniere;
+        attente_apres_destruction(
+            !self.en_attente.is_empty(),
+            derniere.map(|d| maintenant.saturating_duration_since(d)),
+        )
+    }
+}
+
+/// L'attente avant de créer une fenêtre après des destructions : tant qu'une fenêtre retirée
+/// existe (`en_attente`), le temps de la prochaine vérification ; sinon, ce qui reste de
+/// [`APRES_DESTRUCTION`] depuis la dernière destruction (`depuis`) ; `None` : créer.
+pub fn attente_apres_destruction(
+    en_attente: bool,
+    depuis: Option<std::time::Duration>,
+) -> Option<std::time::Duration> {
+    if en_attente {
+        return Some(VERIFICATION);
+    }
+    depuis
+        .and_then(|d| APRES_DESTRUCTION.checked_sub(d))
+        .filter(|d| !d.is_zero())
+}
+
+/// L'attente due aux destructions en cours, maintenant.
+fn attente_destruction() -> Option<std::time::Duration> {
+    #[cfg(windows)]
+    let existe = crate::systeme::fenetre_existe;
+    #[cfg(not(windows))]
+    let existe = |_: isize| false;
+    verrou(&DESTRUCTIONS).attente(std::time::Instant::now(), existe)
+}
+
 /// L'heure du dernier changement d'affichage de Windows.
 static AFFICHAGE_CHANGE: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
@@ -294,14 +388,16 @@ fn depuis_le_changement() -> Option<std::time::Duration> {
 
 /// Combien de temps une fenêtre pas encore créée attend avant d'être dessinée (`None` :
 /// maintenant). `depuis` : le temps écoulé depuis le dernier changement d'affichage ;
-/// `essai` : ce qui reste avant le nouvel essai d'une création ratée. Elle attend le plus
-/// long des deux.
+/// `essai` : ce qui reste avant le nouvel essai d'une création ratée ; `destruction` :
+/// l'attente due aux fenêtres qui viennent d'être détruites ([`attente_apres_destruction`]).
+/// Elle attend le plus long des trois.
 pub fn attente_avant_creation(
     depuis: Option<std::time::Duration>,
     essai: Option<std::time::Duration>,
+    destruction: Option<std::time::Duration>,
 ) -> Option<std::time::Duration> {
     let reprise = depuis.and_then(|d| REPRISE.checked_sub(d));
-    [reprise, essai]
+    [reprise, essai, destruction]
         .into_iter()
         .flatten()
         .filter(|d| !d.is_zero())
@@ -328,7 +424,7 @@ impl Fenetre {
             return None;
         }
         let essai = self.pas_avant.and_then(|t| t.checked_duration_since(maintenant));
-        attente_avant_creation(depuis_le_changement(), essai)
+        attente_avant_creation(depuis_le_changement(), essai, attente_destruction())
     }
 
     fn image(&mut self, ui: &mut egui::Ui, classe: ViewportClass, palette: &Palette) -> Apres {
@@ -665,6 +761,11 @@ impl AutresFenetres {
     /// qui le demandent. Aucun verrou n'est tenu pendant le dessin d'un contenu : il peut
     /// ouvrir ou fermer d'autres fenêtres.
     pub fn montrer(&self, ctx: &egui::Context, palette: &Palette) {
+        // Une fenêtre retirée qui n'a pas encore disparu : constatée dès qu'elle disparaît, sans
+        // attendre un clic.
+        if let Some(d) = attente_destruction() {
+            ctx.request_repaint_after_for(d, ViewportId::ROOT);
+        }
         let liste: Vec<(String, Partagee)> = verrou(&self.registre)
             .fenetres
             .iter()
@@ -685,6 +786,12 @@ impl AutresFenetres {
                     g.images == 0 && !g.montree
                 };
                 let debut = std::time::Instant::now();
+                // La création de la fenêtre se passe dans cet appel : le chien de garde écrit
+                // au journal celle qui ne finit pas.
+                let _creation = premiere.then(|| {
+                    let titre = verrou(&f).titre.clone();
+                    crate::sonde::creation(&titre)
+                });
                 let apres = self.image_ou_essai(ctx, &cle, &f, builder, palette);
                 // Le premier dessin après un changement d'affichage, mesuré (la reprise s'est
                 // bien passée, ou non).
@@ -786,6 +893,8 @@ impl AutresFenetres {
         }
         if let Some(h) = f.hwnd {
             verrou(&PRISES).retain(|x| *x != h);
+            // egui détruit la fenêtre à la fin de l'image : les créations suivantes attendent.
+            verrou(&DESTRUCTIONS).retiree(h, std::time::Instant::now());
         }
         let place = f.place();
         f.contenu.fermee(place);
@@ -950,29 +1059,72 @@ mod tests {
         use std::time::Duration as D;
         let ms = D::from_millis;
         // Aucun changement d'affichage, aucun échec : dessiner.
-        assert_eq!(attente_avant_creation(None, None), None);
+        assert_eq!(attente_avant_creation(None, None, None), None);
         // Un changement d'affichage tout juste arrivé : attendre la reprise entière.
-        assert_eq!(attente_avant_creation(Some(D::ZERO), None), Some(REPRISE));
+        assert_eq!(attente_avant_creation(Some(D::ZERO), None, None), Some(REPRISE));
         // À mi-chemin : attendre le reste.
-        assert_eq!(attente_avant_creation(Some(ms(400)), None), Some(ms(600)));
+        assert_eq!(attente_avant_creation(Some(ms(400)), None, None), Some(ms(600)));
         // Reprise finie (pile, ou bien après) : dessiner.
-        assert_eq!(attente_avant_creation(Some(REPRISE), None), None);
-        assert_eq!(attente_avant_creation(Some(D::from_secs(30)), None), None);
+        assert_eq!(attente_avant_creation(Some(REPRISE), None, None), None);
+        assert_eq!(attente_avant_creation(Some(D::from_secs(30)), None, None), None);
         // Une création ratée attend son nouvel essai ; avec un changement d'affichage : le plus
         // long des deux.
-        assert_eq!(attente_avant_creation(None, Some(ms(500))), Some(ms(500)));
+        assert_eq!(attente_avant_creation(None, Some(ms(500)), None), Some(ms(500)));
         assert_eq!(
-            attente_avant_creation(Some(ms(900)), Some(ms(500))),
+            attente_avant_creation(Some(ms(900)), Some(ms(500)), None),
             Some(ms(500))
         );
         assert_eq!(
-            attente_avant_creation(Some(ms(100)), Some(ms(500))),
+            attente_avant_creation(Some(ms(100)), Some(ms(500)), None),
             Some(ms(900))
         );
         // Un reste nul n'est pas une attente.
-        assert_eq!(attente_avant_creation(None, Some(D::ZERO)), None);
+        assert_eq!(attente_avant_creation(None, Some(D::ZERO), None), None);
         // Jamais plus d'une seconde d'attente pour un changement d'affichage.
         assert!(REPRISE <= D::from_secs(1));
+    }
+
+    /// La création après destruction : rien ne se crée tant qu'une fenêtre retirée existe,
+    /// ni pendant 100 ms après la dernière destruction ; une fenêtre qui ne disparaît pas
+    /// n'attend pas plus de 2 s ; une destruction constatée tard date de son retrait.
+    #[test]
+    fn creation_apres_destruction() {
+        use std::time::{Duration as D, Instant};
+        let t0 = Instant::now();
+        let ms = D::from_millis;
+        // La décision pure.
+        assert_eq!(attente_apres_destruction(false, None), None);
+        assert_eq!(attente_apres_destruction(true, None), Some(VERIFICATION));
+        assert_eq!(attente_apres_destruction(false, Some(ms(30))), Some(ms(70)));
+        assert_eq!(attente_apres_destruction(false, Some(APRES_DESTRUCTION)), None);
+        assert_eq!(attente_apres_destruction(false, Some(D::from_secs(9))), None);
+
+        // Rien de retiré : créer.
+        let mut d = Destructions::default();
+        assert_eq!(d.attente(t0, |_| true), None);
+
+        // Deux fenêtres retirées, encore là : attendre la vérification suivante.
+        d.retiree(10, t0);
+        d.retiree(11, t0);
+        assert_eq!(d.attente(t0 + ms(5), |_| true), Some(VERIFICATION));
+        // L'une détruite, l'autre encore là : toujours attendre.
+        assert_eq!(d.attente(t0 + ms(20), |h| h == 11), Some(VERIFICATION));
+        // Les deux détruites à t0 + 30 ms : encore 100 ms de calme.
+        assert_eq!(d.attente(t0 + ms(30), |_| false), Some(APRES_DESTRUCTION));
+        assert_eq!(d.attente(t0 + ms(80), |_| false), Some(ms(50)));
+        // Le calme passé : créer.
+        assert_eq!(d.attente(t0 + ms(130), |_| false), None);
+
+        // Une fenêtre qui ne disparaît jamais n'arrête pas la création pour toujours.
+        let mut d = Destructions::default();
+        d.retiree(20, t0);
+        assert_eq!(d.attente(t0 + ms(500), |_| true), Some(VERIFICATION));
+        assert_eq!(d.attente(t0 + DESTRUCTION_MAX + ms(1), |_| true), None);
+
+        // Détruite il y a longtemps (personne ne regardait) : pas de calme de plus.
+        let mut d = Destructions::default();
+        d.retiree(30, t0);
+        assert_eq!(d.attente(t0 + D::from_secs(1), |_| false), None);
     }
 
     /// Une panique du contenu lui-même (son dessin a commencé) n'est pas prise pour une

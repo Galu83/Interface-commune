@@ -463,6 +463,12 @@ pub fn fenetre_du_fil(titre: &str, prises: &[isize]) -> Option<isize> {
     (r.trouvee != 0).then_some(r.trouvee)
 }
 
+/// La fenêtre existe-t-elle encore ? (Une fenêtre détruite : non.)
+pub fn fenetre_existe(h: isize) -> bool {
+    // SAFETY: simple question à Windows sur une poignée, même périmée.
+    unsafe { IsWindow(Some(hwnd(h))) }.as_bool()
+}
+
 /// La position de la souris sur l'écran, en pixels.
 pub fn position_souris() -> Option<[i32; 2]> {
     let mut p = POINT::default();

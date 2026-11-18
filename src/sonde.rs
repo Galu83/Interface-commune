@@ -421,6 +421,126 @@ fn demarrer_la_surveillance() {
     });
 }
 
+// ---------------------------------------------------------------------------------------
+// Le chien de garde des créations de fenêtre
+
+/// Une création de fenêtre qui dure plus longtemps que cela est écrite au journal.
+pub const SEUIL_DE_CREATION: Duration = Duration::from_secs(3);
+
+/// Le seuil en millisecondes (les essais le raccourcissent).
+static SEUIL_CREATION_MS: AtomicU64 = AtomicU64::new(3_000);
+
+#[cfg(test)]
+pub(crate) fn regler_le_seuil_de_creation(seuil: Duration) {
+    SEUIL_CREATION_MS.store(
+        u64::try_from(seuil.as_millis()).unwrap_or(u64::MAX),
+        Ordering::Release,
+    );
+}
+
+fn seuil_de_creation() -> Duration {
+    Duration::from_millis(SEUIL_CREATION_MS.load(Ordering::Acquire))
+}
+
+/// Une création de fenêtre en cours, vue par le chien de garde.
+struct EnCreation {
+    id: u64,
+    nom: String,
+    debut: Instant,
+    debut_utc: SystemTime,
+    signalee: bool,
+}
+
+static CREATIONS: Mutex<Vec<EnCreation>> = Mutex::new(Vec::new());
+static PROCHAINE_CREATION: AtomicU64 = AtomicU64::new(1);
+
+/// Une création de fenêtre en cours : à garder pendant tout l'appel qui crée la fenêtre.
+/// Si l'appel dure plus de [`SEUIL_DE_CREATION`] (il ne rend jamais la main : un blocage dans
+/// la création de la fenêtre ou de son contexte OpenGL, sans panique ni erreur), un fil à part
+/// écrit au journal le nom de la fenêtre et l'heure du début ; puis une ligne quand l'appel
+/// finit, avec la durée. Le nom est celui que le logiciel a donné à sa fenêtre.
+pub struct Creation {
+    id: u64,
+}
+
+/// Commence la surveillance de la création de la fenêtre `nom`.
+pub fn creation(nom: &str) -> Creation {
+    let id = PROCHAINE_CREATION.fetch_add(1, Ordering::AcqRel);
+    CREATIONS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(EnCreation {
+            id,
+            nom: nom.to_string(),
+            debut: Instant::now(),
+            debut_utc: SystemTime::now(),
+            signalee: false,
+        });
+    demarrer_le_chien_des_creations();
+    Creation { id }
+}
+
+impl Drop for Creation {
+    fn drop(&mut self) {
+        let fini = {
+            let mut l = CREATIONS.lock().unwrap_or_else(PoisonError::into_inner);
+            l.iter().position(|c| c.id == self.id).map(|i| l.remove(i))
+        };
+        if let Some(c) = fini
+            && c.signalee
+        {
+            noter(format!(
+                "Fenêtre « {} » : la création, commencée à {} UTC, s'est enfin terminée après {} s.",
+                c.nom,
+                heure_utc(c.debut_utc),
+                c.debut.elapsed().as_secs()
+            ));
+        }
+    }
+}
+
+/// Les lignes à écrire à `maintenant` : une, une seule fois, pour chaque création qui dure
+/// depuis plus de `seuil`.
+fn lignes_des_creations(l: &mut [EnCreation], maintenant: Instant, seuil: Duration) -> Vec<String> {
+    let mut lignes = Vec::new();
+    for c in l.iter_mut() {
+        let duree = maintenant.saturating_duration_since(c.debut);
+        if duree >= seuil && !c.signalee {
+            c.signalee = true;
+            lignes.push(format!(
+                "Fenêtre « {} » : sa création dure depuis {} s (commencée à {} UTC) ; le fil des fenêtres ne rend plus la main.",
+                c.nom,
+                duree.as_secs(),
+                heure_utc(c.debut_utc)
+            ));
+        }
+    }
+    lignes
+}
+
+/// Lance l'unique fil du chien de garde des créations (une seule fois pour le programme). Il
+/// regarde souvent (un tiers du seuil, entre 20 ms et 1 s) et ne fait rien d'autre.
+fn demarrer_le_chien_des_creations() {
+    static UNE_FOIS: OnceLock<()> = OnceLock::new();
+    UNE_FOIS.get_or_init(|| {
+        let _ = std::thread::Builder::new()
+            .name("chien-des-creations".into())
+            .spawn(|| {
+                loop {
+                    let seuil = seuil_de_creation();
+                    std::thread::sleep((seuil / 3).clamp(Duration::from_millis(20), Duration::from_secs(1)));
+                    let lignes = {
+                        let mut l = CREATIONS.lock().unwrap_or_else(PoisonError::into_inner);
+                        lignes_des_creations(&mut l, Instant::now(), seuil)
+                    };
+                    for ligne in lignes {
+                        noter(ligne);
+                    }
+                }
+            });
+    });
+}
+
 #[cfg(test)]
 mod essais {
     #![allow(clippy::unwrap_used)]
@@ -675,5 +795,73 @@ mod essais {
         .unwrap();
         assert!(r.0.as_deref().is_some_and(|l| l.contains("sonde.rs:")), "{r:?}");
         assert_eq!(r.1, None);
+    }
+
+    /// Une création de fenêtre qui dure : une seule ligne, avec le nom et l'heure du début ;
+    /// rien pour une création courte.
+    #[test]
+    fn creation_longue_donne_une_ligne() {
+        let t0 = Instant::now();
+        let utc = SystemTime::now();
+        let mut l = vec![
+            EnCreation {
+                id: 1,
+                nom: "Paramètres".into(),
+                debut: t0,
+                debut_utc: utc,
+                signalee: false,
+            },
+            EnCreation {
+                id: 2,
+                nom: "Courte".into(),
+                debut: t0 + Duration::from_secs(5),
+                debut_utc: utc,
+                signalee: false,
+            },
+        ];
+        let seuil = Duration::from_secs(3);
+        assert!(lignes_des_creations(&mut l, t0 + Duration::from_secs(2), seuil).is_empty());
+        let v = lignes_des_creations(&mut l, t0 + Duration::from_secs(6), seuil);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(
+            v[0].contains("« Paramètres »") && v[0].contains("depuis 6 s"),
+            "{v:?}"
+        );
+        assert!(v[0].contains(&heure_utc(utc)) && v[0].contains("UTC"), "{v:?}");
+        // Une seule ligne par création, même longtemps après.
+        assert!(
+            lignes_des_creations(&mut l, t0 + Duration::from_secs(60), seuil)
+                .iter()
+                .all(|x| !x.contains("Paramètres"))
+        );
+    }
+
+    /// Le vrai fil : une création qui ne finit pas est écrite au journal, puis sa fin aussi.
+    #[test]
+    fn le_chien_ecrit_la_creation_qui_dure() {
+        let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+        let lignes = Arc::new(Mutex::new(Vec::<String>::new()));
+        let l2 = lignes.clone();
+        brancher_le_journal(move |l| l2.lock().unwrap().push(l));
+        regler_le_seuil_de_creation(Duration::from_millis(100));
+        let c = creation("Fenêtre d'essai du chien");
+        let attendre = |texte: &str| {
+            let fin = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < fin {
+                if lignes.lock().unwrap().iter().any(|l| l.contains(texte)) {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            false
+        };
+        assert!(
+            attendre("sa création dure depuis"),
+            "{:?}",
+            lignes.lock().unwrap()
+        );
+        drop(c);
+        assert!(attendre("s'est enfin terminée"), "{:?}", lignes.lock().unwrap());
+        regler_le_seuil_de_creation(SEUIL_DE_CREATION);
     }
 }
