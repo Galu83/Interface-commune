@@ -8,7 +8,7 @@
 | `src/horloge.rs` | l'icône près de l'horloge, une seule copie, `Horloge::lancer`, `Poste` |
 | `src/zone.rs` | plusieurs icônes à la fois pour un logiciel qui garde sa boucle de messages : `Zone` (poser, retirer, notifier sur une icône, clic avec l'icône et sa place, menu gris de Windows avec cases et sous-menus) |
 | `src/sonde.rs` | la sonde des fils : clics de l'icône, boucles imbriquées, chien de garde (un compteur de battements et une « dernière étape » par fil), tout au journal du logiciel |
-| `src/fenetres.rs`, `volet.rs`, `surface.rs` | le fil des fenêtres, la fenêtre unique du volet et du petit menu (la fenêtre principale de la boucle), leur contenu |
+| `src/fenetres.rs`, `volet.rs`, `surface.rs` | le fil des fenêtres, la fenêtre unique du volet et du petit menu (la fenêtre principale de la boucle), leur contenu ; la supervision d'une boucle de fenêtres tenue par le logiciel (`superviser_les_fenetres`) |
 | `src/autres_fenetres.rs` | les autres fenêtres de la boucle (Paramètres, fenêtres du logiciel) |
 | `src/briques.rs`, `mesures.rs` | les briques du volet ; les mesures communes du volet, du menu et des Paramètres |
 | `src/toutes_faites.rs` | la fenêtre simple et la fenêtre de lecture |

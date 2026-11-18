@@ -19,6 +19,11 @@
 //! [`RAFALE`]) donnent le menu de secours pour ce clic, et la fenêtre n'est recréée qu'au clic
 //! suivant (jamais de boucle folle). Si le fil s'arrête quand même, [`GardeDuFil`] fait
 //! passer l'icône au menu de secours.
+//!
+//! Un logiciel qui tient sa propre boucle eframe (au lieu de [`boucle_des_fenetres`]) suit
+//! les mêmes règles avec [`superviser_les_fenetres`] : il dit comment lancer sa boucle et quoi
+//! faire de ses fenêtres perdues ([`Supervise`]), la supervision compte les pertes
+//! ([`Pertes`]) et décide quand les recréer ([`Reprise`]).
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
@@ -344,17 +349,163 @@ pub const RECREATIONS_EN_RAFALE: usize = 3;
 /// La fenêtre de temps des pertes en rafale.
 pub const RAFALE: Duration = Duration::from_secs(60);
 
-/// Les pertes récentes de la fenêtre du volet.
-#[derive(Default)]
-struct Pertes(Vec<Instant>);
+/// Les pertes récentes des fenêtres (la fenêtre du volet, ou toute la boucle des fenêtres).
+#[derive(Debug, Default, Clone)]
+pub struct Pertes(Vec<Instant>);
 
 impl Pertes {
     /// Compte une perte ; rend le nombre de pertes dans la dernière [`RAFALE`].
-    fn compter(&mut self, maintenant: Instant) -> usize {
+    pub fn compter(&mut self, maintenant: Instant) -> usize {
         self.0
             .retain(|t| maintenant.saturating_duration_since(*t) < RAFALE);
         self.0.push(maintenant);
         self.0.len()
+    }
+
+    /// `n` pertes dans la dernière [`RAFALE`] font-elles une rafale (plus de
+    /// [`RECREATIONS_EN_RAFALE`]) ?
+    pub fn en_rafale(n: usize) -> bool {
+        n > RECREATIONS_EN_RAFALE
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// La supervision d'une boucle de fenêtres tenue par le logiciel
+
+/// Pourquoi la boucle des fenêtres s'est arrêtée alors qu'elle devait durer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Perte {
+    /// Une panique attrapée (par exemple eframe qui ne peut plus rendre son contexte OpenGL
+    /// courant au réveil des écrans), avec sa cause pour le journal ([`cause_de_panique`]).
+    Panique(String),
+    /// Elle s'est fermée d'elle-même (par Windows).
+    Fermee,
+    /// Elle n'a pas pu être recréée, alors qu'elle a déjà été lancée : un échec passager
+    /// (écrans en veille, carte graphique qui se relance).
+    Echec(String),
+}
+
+/// Quand les fenêtres perdues sont recréées.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reprise {
+    /// Tout de suite ; le clic qui s'ouvrait est refait par les fenêtres recréées.
+    Maintenant,
+    /// Pertes en rafale (ou échec passager) : le menu de Windows pour le clic en cours, et
+    /// les fenêtres sont recréées au clic suivant. Jamais de boucle folle, jamais bloqué
+    /// jusqu'au prochain lancement.
+    AuClicSuivant,
+}
+
+/// Une perte des fenêtres, telle que la supervision la donne au logiciel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Evenement {
+    pub perte: Perte,
+    /// Le nombre de pertes dans la dernière [`RAFALE`], celle-ci comprise.
+    pub nombre: usize,
+    pub reprise: Reprise,
+}
+
+impl Evenement {
+    /// La ligne du journal (avec la cause, pour une panique).
+    pub fn phrase(&self) -> String {
+        let quoi = match &self.perte {
+            Perte::Panique(cause) => format!("Fenêtres perdues ({cause})"),
+            Perte::Fermee => "Fenêtres fermées par Windows".into(),
+            Perte::Echec(e) => format!("Fenêtres impossibles à recréer ({e})"),
+        };
+        match (&self.perte, self.reprise) {
+            (_, Reprise::Maintenant) => format!("{quoi} : recréées."),
+            (Perte::Echec(_), Reprise::AuClicSuivant) => {
+                format!("{quoi} : menu de Windows pour ce clic, nouvel essai au clic suivant.")
+            }
+            (_, Reprise::AuClicSuivant) => format!(
+                "{quoi} : {} fois en {} s ; menu de Windows pour ce clic, recréées au clic suivant.",
+                self.nombre,
+                RAFALE.as_secs()
+            ),
+        }
+    }
+}
+
+/// Comment finit la supervision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fin {
+    /// Le logiciel se ferme.
+    Quitter,
+    /// La boucle n'a jamais pu être créée (ni OpenGL ni fenêtre possibles) : le menu de
+    /// Windows pour de bon.
+    Impossible(String),
+}
+
+/// Ce que la supervision fait tourner : la boucle des fenêtres du logiciel, et ce qu'il fait
+/// quand elle est perdue. Pour un logiciel qui tient sa propre boucle eframe ; la boucle
+/// toute faite de la bibliothèque ([`boucle_des_fenetres`]) suit les mêmes règles.
+pub trait Supervise {
+    /// Un tour de la boucle des fenêtres (par exemple `eframe::run_native` avec
+    /// `run_and_return`). `Ok` quand elle s'est fermée, `Err` quand elle n'a pas pu être
+    /// créée. Une panique est attrapée par la supervision.
+    fn boucle(&mut self) -> Result<(), String>;
+    /// Les fenêtres sont perdues : le logiciel note `e.phrase()` au journal et oublie ce qui
+    /// était ouvert. [`Reprise::Maintenant`] : il refait le clic qui s'ouvrait, pour les
+    /// fenêtres recréées. [`Reprise::AuClicSuivant`] : il ouvre le menu de Windows pour ce
+    /// clic ; le clic suivant revient aux fenêtres.
+    fn perdues(&mut self, e: &Evenement);
+    /// Après [`Reprise::AuClicSuivant`] : attend le clic suivant (ou toute autre demande aux
+    /// fenêtres), puis rend `true` pour les recréer ; `false` : le logiciel se ferme.
+    fn attendre_un_clic(&mut self) -> bool;
+    /// Le logiciel se ferme : plus rien n'est recréé.
+    fn quitter(&self) -> bool {
+        false
+    }
+}
+
+/// Fait tourner la boucle des fenêtres de `s` et la recrée quand elle est perdue : une
+/// panique (attrapée ici, sa cause et son lieu gardés pour le journal), une fermeture par
+/// Windows ou un échec passager. Jusqu'à [`RECREATIONS_EN_RAFALE`] pertes en [`RAFALE`],
+/// elle est recréée tout de suite ; au-delà, le logiciel ouvre le menu de Windows pour le
+/// clic en cours, et elle est recréée au clic suivant. Seul un échec au tout premier tour
+/// (rien n'a jamais marché) arrête la supervision pour de bon. `horloge` : l'heure
+/// (injectable pour les essais ; `Instant::now` sinon).
+pub fn superviser_les_fenetres(s: &mut impl Supervise, horloge: impl Fn() -> Instant) -> Fin {
+    crate::sonde::retenir_les_paniques();
+    let mut pertes = Pertes::default();
+    let mut premier_tour = true;
+    loop {
+        if s.quitter() {
+            return Fin::Quitter;
+        }
+        let tour = catch_unwind(AssertUnwindSafe(|| s.boucle()));
+        let premier = std::mem::replace(&mut premier_tour, false);
+        if s.quitter() {
+            return Fin::Quitter;
+        }
+        let perte = match tour {
+            Ok(Ok(())) => Perte::Fermee,
+            Ok(Err(e)) if premier => return Fin::Impossible(e),
+            Ok(Err(e)) => Perte::Echec(e),
+            Err(p) => Perte::Panique(cause_de_panique(&*p)),
+        };
+        let (nombre, reprise) = match perte {
+            // Un échec passager n'est pas une perte de plus : un nouvel essai au clic suivant.
+            Perte::Echec(_) => (pertes.0.len(), Reprise::AuClicSuivant),
+            _ => {
+                let n = pertes.compter(horloge());
+                let reprise = if Pertes::en_rafale(n) {
+                    Reprise::AuClicSuivant
+                } else {
+                    Reprise::Maintenant
+                };
+                (n, reprise)
+            }
+        };
+        s.perdues(&Evenement {
+            perte,
+            nombre,
+            reprise,
+        });
+        if reprise == Reprise::AuClicSuivant && !s.attendre_un_clic() {
+            return Fin::Quitter;
+        }
     }
 }
 
@@ -453,7 +604,7 @@ pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: 
                             .as_ref()
                             .map(|d| format!(" ; {} demandé est rouvert", nom_du_clic(d)))
                             .unwrap_or_default();
-                        if n <= RECREATIONS_EN_RAFALE {
+                        if !Pertes::en_rafale(n) {
                             ouvreur.noter(format!(
                                 "Fenêtre du volet et du petit menu perdue ({cause}) : recréée{refaire}."
                             ));
@@ -480,7 +631,7 @@ pub fn boucle_des_fenetres(liens: &Liens, ouvreur: &mut impl Ouvreur, demandes: 
                             break;
                         }
                         let n = pertes.compter(Instant::now());
-                        en_pause = n > RECREATIONS_EN_RAFALE;
+                        en_pause = Pertes::en_rafale(n);
                         ouvreur.noter(if en_pause {
                             format!(
                                 "Fenêtre du volet et du petit menu fermée par Windows : {n} fois en {} s ; recréée au clic suivant.",
@@ -892,6 +1043,210 @@ mod tests {
         assert_eq!(faux.preparations, RECREATIONS_EN_RAFALE + 2);
         assert_eq!(faux.ouvertures, vec![(Surface::Volet, RECREATIONS_EN_RAFALE + 2)]);
         assert!(!liens.egui_impossible.load(Ordering::Acquire));
+    }
+
+    /// Un tour de la fausse boucle supervisée.
+    #[derive(Debug, Clone, Copy)]
+    enum Tour {
+        Panique,
+        Fermee,
+        Erreur,
+        /// Le logiciel se ferme pendant ce tour.
+        Quitter,
+    }
+
+    /// Une fausse boucle de fenêtres pour la supervision : chaque tour suit le script, à
+    /// l'heure dite (en secondes depuis le départ), sans rien ouvrir.
+    struct Supervisee {
+        script: std::collections::VecDeque<(u64, Tour)>,
+        horloge: Arc<std::sync::atomic::AtomicU64>,
+        tours: usize,
+        evenements: Vec<Evenement>,
+        attentes: usize,
+        /// `attendre_un_clic` rend faux (le logiciel se ferme pendant la pause).
+        ferme_en_pause: bool,
+        fini: bool,
+    }
+
+    impl Supervisee {
+        fn new(script: &[(u64, Tour)]) -> Supervisee {
+            Supervisee {
+                script: script.iter().copied().collect(),
+                horloge: Arc::default(),
+                tours: 0,
+                evenements: Vec::new(),
+                attentes: 0,
+                ferme_en_pause: false,
+                fini: false,
+            }
+        }
+
+        fn superviser(&mut self) -> Fin {
+            let depart = Instant::now();
+            let h = self.horloge.clone();
+            superviser_les_fenetres(self, move || {
+                depart + Duration::from_secs(h.load(Ordering::Acquire))
+            })
+        }
+
+        fn reprises(&self) -> Vec<Reprise> {
+            self.evenements.iter().map(|e| e.reprise).collect()
+        }
+    }
+
+    impl Supervise for Supervisee {
+        fn boucle(&mut self) -> Result<(), String> {
+            self.tours += 1;
+            let (seconde, tour) = self.script.pop_front().expect("script épuisé");
+            self.horloge.store(seconde, Ordering::Release);
+            match tour {
+                Tour::Panique => panic!("contexte OpenGL perdu (essai)"),
+                Tour::Fermee => Ok(()),
+                Tour::Erreur => Err("OpenGL indisponible (essai)".into()),
+                Tour::Quitter => {
+                    self.fini = true;
+                    Ok(())
+                }
+            }
+        }
+
+        fn perdues(&mut self, e: &Evenement) {
+            self.evenements.push(e.clone());
+        }
+
+        fn attendre_un_clic(&mut self) -> bool {
+            self.attentes += 1;
+            !self.ferme_en_pause
+        }
+
+        fn quitter(&self) -> bool {
+            self.fini
+        }
+    }
+
+    /// La boucle d'un logiciel perdue (panique) est recréée tout de suite, trois fois en une
+    /// minute ; la quatrième perte fait une rafale : le menu de Windows pour ce clic, puis la
+    /// supervision attend le clic suivant et la recrée (jamais bloquée jusqu'au prochain
+    /// lancement). La cause de la panique est dans le journal.
+    #[test]
+    fn supervision_rafale_puis_reprise_au_clic_suivant() {
+        let mut s = Supervisee::new(&[
+            (0, Tour::Panique),
+            (1, Tour::Panique),
+            (2, Tour::Panique),
+            (3, Tour::Panique),
+            // Recréée au clic suivant : elle tient, puis le logiciel se ferme.
+            (10, Tour::Quitter),
+        ]);
+        assert_eq!(s.superviser(), Fin::Quitter);
+        assert_eq!(s.tours, 5);
+        assert_eq!(
+            s.reprises(),
+            vec![
+                Reprise::Maintenant,
+                Reprise::Maintenant,
+                Reprise::Maintenant,
+                Reprise::AuClicSuivant
+            ]
+        );
+        assert_eq!(s.attentes, 1);
+        let e = &s.evenements[3];
+        assert_eq!(e.nombre, RECREATIONS_EN_RAFALE + 1);
+        assert!(
+            matches!(&e.perte, Perte::Panique(c) if c.contains("contexte OpenGL perdu (essai)")),
+            "{e:?}"
+        );
+        let phrase = e.phrase();
+        assert!(phrase.contains("contexte OpenGL perdu (essai)"), "{phrase}");
+        assert!(phrase.contains("4 fois en 60 s"), "{phrase}");
+        assert!(phrase.contains("recréées au clic suivant"), "{phrase}");
+        assert!(s.evenements[0].phrase().ends_with(": recréées."));
+    }
+
+    /// Après une rafale, une nouvelle perte dans la même minute redonne le menu de Windows et
+    /// attend encore le clic suivant (jamais de boucle folle) ; une minute plus tard, les
+    /// vieilles pertes sont oubliées et la boucle est de nouveau recréée tout de suite.
+    #[test]
+    fn supervision_reprise_apres_rafale() {
+        let mut s = Supervisee::new(&[
+            (0, Tour::Panique),
+            (0, Tour::Panique),
+            (0, Tour::Panique),
+            (0, Tour::Panique),
+            (5, Tour::Panique),
+            (120, Tour::Panique),
+            (121, Tour::Quitter),
+        ]);
+        assert_eq!(s.superviser(), Fin::Quitter);
+        assert_eq!(
+            s.reprises(),
+            vec![
+                Reprise::Maintenant,
+                Reprise::Maintenant,
+                Reprise::Maintenant,
+                Reprise::AuClicSuivant,
+                Reprise::AuClicSuivant,
+                Reprise::Maintenant,
+            ]
+        );
+        assert_eq!(s.attentes, 2);
+        assert_eq!(s.evenements[5].nombre, 1);
+    }
+
+    /// Des pertes espacées de plus d'une minute ne font jamais de rafale : toutes recréées
+    /// tout de suite. Une fermeture par Windows compte comme une perte.
+    #[test]
+    fn supervision_pertes_espacees_toujours_recreees() {
+        let mut script: Vec<(u64, Tour)> = (0..10)
+            .map(|i| {
+                let tour = if i % 2 == 0 { Tour::Panique } else { Tour::Fermee };
+                (i * 61, tour)
+            })
+            .collect();
+        script.push((1_000, Tour::Quitter));
+        let mut s = Supervisee::new(&script);
+        assert_eq!(s.superviser(), Fin::Quitter);
+        assert_eq!(s.tours, 11);
+        assert_eq!(s.reprises(), vec![Reprise::Maintenant; 10]);
+        assert_eq!(s.attentes, 0);
+        assert_eq!(s.evenements[1].perte, Perte::Fermee);
+        assert!(s.evenements[1].phrase().contains("fermées par Windows"));
+    }
+
+    /// Un échec au tout premier tour (ni OpenGL ni fenêtre) : le menu de Windows pour de bon.
+    /// Un échec après un premier tour est passager : le menu de Windows pour ce clic, un
+    /// nouvel essai au clic suivant, sans compter comme une perte.
+    #[test]
+    fn supervision_echec_premier_tour_ou_passager() {
+        let mut s = Supervisee::new(&[(0, Tour::Erreur)]);
+        assert_eq!(
+            s.superviser(),
+            Fin::Impossible("OpenGL indisponible (essai)".into())
+        );
+        assert!(s.evenements.is_empty());
+
+        let mut s = Supervisee::new(&[(0, Tour::Panique), (1, Tour::Erreur), (2, Tour::Quitter)]);
+        assert_eq!(s.superviser(), Fin::Quitter);
+        assert_eq!(s.reprises(), vec![Reprise::Maintenant, Reprise::AuClicSuivant]);
+        assert_eq!(s.evenements[1].nombre, 1, "l'échec ne compte pas");
+        assert_eq!(s.attentes, 1);
+        let phrase = s.evenements[1].phrase();
+        assert!(phrase.contains("OpenGL indisponible (essai)"), "{phrase}");
+        assert!(phrase.contains("nouvel essai au clic suivant"), "{phrase}");
+    }
+
+    /// Le logiciel se ferme : pendant la pause d'une rafale, ou à la fin d'un tour, rien
+    /// n'est recréé.
+    #[test]
+    fn supervision_quitter() {
+        let mut s = Supervisee::new(&[(0, Tour::Panique); 4]);
+        s.ferme_en_pause = true;
+        assert_eq!(s.superviser(), Fin::Quitter);
+        assert_eq!((s.tours, s.attentes), (4, 1));
+
+        let mut s = Supervisee::new(&[(0, Tour::Quitter)]);
+        assert_eq!(s.superviser(), Fin::Quitter);
+        assert!(s.evenements.is_empty());
     }
 
     /// Une panique hors de la boucle arrête le fil des fenêtres : la garde fait passer l'icône
