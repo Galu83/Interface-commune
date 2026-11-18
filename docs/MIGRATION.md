@@ -226,6 +226,45 @@ contournements :
 - Retirer ensuite son ancien code de Paramètres ; l'icône, le volet et le petit menu de la
   bibliothèque (`Logiciel`) restent un choix pour plus tard.
 
+### Passer au volet commun (branche `volet-powerpeek`)
+
+Ce qui manquait au volet commun pour remplacer celui de PowerPeek est ajouté, sans rien
+changer pour KVMSoft ni Vocalis (tout est facultatif, avec la valeur d'avant par défaut) :
+
+- **Le contexte egui pour les briques** : `Logiciel::briques_avec_contexte(ctx)` (par défaut,
+  elle rend `briques()`). PowerPeek y charge les images de ses appareils
+  (`ImageAppareil::texture`) et les garde comme aujourd'hui. Elle est appelée une fois par
+  image du volet (avant : deux fois, pour la largeur et pour le dessin).
+- **Le placement** : `Logiciel::placement_volet()` rend un `place::PlacementVolet` :
+  `contre_l_icone` (en face de l'icône, du côté opposé à la barre, comme `lbt::popup::place`),
+  `ecart` en points (converti en pixels réels à l'échelle de l'écran : 8 points pour PowerPeek)
+  et `hauteur_max` en points (600 pour PowerPeek ; toujours bornée aussi par la zone de travail
+  de l'écran). Au-delà, l'état et le bas du volet restent en place et **les briques
+  défilent**. Hors fenêtre : `surface::dessiner_borne(ui, p, s, l, Some(hauteur))`.
+- **L'icône par les mécanismes communs** : `zone::FenetresCommunes::lancer(&zone, logiciel,
+  parametres, secours)` lance le fil des fenêtres de la bibliothèque (le même que celui
+  d'`Horloge`, aussi public : `horloge::lancer_le_fil_des_fenetres`). Chaque événement de
+  `zone.evenements()` passe par `communes.geste(&e)` (clics par icône, `Demandes`, `Liens`,
+  second clic qui referme, anti-rebond, double-clic vers les Paramètres) ; il rend
+  `SuiteDuGeste::Secours { icone, point }` (menu gris : `zone.menu_windows`) ou
+  `Notification(icone)`. `secours` est appelé sur le fil des fenêtres : poster un message à
+  `zone.fenetre()`, le menu s'ouvre sur le fil de la zone. À « Quitter » :
+  `communes.fermer()` (5 s au plus). La logique seule, sans thread : `zone::Aiguilleur` ;
+  sans zone : `fenetres::envoyer_le_clic`.
+- **La place des Paramètres retenue 1 s après un déplacement**, et jamais celle d'une fenêtre
+  réduite ou agrandie : dans les Paramètres communs (`place::SuiviDePlace`), pour tous les
+  logiciels. PowerPeek peut retirer `FenetreParametres` (son `REMEMBER_AFTER`) et ouvrir les
+  Paramètres communs (`parametres::fenetre::ouvrir_dans`, ou `FenetresCommunes`).
+
+Ce que PowerPeek retire ou change de son côté : sa fenêtre du volet (`gui::host::WindowHost`,
+`MenuWindow`, `MenuUi::show`, `lbt::tray::motion` pour le volet), son placement
+(`lbt::popup::place`, `MenuRequest`) et son propre fil des fenêtres ; `volet_commun::Volet`
+devient son `Logiciel` complet (état, `briques_avec_contexte` avec ses textures,
+`placement_volet`, `actions_menu`, `quitter`, `noter`, ses `Reglages`) ; sa boucle de messages
+donne les gestes de sa `Zone` à `FenetresCommunes::geste` et appelle
+`FenetresCommunes::redessiner` quand un appareil change. L'animation du volet devient celle de
+la bibliothèque (fondu de 83 ms, sans glissement).
+
 ## La sonde des fils (branche `kvmsoft-sonde`, pour tous)
 
 Une icône qui ne réagit plus alors que la fenêtre cachée répond encore, c'est un fil pris. La

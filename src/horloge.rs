@@ -55,7 +55,7 @@ use windows::core::{HSTRING, PCWSTR};
 
 use crate::Logiciel;
 use crate::clics::{Clics, Geste, evenement};
-use crate::fenetres::{self, Clic, Demande, Demandes, Liens, Ouvreur, Reception, decider_le_clic};
+use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, Ouvreur, Reception};
 use crate::menu::{self, Choix};
 use crate::place::Rect;
 use crate::systeme::{choix_windows, hwnd, reveiller, temps_double_clic};
@@ -552,11 +552,12 @@ impl Horloge {
         // La sonde des fils écrit dans le journal du logiciel (clics, boucles imbriquées, blocages).
         let pour_la_sonde = logiciel.clone();
         crate::sonde::brancher_le_journal(move |ligne| pour_la_sonde.noter(ligne));
-        let (l2, liens2) = (logiciel.clone(), poste.liens.clone());
-        let fil = std::thread::Builder::new()
-            .name("fenêtres".into())
-            .spawn(move || fil_des_fenetres(l2, liens2, reception))
-            .map_err(|e| e.to_string())?;
+        let fil = lancer_le_fil_des_fenetres(
+            logiciel.clone(),
+            poste.liens.clone(),
+            reception,
+            secours_de_l_horloge(poste.liens.clone()),
+        )?;
         let pour_noter = logiciel.clone();
         let r = boucle(&nom, logiciel, poste.clone(), messages, arguments);
         poste.liens.tout_fermer();
@@ -573,7 +574,7 @@ pub const ATTENTE_FERMETURE: Duration = Duration::from_secs(5);
 
 /// Attend la fin d'un fil au plus `delai` ; rend faux (et le laisse partir seul) s'il n'a pas
 /// fini : le programme se ferme quand même, rien ne le retient.
-fn attendre_la_fin(fil: std::thread::JoinHandle<()>, delai: Duration) -> bool {
+pub(crate) fn attendre_la_fin(fil: std::thread::JoinHandle<()>, delai: Duration) -> bool {
     let fin = Instant::now() + delai;
     while !fil.is_finished() {
         if Instant::now() >= fin {
@@ -588,11 +589,16 @@ fn attendre_la_fin(fil: std::thread::JoinHandle<()>, delai: Duration) -> bool {
 // ---------------------------------------------------------------------------------------
 // Le fil des fenêtres
 
+/// Le menu de secours de Windows, demandé par le fil des fenêtres (voir
+/// [`lancer_le_fil_des_fenetres`]).
+pub type Secours = Box<dyn FnMut(&Demande) + Send>;
+
 /// Les vraies fenêtres (egui).
 struct Fenetres {
     logiciel: Arc<dyn Logiciel>,
     liens: Arc<Liens>,
     polices: egui::FontDefinitions,
+    secours: Secours,
 }
 
 impl Ouvreur for Fenetres {
@@ -620,13 +626,25 @@ impl Ouvreur for Fenetres {
     }
 
     fn secours(&mut self, d: &Demande) {
+        (self.secours)(d);
+    }
+
+    fn noter(&mut self, ligne: String) {
+        self.logiciel.noter(ligne);
+    }
+}
+
+/// Le menu de secours de l'icône unique : demandé à la fenêtre cachée du fil principal, qui
+/// l'ouvre au point du clic.
+fn secours_de_l_horloge(liens: Arc<Liens>) -> Secours {
+    Box::new(move |d: &Demande| {
         let point = match d {
             Demande::Volet { icone, .. } => [icone[0], icone[1]],
             Demande::Menu { ancre, .. } => *ancre,
             _ => return,
         };
         let lp = (i64::from(point[0]) & 0xFFFF) | ((i64::from(point[1]) & 0xFFFF) << 16);
-        let h = self.liens.fenetre.load(Ordering::Acquire);
+        let h = liens.fenetre.load(Ordering::Acquire);
         if h != 0 {
             // SAFETY: comme `Poste::envoyer`.
             let _ = unsafe {
@@ -638,14 +656,34 @@ impl Ouvreur for Fenetres {
                 )
             };
         }
-    }
-
-    fn noter(&mut self, ligne: String) {
-        self.logiciel.noter(ligne);
-    }
+    })
 }
 
-fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: Reception) {
+/// Lance **le fil des fenêtres de la bibliothèque** : la fenêtre du volet et du petit menu
+/// préparée au repos (`volet::veiller`), les Paramètres et les autres fenêtres dans sa
+/// boucle, une fenêtre perdue recréée, la garde du fil ; jusqu'à `Demande::Quitter` (ou
+/// [`Liens::tout_fermer`]). Les demandes arrivent par `reception` (l'autre bout de
+/// [`fenetres::canal`]). C'est le fil que [`Horloge::lancer`] lance ; un logiciel qui garde
+/// sa propre boucle de messages (plusieurs icônes, `zone`) le lance aussi, par
+/// `zone::FenetresCommunes`.
+///
+/// `secours` : le menu gris de Windows à la place du volet ou du petit menu de cette demande
+/// (les fenêtres modernes sont impossibles, ou perdues en rafale). Il est appelé **sur le fil
+/// des fenêtres** : il doit seulement transmettre la demande au fil de l'icône (un message
+/// posté à sa fenêtre), jamais ouvrir le menu lui-même.
+pub fn lancer_le_fil_des_fenetres(
+    logiciel: Arc<dyn Logiciel>,
+    liens: Arc<Liens>,
+    reception: Reception,
+    secours: Secours,
+) -> Result<std::thread::JoinHandle<()>, String> {
+    std::thread::Builder::new()
+        .name("fenêtres".into())
+        .spawn(move || fil_des_fenetres(logiciel, liens, reception, secours))
+        .map_err(|e| e.to_string())
+}
+
+fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: Reception, secours: Secours) {
     // Le lieu d'une panique est gardé pour le journal (la boucle des fenêtres l'attrape et
     // recrée la fenêtre) ; si le fil s'arrête quand même, l'icône passe au menu de secours.
     crate::sonde::retenir_les_paniques();
@@ -669,6 +707,7 @@ fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: R
                 logiciel,
                 liens: liens.clone(),
                 polices,
+                secours,
             };
             fenetres::boucle_des_fenetres(&liens, &mut f, &reception);
         }
@@ -679,6 +718,7 @@ fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: R
                 logiciel,
                 liens: liens.clone(),
                 polices: egui::FontDefinitions::empty(),
+                secours,
             };
             // Sans polices : seul le menu de secours (fil principal).
             while let Some(d) = reception.recevoir() {
@@ -871,36 +911,24 @@ impl Principal {
     /// Ouvre le volet ou le petit menu ; un nouveau clic quand il est ouvert le referme.
     fn ouvrir(&mut self, surface: Surface, ancre: Option<[i32; 2]>, clic: Instant) {
         let icone = self.rect_icone();
-        let liens = self.liens();
-        if liens.egui_impossible.load(Ordering::Acquire) {
-            let [x, y] = ancre.unwrap_or([icone[0], icone[1]]);
-            self.menu_de_secours(x, y);
-            return;
-        }
+        let deja_impossible = self.liens().egui_impossible.load(Ordering::Acquire);
         // Les Paramètres ouverts ne bloquent pas le clic : le volet ou le petit menu s'ouvre
         // devant eux, qui restent ouverts derrière.
-        match decider_le_clic(liens.ouvert(), surface, liens.juste_fermee(surface)) {
-            Clic::Fermer => liens.fermer_la_fenetre(),
-            Clic::Ignorer => {}
-            Clic::Ouvrir => {
-                let d = match ancre {
-                    None => Demande::Volet { icone, clic },
-                    Some(ancre) => Demande::Menu { icone, ancre, clic },
-                };
-                if self.poste.demandes.send(d).is_err() {
+        match fenetres::envoyer_le_clic(self.liens(), &self.poste.demandes, surface, icone, ancre, clic) {
+            Aiguillage::Rien => {}
+            // La fenêtre prête se montre tout de suite, encore invisible.
+            Aiguillage::Envoye => reveiller(self.liens().surface_prete.load(Ordering::Acquire)),
+            Aiguillage::Secours => {
+                if !deja_impossible {
                     // Le fil des fenêtres n'existe plus : le menu de secours, pour que le
                     // clic ouvre quand même quelque chose.
-                    liens.egui_impossible.store(true, Ordering::Release);
                     self.logiciel.noter(
                         "Clic sur l'icône : le fil des fenêtres ne répond plus ; menu de secours de Windows."
                             .into(),
                     );
-                    let [x, y] = ancre.unwrap_or([icone[0], icone[1]]);
-                    self.menu_de_secours(x, y);
-                    return;
                 }
-                // La fenêtre prête se montre tout de suite, encore invisible.
-                reveiller(liens.surface_prete.load(Ordering::Acquire));
+                let [x, y] = ancre.unwrap_or([icone[0], icone[1]]);
+                self.menu_de_secours(x, y);
             }
         }
     }

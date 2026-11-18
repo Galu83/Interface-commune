@@ -107,8 +107,151 @@ pub fn placer_au_point(
     [vers_i32(x), vers_i32(y), vers_i32(largeur), vers_i32(hauteur)]
 }
 
+/// La place (gauche, haut, largeur, hauteur) d'une fenêtre de `taille` ouverte **contre
+/// l'icône** `icone`, dans la zone de travail `travail`, à `marge` pixels de l'icône et des
+/// bords : en face de l'icône, du côté opposé à la barre des tâches (au-dessus quand elle est
+/// en bas, à droite quand elle est à gauche…). Une icône dans la zone de travail (barre
+/// masquée, icônes cachées sous la flèche) : au-dessus d'elle s'il y a la place, sinon
+/// dessous. Toujours en entier dans la zone ; une fenêtre trop grande est rapetissée.
+pub fn placer_contre_l_icone(icone: Rect, taille: [i32; 2], travail: Rect, marge: i32) -> Rect {
+    let z = travail.map(i64::from);
+    let (zg, zh) = (z[0], z[1]);
+    let (zd, zb) = (z[2].max(zg + 1), z[3].max(zh + 1));
+    let m = i64::from(marge.clamp(0, 48));
+    let largeur = i64::from(taille[0]).clamp(1, (zd - zg - 2 * m).max(1));
+    let hauteur = i64::from(taille[1]).clamp(1, (zb - zh - 2 * m).max(1));
+    let [ig, ih, id, ib] = icone.map(i64::from);
+    let (cx, cy) = ((ig + id).div_euclid(2), (ih + ib).div_euclid(2));
+    let (x, y) = if cy >= zb {
+        // La barre en bas : au-dessus de l'icône, centré sur elle.
+        (cx - largeur / 2, ih - m - hauteur)
+    } else if cy < zh {
+        // En haut : dessous.
+        (cx - largeur / 2, ib + m)
+    } else if cx < zg {
+        // À gauche : à sa droite, le bas au niveau du bas de l'icône.
+        (id + m, ib - hauteur)
+    } else if cx >= zd {
+        // À droite : à sa gauche.
+        (ig - m - largeur, ib - hauteur)
+    } else if ih - m - hauteur >= zh + m {
+        (cx - largeur / 2, ih - m - hauteur)
+    } else {
+        (cx - largeur / 2, ib + m)
+    };
+    let x = x.clamp(zg + m, (zd - m - largeur).max(zg + m));
+    let y = y.clamp(zh + m, (zb - m - hauteur).max(zh + m));
+    let vers_i32 = |v: i64| i32::try_from(v).unwrap_or(if v < 0 { i32::MIN } else { i32::MAX });
+    [vers_i32(x), vers_i32(y), vers_i32(largeur), vers_i32(hauteur)]
+}
+
+/// L'écart du volet avec la barre et les bords quand le logiciel n'en choisit pas (pixels,
+/// quelle que soit l'échelle de l'écran : le comportement d'avant [`PlacementVolet`]).
+pub const ECART_VOLET: i32 = 12;
+
+/// Où et comment le volet se place (`Logiciel::placement_volet`). `Default` : comme les volets
+/// de Windows 11, collé à la barre des tâches en face de l'icône, à [`ECART_VOLET`] pixels,
+/// aussi haut que son contenu. Pour changer un seul point :
+/// `PlacementVolet { hauteur_max: Some(600.0), ..Default::default() }`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PlacementVolet {
+    /// Contre l'icône ([`placer_contre_l_icone`]) plutôt que contre la barre ([`placer`]).
+    pub contre_l_icone: bool,
+    /// L'écart avec l'icône (ou la barre) et les bords, en points : converti en pixels réels à
+    /// l'échelle de l'écran du volet. `None` : [`ECART_VOLET`] pixels.
+    pub ecart: Option<f32>,
+    /// La hauteur maximale du volet, en points. Au-delà, l'état et le bas du volet restent en
+    /// place et les briques défilent. Le volet ne dépasse jamais non plus la zone de travail de
+    /// son écran. `None` : aussi haut que son contenu.
+    pub hauteur_max: Option<f32>,
+}
+
+/// Des pixels par point utilisables (une échelle absurde vaut 1).
+fn echelle_sure(ppp: f32) -> f32 {
+    if ppp.is_finite() && ppp > 0.0 { ppp } else { 1.0 }
+}
+
+impl PlacementVolet {
+    /// L'écart en pixels réels, à l'échelle `ppp` (pixels par point) de l'écran.
+    pub fn ecart_px(&self, ppp: f32) -> i32 {
+        match self.ecart {
+            Some(e) if e.is_finite() => (e.max(0.0) * echelle_sure(ppp)).round().min(48.0) as i32,
+            _ => ECART_VOLET,
+        }
+    }
+
+    /// La place du volet de `taille` (pixels), ouvert depuis `icone`, sur l'écran `ecran` dont
+    /// la zone de travail est `travail`, à l'échelle `ppp`.
+    pub fn placer(&self, icone: Rect, taille: [i32; 2], ecran: Rect, travail: Rect, ppp: f32) -> Rect {
+        let m = self.ecart_px(ppp);
+        if self.contre_l_icone {
+            placer_contre_l_icone(icone, taille, travail, m)
+        } else {
+            placer(icone, taille, ecran, travail, m)
+        }
+    }
+
+    /// La hauteur que le volet ne dépasse pas (points), sur un écran dont la zone de travail
+    /// est `travail` (pixels), à l'échelle `ppp` : la hauteur maximale voulue, bornée par la
+    /// zone de travail moins les écarts. `None` sans hauteur maximale.
+    pub fn hauteur_max_points(&self, travail: Rect, ppp: f32) -> Option<f32> {
+        let voulue = self.hauteur_max.filter(|h| h.is_finite())?;
+        let ppp = echelle_sure(ppp);
+        let zone = (i64::from(travail[3]) - i64::from(travail[1]) - 2 * i64::from(self.ecart_px(ppp))) as f32;
+        Some(voulue.min(zone / ppp).max(1.0))
+    }
+}
+
 /// Une place de fenêtre retenue : gauche, haut, largeur, hauteur, en pixels.
 pub type Place = [i32; 4];
+
+/// La place d'une fenêtre est retenue ce temps après son dernier mouvement (et à sa
+/// fermeture) : un déplacement à la souris n'écrit pas les réglages à chaque pixel, et un arrêt
+/// brutal du logiciel ne perd pas la dernière place.
+pub const RETENIR_APRES: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Ce qu'il faut faire de la place d'une fenêtre à cette image ([`SuiviDePlace`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Retenue {
+    /// Rien n'a bougé depuis la dernière place retenue.
+    Rien,
+    /// La fenêtre a bougé : revenir dans ce temps (une image de plus), la place n'est pas
+    /// encore retenue.
+    Attendre(std::time::Duration),
+    /// Elle ne bouge plus depuis [`RETENIR_APRES`] : retenir sa place maintenant.
+    Retenir,
+}
+
+/// Le suivi de la place d'une fenêtre ouverte, image par image, pour la retenir
+/// [`RETENIR_APRES`] après son dernier mouvement. Du calcul pur, testé partout.
+#[derive(Debug, Clone, Default)]
+pub struct SuiviDePlace {
+    vue: Option<Place>,
+    bougee: Option<std::time::Instant>,
+}
+
+impl SuiviDePlace {
+    /// La place de la fenêtre à cette image (`None` : inconnue, ou fenêtre pas encore montrée).
+    /// La première place vue ne compte pas comme un mouvement.
+    pub fn voir(&mut self, place: Option<Place>, maintenant: std::time::Instant) -> Retenue {
+        if place.is_some() && place != self.vue {
+            if self.vue.is_some() {
+                self.bougee = Some(maintenant);
+            }
+            self.vue = place;
+        }
+        let Some(depuis) = self.bougee else {
+            return Retenue::Rien;
+        };
+        let ecoule = maintenant.saturating_duration_since(depuis);
+        if ecoule >= RETENIR_APRES {
+            self.bougee = None;
+            Retenue::Retenir
+        } else {
+            Retenue::Attendre(RETENIR_APRES - ecoule)
+        }
+    }
+}
 
 /// La place des Paramètres à retenir d'une ouverture à l'autre ; `None` si elle n'a pas de
 /// sens (fenêtre réduite : Windows la range très loin de l'écran ; taille minuscule).
@@ -499,5 +642,148 @@ mod tests {
         assert_eq!(centrer([200, 100], [0, 0, 1000, 500]), [400, 200]);
         assert_eq!(centrer([200, 100], [-1920, 0, -920, 500]), [-1520, 200]);
         assert_eq!(centrer([3000, 900], [0, 0, 1000, 500]), [0, 0]);
+    }
+
+    /// Contre l'icône : au-dessus d'elle quand la barre est en bas, centré sur elle ; à sa
+    /// droite quand la barre est à gauche ; au-dessus ou dessous une icône cachée sous la
+    /// flèche (dans la zone de travail) ; toujours en entier dans la zone.
+    #[test]
+    fn contre_l_icone() {
+        // Barre en bas (zone de travail jusqu'à 1032), icône à droite.
+        let travail = [0, 0, 1920, 1032];
+        let icone = [1700, 1040, 1724, 1072];
+        assert_eq!(
+            placer_contre_l_icone(icone, [360, 400], travail, 8),
+            [1712 - 180, 1032 - 8 - 400, 360, 400]
+        );
+        // Contre le bord droit : ramené dans la zone.
+        let r = placer_contre_l_icone([1900, 1040, 1916, 1072], [360, 400], travail, 8);
+        assert_eq!(r[0], 1920 - 8 - 360);
+        // Barre à gauche (zone de travail à partir de 48) : à droite de l'icône, bas aligné.
+        let gauche = [48, 0, 1920, 1080];
+        assert_eq!(
+            placer_contre_l_icone([8, 900, 40, 932], [360, 400], gauche, 8),
+            [48 + 8, 932 - 400, 360, 400]
+        );
+        // Barre à droite : à gauche de l'icône.
+        let droite = [0, 0, 1872, 1080];
+        assert_eq!(
+            placer_contre_l_icone([1880, 900, 1912, 932], [360, 400], droite, 8),
+            [1872 - 8 - 360, 932 - 400, 360, 400]
+        );
+        // Barre en haut : dessous.
+        let haut = [0, 48, 1920, 1080];
+        assert_eq!(
+            placer_contre_l_icone([1700, 8, 1724, 40], [360, 400], haut, 8)[1],
+            48 + 8
+        );
+        // Icône dans la zone de travail (sous la flèche) : au-dessus s'il y a la place…
+        assert_eq!(
+            placer_contre_l_icone([1500, 900, 1524, 924], [360, 400], travail, 8)[1],
+            900 - 8 - 400
+        );
+        // … sinon dessous.
+        assert_eq!(
+            placer_contre_l_icone([1500, 100, 1524, 124], [360, 400], travail, 8)[1],
+            132
+        );
+        // Plus haut que la zone : rapetissé.
+        assert_eq!(
+            placer_contre_l_icone(icone, [360, 5000], travail, 8)[3],
+            1032 - 16
+        );
+    }
+
+    /// Le placement par défaut est celui d'avant les options (collé à la barre, 12 pixels) ;
+    /// l'écart choisi est en points, converti à l'échelle de l'écran.
+    #[test]
+    fn placement_du_volet() {
+        let travail = [0, 0, 2560, 1380];
+        let icone = [2200, 1392, 2232, 1428];
+        let defaut = PlacementVolet::default();
+        assert_eq!(defaut.ecart_px(1.5), ECART_VOLET);
+        assert_eq!(
+            defaut.placer(icone, [480, 600], ECRAN, travail, 1.5),
+            placer(icone, [480, 600], ECRAN, travail, 12)
+        );
+        assert_eq!(defaut.hauteur_max_points(travail, 1.5), None);
+        let pp = PlacementVolet {
+            contre_l_icone: true,
+            ecart: Some(8.0),
+            hauteur_max: Some(600.0),
+        };
+        assert_eq!(pp.ecart_px(1.5), 12);
+        assert_eq!(pp.ecart_px(2.0), 16);
+        assert_eq!(
+            pp.placer(icone, [480, 600], ECRAN, travail, 2.0),
+            placer_contre_l_icone(icone, [480, 600], travail, 16)
+        );
+        // 600 points tiennent sur un écran de 1380 pixels à l'échelle 1,5 (≈ 900 points)…
+        assert_eq!(pp.hauteur_max_points(travail, 1.5), Some(600.0));
+        // … pas sur un petit écran : bornés à la zone moins les écarts.
+        let petit = [0, 0, 1366, 728];
+        assert_eq!(pp.hauteur_max_points(petit, 1.5), Some((728.0 - 24.0) / 1.5));
+        // Valeurs absurdes : rien ne casse.
+        let absurde = PlacementVolet {
+            contre_l_icone: false,
+            ecart: Some(f32::NAN),
+            hauteur_max: Some(f32::INFINITY),
+        };
+        assert_eq!(absurde.ecart_px(f32::NAN), ECART_VOLET);
+        assert_eq!(absurde.hauteur_max_points(travail, 0.0), None);
+        let enorme = PlacementVolet {
+            ecart: Some(1e9),
+            hauteur_max: Some(-5.0),
+            ..Default::default()
+        };
+        assert_eq!(enorme.ecart_px(1.0), 48);
+        assert_eq!(enorme.hauteur_max_points(travail, 1.0), Some(1.0));
+    }
+
+    /// La place est retenue 1 s après le dernier mouvement, pas pendant ; la première place vue
+    /// n'est pas un mouvement ; une place inconnue ne change rien.
+    #[test]
+    fn place_retenue_apres_un_deplacement() {
+        let t0 = std::time::Instant::now();
+        let ms = |n: u64| t0 + std::time::Duration::from_millis(n);
+        let mut s = SuiviDePlace::default();
+        assert_eq!(s.voir(None, t0), Retenue::Rien);
+        assert_eq!(s.voir(Some([10, 10, 900, 600]), ms(10)), Retenue::Rien);
+        assert_eq!(s.voir(Some([10, 10, 900, 600]), ms(500)), Retenue::Rien);
+        // Elle bouge, puis encore : l'attente repart du dernier mouvement.
+        assert_eq!(
+            s.voir(Some([20, 10, 900, 600]), ms(600)),
+            Retenue::Attendre(RETENIR_APRES)
+        );
+        assert_eq!(
+            s.voir(Some([40, 12, 900, 600]), ms(900)),
+            Retenue::Attendre(RETENIR_APRES)
+        );
+        assert_eq!(
+            s.voir(None, ms(1_400)),
+            Retenue::Attendre(std::time::Duration::from_millis(500))
+        );
+        assert_eq!(s.voir(Some([40, 12, 900, 600]), ms(1_900)), Retenue::Retenir);
+        // Retenue une seule fois.
+        assert_eq!(s.voir(Some([40, 12, 900, 600]), ms(3_000)), Retenue::Rien);
+    }
+
+    proptest! {
+        /// Contre l'icône : toujours en entier dans la zone de travail (s'il y tient), quelles
+        /// que soient l'icône et la taille.
+        #[test]
+        fn contre_l_icone_toujours_dans_la_zone(ig in -5_000..5_000i32, ih in -5_000..5_000i32,
+                                                l in 1..3_000i32, h in 1..3_000i32, m in 0..48i32) {
+            let travail = [0, 0, 1920, 1032];
+            let r = placer_contre_l_icone([ig, ih, ig + 24, ih + 24], [l, h], travail, m);
+            prop_assert!(r[0] >= m && r[1] >= m);
+            prop_assert!(r[0] + r[2] <= 1920 - m && r[1] + r[3] <= 1032 - m);
+        }
+
+        #[test]
+        fn contre_l_icone_valeurs_absurdes(icone in any::<[i32; 4]>(), taille in any::<[i32; 2]>(),
+                                           travail in any::<[i32; 4]>(), m in any::<i32>()) {
+            let _ = placer_contre_l_icone(icone, taille, travail, m);
+        }
     }
 }

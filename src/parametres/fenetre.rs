@@ -1,7 +1,9 @@
 //! La fenêtre des Paramètres (sous Windows) : « Paramètres de <logiciel> », coins arrondis et
 //! barre de titre sombre par Windows, aucune animation à nous (Windows anime déjà les
 //! fenêtres), taille et place retenues d'une ouverture à l'autre et toujours en entier sur un
-//! écran, taille minimale.
+//! écran, taille minimale. La place est retenue à la fermeture, et aussi 1 s après chaque
+//! déplacement ([`crate::place::SuiviDePlace`]) : un arrêt brutal ne la perd pas. Celle d'une
+//! fenêtre réduite ou agrandie ne l'est jamais (sa place d'avant reste retenue).
 //!
 //! Trois façons de l'ouvrir :
 //! - avec l'icône de la bibliothèque (`horloge`) : dans sa boucle, à côté du volet
@@ -20,7 +22,7 @@ use super::{CLE_FENETRE, Parametres, TAILLE, TAILLE_MIN};
 use crate::apparence::{Apparence, couleur};
 use crate::autres_fenetres::{AutresFenetres, Cadre, Contenu, Ouverture};
 use crate::fenetres::Liens;
-use crate::place::{Place, garder_visible, place_valable};
+use crate::place::{Place, Retenue, SuiviDePlace, garder_visible, place_valable};
 use crate::systeme::{self, hwnd_de};
 use crate::{Logiciel, Reglages};
 
@@ -72,6 +74,10 @@ pub struct ContenuParametres {
     parametres: Parametres,
     /// Le thème de l'icône de la fenêtre.
     sombre: Option<bool>,
+    /// Les déplacements de la fenêtre, pour retenir sa place 1 s après le dernier.
+    suivi: SuiviDePlace,
+    /// Réduite ou agrandie à la dernière image : sa place d'avant reste retenue.
+    hors_place: bool,
 }
 
 impl ContenuParametres {
@@ -82,6 +88,8 @@ impl ContenuParametres {
             voulue,
             parametres,
             sombre: None,
+            suivi: SuiviDePlace::default(),
+            hors_place: false,
         }
     }
 }
@@ -95,6 +103,7 @@ impl Contenu for ContenuParametres {
             ctx.send_viewport_cmd(ViewportCommand::Icon(Some(Arc::new(icone))));
         }
         self.sombre = Some(p.sombre);
+        self.suivre_la_place(&ctx, cadre);
         if let Some(page) = self.voulue.lock().ok().and_then(|mut v| v.take()) {
             self.parametres.aller_a(&page);
         }
@@ -109,8 +118,36 @@ impl Contenu for ContenuParametres {
     }
 
     fn fermee(&mut self, place: Option<Place>) {
-        if let Some(p) = place {
+        if let Some(p) = place.filter(|_| !self.hors_place) {
             self.reglages.retenir_place(p);
+        }
+    }
+}
+
+impl ContenuParametres {
+    /// Retient la place des Paramètres 1 s après leur dernier déplacement (et jamais celle
+    /// d'une fenêtre réduite ou agrandie).
+    fn suivre_la_place(&mut self, ctx: &egui::Context, cadre: &Cadre<'_>) {
+        let (reduite, agrandie) = ctx.input(|i| {
+            let v = i.viewport();
+            (v.minimized.unwrap_or(false), v.maximized.unwrap_or(false))
+        });
+        self.hors_place = reduite || agrandie;
+        if !cadre.montree || self.hors_place {
+            return;
+        }
+        let place = cadre
+            .hwnd
+            .and_then(systeme::rect_fenetre)
+            .and_then(|r| place_valable([r[0], r[1], r[2] - r[0], r[3] - r[1]]));
+        match self.suivi.voir(place, std::time::Instant::now()) {
+            Retenue::Rien => {}
+            Retenue::Attendre(d) => ctx.request_repaint_after(d),
+            Retenue::Retenir => {
+                if let Some(p) = place {
+                    self.reglages.retenir_place(p);
+                }
+            }
         }
     }
 }

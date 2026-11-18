@@ -91,6 +91,61 @@ pub fn decider_le_clic(ouvert: Ouvert, surface: Surface, juste_fermee: bool) -> 
     }
 }
 
+/// Ce qu'est devenu un clic sur une icône ([`envoyer_le_clic`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aiguillage {
+    /// Rien à faire de plus : le clic ferme la surface montrée, ou il est ignoré.
+    Rien,
+    /// La demande est partie au fil des fenêtres : réveiller la fenêtre prête
+    /// ([`Liens::surface_prete`]) pour qu'elle se montre tout de suite.
+    Envoye,
+    /// Les fenêtres modernes sont impossibles (ou le fil des fenêtres ne répond plus) : le
+    /// menu de secours de Windows, au point du clic.
+    Secours,
+}
+
+/// Le clic sur une icône pour `surface` (le volet, ou le petit menu avec son point `ancre`),
+/// par les mécanismes communs : ouvert devant les Paramètres, refermé par un second clic,
+/// ignoré juste après une fermeture ([`decider_le_clic`]), envoyé au fil des fenêtres
+/// ([`Demandes`]). Si le fil des fenêtres ne répond plus, l'icône passe au menu de secours pour
+/// de bon ([`Liens::egui_impossible`]). Le même pour l'icône unique (`horloge`) et pour les
+/// icônes d'une `zone`.
+pub fn envoyer_le_clic(
+    liens: &Liens,
+    demandes: &Demandes,
+    surface: Surface,
+    icone: Rect,
+    ancre: Option<[i32; 2]>,
+    clic: Instant,
+) -> Aiguillage {
+    if liens.egui_impossible.load(Ordering::Acquire) {
+        return Aiguillage::Secours;
+    }
+    match decider_le_clic(liens.ouvert(), surface, liens.juste_fermee(surface)) {
+        Clic::Fermer => {
+            liens.fermer_la_fenetre();
+            Aiguillage::Rien
+        }
+        Clic::Ignorer => Aiguillage::Rien,
+        Clic::Ouvrir => {
+            let d = match (surface, ancre) {
+                (Surface::Menu, Some(ancre)) => Demande::Menu { icone, ancre, clic },
+                (Surface::Menu, None) => Demande::Menu {
+                    icone,
+                    ancre: crate::place::centre_de(icone),
+                    clic,
+                },
+                (Surface::Volet, _) => Demande::Volet { icone, clic },
+            };
+            if demandes.send(d).is_err() {
+                liens.egui_impossible.store(true, Ordering::Release);
+                return Aiguillage::Secours;
+            }
+            Aiguillage::Envoye
+        }
+    }
+}
+
 /// Ce que partagent le fil principal (l'icône), le fil des fenêtres et le logiciel.
 #[derive(Default)]
 pub struct Liens {

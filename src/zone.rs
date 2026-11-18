@@ -23,6 +23,13 @@
 //! Un logiciel qui n'a qu'une icône et laisse la bibliothèque tout faire prend plutôt
 //! `horloge::Horloge`.
 //!
+//! **Le volet, le petit menu et les Paramètres communs** pour ces icônes :
+//! [`FenetresCommunes`] lance le fil des fenêtres de la bibliothèque (le même que celui de
+//! `Horloge`) ; chaque geste lu par [`Zone::evenements`] lui est donné
+//! ([`FenetresCommunes::geste`]) et passe par les mécanismes communs (`fenetres::Demandes`,
+//! `fenetres::Liens`) : clic gauche, le volet ; clic droit, le petit menu ; double-clic, les
+//! Paramètres ; un second clic referme ; rien ne se rouvre juste après une fermeture.
+//!
 //! ```no_run
 //! use interface_commune::zone::{Image, Zone};
 //! let mut zone = Zone::creer("MonLogiciel", "MonLogiciel").map_err(|e| e.to_string())?;
@@ -61,9 +68,16 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{GUID, HSTRING, PCWSTR};
 
-use crate::clics;
-use crate::horloge::Niveau;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
+
+use crate::Logiciel;
+use crate::clics::{self, Geste};
+use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, envoyer_le_clic};
+use crate::horloge::{Niveau, Secours};
 use crate::place::Rect;
+use crate::theme::Surface;
 
 /// Le premier message de rappel des icônes : chaque icône a le sien (`PREMIER_MESSAGE + n`),
 /// ce qui dit sans erreur de quelle icône vient un geste.
@@ -771,6 +785,203 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
     unsafe { DefWindowProcW(h, msg, wp, lp) }
 }
 
+// ---------------------------------------------------------------------------------------
+// Le volet, le petit menu et les Paramètres communs pour les icônes de la zone
+
+/// Ce que le logiciel fait d'un geste sur une de ses icônes, une fois passé par les
+/// mécanismes communs ([`Aiguilleur::recevoir`], [`FenetresCommunes::geste`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SuiteDuGeste {
+    /// Rien : la bibliothèque s'en occupe (volet, petit menu, Paramètres), ou le geste ne
+    /// compte pas (survol, clic du milieu…).
+    Rien,
+    /// Les fenêtres modernes sont impossibles : le menu de secours de Windows
+    /// ([`Zone::menu_windows`]) au point `point` (pixels réels), pour l'icône `icone`.
+    Secours { icone: String, point: [i32; 2] },
+    /// Un clic sur la notification de cette icône : au logiciel de faire ce qu'elle annonçait.
+    Notification(String),
+}
+
+/// L'aiguillage des gestes des icônes d'une zone vers le fil des fenêtres commun, sans
+/// Windows ni fenêtre (testé) : un suivi des clics par icône (`clics::Clics` : double-clic,
+/// Entrée en double…), puis [`fenetres::envoyer_le_clic`]. [`FenetresCommunes`] en tient un.
+pub struct Aiguilleur {
+    liens: Arc<Liens>,
+    demandes: Demandes,
+    clics: BTreeMap<String, clics::Clics>,
+}
+
+impl Aiguilleur {
+    pub fn new(liens: Arc<Liens>, demandes: Demandes) -> Aiguilleur {
+        Aiguilleur {
+            liens,
+            demandes,
+            clics: BTreeMap::new(),
+        }
+    }
+
+    /// Le geste `e`, reçu à `maintenant` ; `double` : le temps d'un double-clic de Windows.
+    pub fn recevoir(&mut self, e: &Evenement, maintenant: Instant, double: Duration) -> SuiteDuGeste {
+        if e.message == Message::Notification {
+            return SuiteDuGeste::Notification(e.icone.clone());
+        }
+        let Some(g) = e.message.geste() else {
+            return SuiteDuGeste::Rien;
+        };
+        if self.clics.len() >= ICONES_MAX && !self.clics.contains_key(&e.icone) {
+            // Des icônes retirées depuis longtemps : leur suivi est oublié.
+            self.clics.clear();
+        }
+        let suivi = self.clics.entry(e.icone.clone()).or_default();
+        let (surface, ancre) = match suivi.recevoir(g, maintenant, double) {
+            Geste::Rien => return SuiteDuGeste::Rien,
+            Geste::Parametres => {
+                // Double-clic : le volet ouvert par le premier clic lit la demande des
+                // Paramètres, se cache, puis leur laisse la place.
+                self.liens.montrer_page(&self.demandes, None);
+                return SuiteDuGeste::Rien;
+            }
+            Geste::Volet => (Surface::Volet, None),
+            Geste::Menu => (Surface::Menu, Some(e.ancre)),
+        };
+        match envoyer_le_clic(&self.liens, &self.demandes, surface, e.rect, ancre, maintenant) {
+            Aiguillage::Rien => SuiteDuGeste::Rien,
+            Aiguillage::Envoye => {
+                // La fenêtre prête se montre tout de suite, encore invisible.
+                crate::systeme::reveiller(self.liens.surface_prete.load(Ordering::Acquire));
+                SuiteDuGeste::Rien
+            }
+            Aiguillage::Secours => SuiteDuGeste::Secours {
+                icone: e.icone.clone(),
+                point: ancre.unwrap_or([e.rect[0], e.rect[1]]),
+            },
+        }
+    }
+}
+
+/// Le volet, le petit menu et les Paramètres de la bibliothèque pour un logiciel qui garde sa
+/// [`Zone`] et sa boucle de messages : le fil des fenêtres commun
+/// (`horloge::lancer_le_fil_des_fenetres`), et l'aiguillage des gestes vers lui
+/// ([`Aiguilleur`]). Le volet est le même quelle que soit l'icône cliquée ; il se place contre
+/// l'icône du geste (`Logiciel::placement_volet`).
+///
+/// ```no_run
+/// # use std::sync::Arc;
+/// # fn essai(logiciel: Arc<dyn interface_commune::Logiciel>) -> Result<(), String> {
+/// use interface_commune::zone::{FenetresCommunes, SuiteDuGeste, Zone};
+/// let mut zone = Zone::creer("MonLogiciel", "MonLogiciel")?;
+/// // Le menu de secours est demandé sur le fil des fenêtres : le transmettre au fil de la
+/// // zone (un message posté à `zone.fenetre()`), qui l'ouvre avec `Zone::menu_windows`.
+/// let mut communes = FenetresCommunes::lancer(&zone, logiciel, None, Box::new(|_demande| {}))?;
+/// // Dans la boucle de messages du logiciel, après DispatchMessageW :
+/// for e in zone.evenements() {
+///     match communes.geste(&e) {
+///         SuiteDuGeste::Rien => {}
+///         SuiteDuGeste::Secours { icone, point } => { /* zone.menu_windows(point, …) */ }
+///         SuiteDuGeste::Notification(icone) => { /* ce que la bulle annonçait */ }
+///     }
+/// }
+/// // « Quitter » : les fenêtres se ferment (5 s au plus), puis la zone.
+/// communes.fermer();
+/// # Ok(()) }
+/// ```
+pub struct FenetresCommunes {
+    aiguilleur: Aiguilleur,
+    liens: Arc<Liens>,
+    demandes: Demandes,
+    logiciel: Arc<dyn Logiciel>,
+    fil: Option<std::thread::JoinHandle<()>>,
+}
+
+impl FenetresCommunes {
+    /// Lance le fil des fenêtres (le volet préparé au repos, caché). `parametres` : les
+    /// Paramètres à ouvrir tout de suite (`--parametres <page>` : `Some(page)`). `secours` :
+    /// voir `horloge::lancer_le_fil_des_fenetres` (appelé sur le fil des fenêtres, il transmet
+    /// seulement la demande au fil de la zone).
+    pub fn lancer(
+        zone: &Zone,
+        logiciel: Arc<dyn Logiciel>,
+        parametres: Option<Option<String>>,
+        secours: Secours,
+    ) -> Result<FenetresCommunes, String> {
+        let (demandes, reception) = fenetres::canal();
+        let liens = Arc::new(Liens::default());
+        liens.fenetre.store(zone.fenetre(), Ordering::Release);
+        if let Some(page) = parametres {
+            let _ = demandes.send(Demande::Parametres(page));
+        }
+        // La sonde des fils écrit dans le journal du logiciel, comme avec `Horloge`.
+        let pour_la_sonde = logiciel.clone();
+        crate::sonde::brancher_le_journal(move |ligne| pour_la_sonde.noter(ligne));
+        let fil =
+            crate::horloge::lancer_le_fil_des_fenetres(logiciel.clone(), liens.clone(), reception, secours)?;
+        Ok(FenetresCommunes {
+            aiguilleur: Aiguilleur::new(liens.clone(), demandes.clone()),
+            liens,
+            demandes,
+            logiciel,
+            fil: Some(fil),
+        })
+    }
+
+    /// Un geste lu par [`Zone::evenements`] : le volet, le petit menu ou les Paramètres
+    /// s'ouvrent (ou se ferment) par les mécanismes communs ; rend ce qui reste au logiciel.
+    pub fn geste(&mut self, e: &Evenement) -> SuiteDuGeste {
+        self.aiguilleur
+            .recevoir(e, Instant::now(), crate::systeme::temps_double_clic())
+    }
+
+    /// Ce que partagent le fil des fenêtres et le logiciel (`Liens::redessiner` quand l'état
+    /// change, `Liens::autres` pour ses autres fenêtres…).
+    pub fn liens(&self) -> &Arc<Liens> {
+        &self.liens
+    }
+
+    /// L'envoi des demandes au fil des fenêtres.
+    pub fn demandes(&self) -> &Demandes {
+        &self.demandes
+    }
+
+    /// Ouvre les Paramètres à cette page (une notification, une demande du logiciel) ;
+    /// ouverts, ils passent devant et changent de page.
+    pub fn ouvrir_parametres(&self, page: Option<String>) {
+        self.liens.montrer_page(&self.demandes, page);
+    }
+
+    /// L'état du logiciel a changé : le volet et les Paramètres ouverts se redessinent.
+    pub fn redessiner(&self) {
+        self.liens.redessiner();
+    }
+
+    /// Ferme les fenêtres et attend la fin de leur fil (`horloge::ATTENTE_FERMETURE` au
+    /// plus) ; faux s'il a fallu partir sans l'attendre (c'est noté au journal).
+    pub fn fermer(mut self) -> bool {
+        self.arreter()
+    }
+
+    fn arreter(&mut self) -> bool {
+        self.liens.tout_fermer();
+        let _ = self.demandes.send(Demande::Quitter);
+        let Some(fil) = self.fil.take() else {
+            return true;
+        };
+        let fini = crate::horloge::attendre_la_fin(fil, crate::horloge::ATTENTE_FERMETURE);
+        if !fini {
+            self.logiciel
+                .noter("Une fenêtre ne répond plus : le logiciel se ferme sans l'attendre.".into());
+        }
+        fini
+    }
+}
+
+impl Drop for FenetresCommunes {
+    fn drop(&mut self) {
+        if self.fil.is_some() {
+            self.arreter();
+        }
+    }
+}
+
 #[cfg(test)]
 mod essais {
     #![allow(clippy::unwrap_used)]
@@ -923,5 +1134,105 @@ mod essais {
         // Sans icône dans la barre, la place est un petit carré autour de la souris.
         assert!(e.iter().all(|e| e.rect[2] - e.rect[0] == 16));
         assert!(z.evenements().is_empty());
+    }
+
+    /// Les gestes des icônes d'une zone passent par les mécanismes communs, comme l'icône
+    /// unique : clic gauche, le volet contre l'icône ; un second clic le referme ; clic droit,
+    /// le petit menu au point du clic ; double-clic, les Paramètres (et le clic qui le suit ne
+    /// rouvre rien) ; la bulle revient au logiciel ; sans fenêtres modernes, le menu de
+    /// secours ; le fil des fenêtres parti, le secours pour de bon. Sans aucune fenêtre.
+    #[test]
+    fn gestes_par_les_mecanismes_communs() {
+        use crate::fenetres::Ouvert;
+        let (demandes, reception) = fenetres::canal();
+        let liens = Arc::new(Liens::default());
+        let mut a = Aiguilleur::new(liens.clone(), demandes);
+        let t0 = Instant::now();
+        let t = |ms: u64| t0 + Duration::from_millis(ms);
+        let double = Duration::from_millis(500);
+        let geste = |icone: &str, message: Message| Evenement {
+            icone: icone.into(),
+            message,
+            ancre: [1500, 1050],
+            rect: [1490, 1040, 1514, 1072],
+        };
+        assert_eq!(
+            a.recevoir(&geste("souris", Message::Selection), t(0), double),
+            SuiteDuGeste::Rien
+        );
+        assert!(matches!(
+            reception.prendre(),
+            Ok(Some(Demande::Volet {
+                icone: [1490, 1040, 1514, 1072],
+                ..
+            }))
+        ));
+        // Le volet est montré : un second clic le referme, sans nouvelle demande.
+        liens.mettre(Ouvert::Surface(Surface::Volet));
+        assert_eq!(
+            a.recevoir(&geste("souris", Message::Selection), t(1_000), double),
+            SuiteDuGeste::Rien
+        );
+        assert!(liens.fermer.load(Ordering::Acquire));
+        assert_eq!(reception.prendre(), Ok(None));
+        liens.mettre(Ouvert::Rien);
+        // Clic droit sur une autre icône : le petit menu au point du clic.
+        a.recevoir(&geste("clavier", Message::MenuContextuel), t(2_000), double);
+        assert!(matches!(
+            reception.prendre(),
+            Ok(Some(Demande::Menu {
+                ancre: [1500, 1050],
+                ..
+            }))
+        ));
+        // Le survol et le clic du milieu ne comptent pas.
+        assert_eq!(
+            a.recevoir(&geste("souris", Message::Appui(Bouton::Milieu)), t(2_100), double),
+            SuiteDuGeste::Rien
+        );
+        assert_eq!(reception.prendre(), Ok(None));
+        // La bulle.
+        assert_eq!(
+            a.recevoir(&geste("souris", Message::Notification), t(2_200), double),
+            SuiteDuGeste::Notification("souris".into())
+        );
+        // Double-clic : les Paramètres ; le NIN_SELECT qui suit ne rouvre pas le volet.
+        a.recevoir(
+            &geste("souris", Message::DoubleClic(Bouton::Gauche)),
+            t(3_000),
+            double,
+        );
+        a.recevoir(
+            &geste("souris", Message::Relache(Bouton::Gauche)),
+            t(3_050),
+            double,
+        );
+        assert_eq!(reception.prendre(), Ok(Some(Demande::Parametres(None))));
+        a.recevoir(&geste("souris", Message::Selection), t(3_060), double);
+        assert_eq!(reception.prendre(), Ok(None));
+        // Sans fenêtres modernes : le menu de secours, au point du clic droit ou à l'icône.
+        liens.egui_impossible.store(true, Ordering::Release);
+        assert_eq!(
+            a.recevoir(&geste("clavier", Message::MenuContextuel), t(5_000), double),
+            SuiteDuGeste::Secours {
+                icone: "clavier".into(),
+                point: [1500, 1050]
+            }
+        );
+        assert_eq!(
+            a.recevoir(&geste("souris", Message::Selection), t(6_000), double),
+            SuiteDuGeste::Secours {
+                icone: "souris".into(),
+                point: [1490, 1040]
+            }
+        );
+        // Le fil des fenêtres parti : le secours, pour de bon.
+        liens.egui_impossible.store(false, Ordering::Release);
+        drop(reception);
+        assert!(matches!(
+            a.recevoir(&geste("souris", Message::Selection), t(8_000), double),
+            SuiteDuGeste::Secours { .. }
+        ));
+        assert!(liens.egui_impossible.load(Ordering::Acquire));
     }
 }

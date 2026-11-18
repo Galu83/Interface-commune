@@ -1072,3 +1072,130 @@ fn captures_pour_la_documentation() {
         let _ = std::fs::remove_dir_all(&dossier);
     }
 }
+
+/// Un logiciel aux nombreux appareils, dont les images sont des textures chargées dans le
+/// contexte egui du volet (comme celles d'un logiciel de batteries).
+struct Appareils {
+    identite: Identite,
+    appels: std::sync::atomic::AtomicUsize,
+    texture: Mutex<Option<egui::TextureHandle>>,
+}
+
+impl Reglages for Appareils {
+    fn identite(&self) -> &Identite {
+        &self.identite
+    }
+
+    fn action(&self, _: &str) {}
+
+    fn rechercher_mise_a_jour(&self) {}
+
+    fn communs(&self) -> Communs {
+        Communs::default()
+    }
+
+    fn changer(&self, _: &str, _: Valeur) {}
+}
+
+impl Logiciel for Appareils {
+    fn etat(&self) -> Etat {
+        Etat {
+            genre: GenreEtat::Pret,
+            titre: "Démo".into(),
+            ligne: "30 appareils connectés".into(),
+            detail: None,
+        }
+    }
+
+    fn briques_avec_contexte(&self, ctx: &egui::Context) -> Vec<interface_commune::briques::Brique> {
+        use interface_commune::briques::{Brique, ImageAppareil, PlusAppareil};
+        self.appels.fetch_add(1, Ordering::AcqRel);
+        let mut t = self.texture.lock().expect("verrou");
+        let texture = t
+            .get_or_insert_with(|| {
+                ctx.load_texture(
+                    "appareil",
+                    egui::ColorImage::new([16, 16], vec![egui::Color32::WHITE; 256]),
+                    egui::TextureOptions::LINEAR,
+                )
+            })
+            .id();
+        (0..30)
+            .map(|i| Brique::Appareil {
+                cle: None,
+                glyphe: '\u{E7F4}',
+                nom: format!("Appareil {i}"),
+                pourcentage: Some(0.5),
+                sous_ligne: Some("Vu à l'instant".into()),
+                plus: PlusAppareil {
+                    image: Some(ImageAppareil {
+                        texture,
+                        cote: 16.0,
+                        fond: None,
+                    }),
+                    ..Default::default()
+                },
+            })
+            .collect()
+    }
+
+    fn quitter(&self) {}
+
+    fn noter(&self, _: String) {}
+}
+
+/// Le volet reçoit le contexte egui pour ses briques (une fois par image) ; sans hauteur
+/// maximale il est aussi haut que son contenu (comme avant) ; avec, il ne la dépasse pas et
+/// garde la version et la roue dentée en bas, les briques défilant au-dessus.
+#[test]
+fn volet_borne_et_briques_avec_contexte() {
+    let l = Appareils {
+        identite: identite(),
+        appels: Default::default(),
+        texture: Mutex::default(),
+    };
+    let mut libre = egui::Vec2::ZERO;
+    image(egui::vec2(800.0, 4000.0), 1.0, |ui, p| {
+        libre = surface::dessiner(ui, p, Surface::Volet, &l).1;
+    });
+    assert_eq!(l.appels.load(Ordering::Acquire), 3, "une fois par image");
+    assert!(
+        l.texture.lock().expect("verrou").is_some(),
+        "texture chargée dans le contexte"
+    );
+    assert!(libre.y > 1000.0, "30 appareils : {libre:?}");
+    for max in [400.0, 600.0] {
+        let mut borne = egui::Vec2::ZERO;
+        let textes = image(egui::vec2(800.0, 4000.0), 1.5, |ui, p| {
+            borne = surface::dessiner_borne(ui, p, Surface::Volet, &l, Some(max)).1;
+        });
+        assert!(borne.y <= max, "{max} : {borne:?}");
+        assert!(borne.y >= max - 60.0, "la place est remplie : {borne:?}");
+        assert_eq!(borne.x, libre.x, "même largeur");
+        if polices::polices().is_ok() {
+            let (_, version) = textes
+                .iter()
+                .find(|(t, _)| t == "Démo 1.2.3")
+                .expect("la version reste en bas");
+            assert!(version.max.y <= borne.y, "{version:?} {borne:?}");
+            let haut = textes
+                .iter()
+                .filter(|(t, _)| t.starts_with("Appareil "))
+                .map(|(_, r)| r.min.y)
+                .fold(f32::MAX, f32::min);
+            assert!(haut < max, "les premiers appareils sont visibles");
+        }
+    }
+    // Une hauteur qui suffit : rien ne change.
+    let mut large = egui::Vec2::ZERO;
+    image(egui::vec2(800.0, 4000.0), 1.0, |ui, p| {
+        large = surface::dessiner_borne(ui, p, Surface::Volet, &l, Some(libre.y + 100.0)).1;
+    });
+    assert!((large.y - libre.y).abs() <= 1.0, "{large:?} {libre:?}");
+    // Le petit menu n'est jamais borné.
+    let mut menu = egui::Vec2::ZERO;
+    image(egui::vec2(800.0, 4000.0), 1.0, |ui, p| {
+        menu = surface::dessiner_borne(ui, p, Surface::Menu, &l, Some(10.0)).1;
+    });
+    assert!(menu.y > 10.0);
+}

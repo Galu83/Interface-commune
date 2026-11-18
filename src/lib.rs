@@ -329,7 +329,8 @@ pub trait Reglages: Send + Sync + 'static {
 }
 
 /// Ce qu'un logiciel donne à l'interface commune entière : les Paramètres ([`Reglages`]),
-/// plus l'icône près de l'horloge, le volet et le petit menu. Mêmes règles d'appel que
+/// plus l'icône près de l'horloge (une seule, `horloge::Horloge`, ou plusieurs,
+/// `zone::FenetresCommunes`), le volet et le petit menu. Mêmes règles d'appel que
 /// [`Reglages`].
 pub trait Logiciel: Reglages {
     /// L'état, en haut du volet.
@@ -341,6 +342,21 @@ pub trait Logiciel: Reglages {
     /// sans fermer le volet ; les autres rendent leur clé à `Reglages::action`, volet fermé.
     fn briques(&self) -> Vec<briques::Brique> {
         Vec::new()
+    }
+
+    /// Les mêmes briques, avec le contexte egui du volet : pour un logiciel qui prépare des
+    /// images pour ses briques (textures de [`briques::ImageAppareil`], chargées et gardées
+    /// dans ce contexte). C'est elle que la bibliothèque appelle, une fois par image du volet ;
+    /// par défaut, elle rend [`Logiciel::briques`]. Un logiciel n'écrit que l'une des deux.
+    fn briques_avec_contexte(&self, _ctx: &egui::Context) -> Vec<briques::Brique> {
+        self.briques()
+    }
+
+    /// Où et comment le volet se place : collé à la barre des tâches comme les volets de
+    /// Windows 11 (par défaut), ou contre l'icône ; l'écart en points ; une hauteur maximale,
+    /// au-delà de laquelle les briques défilent. Lu à chaque image du volet.
+    fn placement_volet(&self) -> place::PlacementVolet {
+        place::PlacementVolet::default()
     }
 
     /// **Passage seulement**, à remplacer par [`Logiciel::briques`] : des réglages rapides

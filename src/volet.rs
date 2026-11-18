@@ -30,7 +30,7 @@ use crate::fenetres::{
     fermer_sur_appui, suite,
 };
 use crate::menu::Choix;
-use crate::place::{Rect, placer, placer_au_point};
+use crate::place::{Rect, placer_au_point};
 use crate::surface::{self, Choisi, LARGEUR, LARGEUR_MENU};
 use crate::systeme::{self, hwnd_de};
 use crate::theme::{self, Surface};
@@ -361,6 +361,9 @@ struct Volet<'a> {
     etape: Etape,
     /// La taille du contenu de chaque surface (points), mesurée à chaque image.
     tailles: [egui::Vec2; 2],
+    /// La hauteur que le volet ne dépasse pas (points), d'après `Logiciel::placement_volet`
+    /// et la zone de travail de son écran ; `None` : aussi haut que son contenu.
+    borne: Option<f32>,
     /// « Effets d'animation » de Windows, relu à chaque ouverture.
     effets: bool,
     a_eu_le_focus: bool,
@@ -583,14 +586,33 @@ impl Volet<'_> {
         }
     }
 
-    /// La place de la fenêtre (pixels), d'après l'écran de l'icône.
-    fn place(&self, m: &Montrer, taille: [i32; 2]) -> Option<[i32; 2]> {
+    /// La place de la fenêtre (pixels), d'après l'écran de l'icône ; `ppp` : l'échelle de cet
+    /// écran (pixels par point), pour l'écart choisi par le logiciel.
+    fn place(&self, m: &Montrer, taille: [i32; 2], ppp: f32) -> Option<[i32; 2]> {
         let (e, t) = systeme::ecran_autour(m.ancre[0], m.ancre[1])?;
         let r = match m.surface {
-            Surface::Volet => placer(m.icone, taille, e, t, 12),
+            Surface::Volet => self.logiciel.placement_volet().placer(m.icone, taille, e, t, ppp),
             Surface::Menu => placer_au_point(m.ancre, m.icone, taille, e, t, 8),
         };
         Some([r[0], r[1]])
+    }
+
+    /// La hauteur que le volet ne dépasse pas à cette image (points) : la hauteur maximale du
+    /// logiciel, bornée par la zone de travail de l'écran de l'icône dès qu'il est connu.
+    fn borner(&mut self, ctx: &egui::Context) {
+        let placement = self.logiciel.placement_volet();
+        self.borne = match &self.etape {
+            Etape::MiseEnPlace { m, .. } | Etape::Montree { m, .. } => {
+                match systeme::ecran_autour(m.ancre[0], m.ancre[1]) {
+                    Some((_, t)) => placement.hauteur_max_points(t, ctx.pixels_per_point()),
+                    None => placement.hauteur_max,
+                }
+            }
+            // Pendant le fondu de fermeture : la même qu'à l'ouverture.
+            Etape::Fermeture { .. } => self.borne,
+            Etape::Preparation(_) | Etape::Cachee => placement.hauteur_max,
+        }
+        .filter(|h| h.is_finite());
     }
 
     /// La taille voulue (pixels) ; `None` si la fenêtre l'a déjà (à un pixel près).
@@ -649,7 +671,7 @@ impl Volet<'_> {
             return;
         }
         let taille = systeme::taille_fenetre(h).unwrap_or([1, 1]);
-        let place = self.place(&m, taille).unwrap_or_else(|| {
+        let place = self.place(&m, taille, ctx.pixels_per_point()).unwrap_or_else(|| {
             let r = systeme::rect_fenetre(h).unwrap_or_default();
             [r[0], r[1]]
         });
@@ -810,7 +832,7 @@ impl Volet<'_> {
             }
         } else if replacer {
             let taille = systeme::taille_fenetre(h).unwrap_or([1, 1]);
-            if let Some(p) = self.place(&m, taille) {
+            if let Some(p) = self.place(&m, taille, ctx.pixels_per_point()) {
                 systeme::deplacer(h, p[0], p[1], true);
                 if let Etape::Montree { replacer, .. } = &mut self.etape {
                     *replacer = false;
@@ -955,7 +977,8 @@ impl eframe::App for Volet<'_> {
         };
         let p = self.apparence.palette.clone();
         let logiciel = self.logiciel.clone();
-        let (action, taille) = surface::dessiner(ui, &p, surface, &*logiciel);
+        self.borner(&ctx);
+        let (action, taille) = surface::dessiner_borne(ui, &p, surface, &*logiciel, self.borne);
         self.tailles[rang(surface)] = taille;
         match self.etape.clone() {
             Etape::Preparation(n) => self.preparer(&ctx, n),
@@ -1062,6 +1085,7 @@ pub fn veiller(
                 voilee: None,
                 etape: Etape::Preparation(0),
                 tailles: [egui::vec2(LARGEUR, 300.0), egui::vec2(LARGEUR_MENU, 200.0)],
+                borne: None,
                 effets: true,
                 a_eu_le_focus: false,
                 focus_redemande: false,
