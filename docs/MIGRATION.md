@@ -249,6 +249,28 @@ Pour un projet : rien d'obligatoire. `sonde::regler(Delais { pas, blocage })` ch
 bat avec `sonde::battement()`, pose `sonde::etape("…")` avant un appel à risque et entoure un
 appel à boucle propre de `sonde::imbriquee("…")`.
 
+## La fenêtre du volet perdue est recréée (branche `kvmsoft-volet-recree`, pour tous)
+
+Le défaut : au bout de quelques heures (une nuit d'écrans en veille, carte NVIDIA, OpenGL), plus
+rien ne s'ouvrait au clic sur l'icône. Une panique dans la boucle des fenêtres (eframe garde des
+`unwrap()` sur son contexte OpenGL, par exemple `make_current`) remontait de `run_native` et
+**tuait le fil des fenêtres en silence** : ses fenêtres détruites avec lui, aucune ligne au
+journal (le crochet de panique par défaut écrit sur une console absente), le chien de garde muet
+(le fil mort sort de la surveillance), et les clics envoyés à un canal sans personne au bout.
+
+Maintenant, sans rien à changer dans un projet :
+- `boucle_des_fenetres` attrape la panique, note « Fenêtre du volet et du petit menu perdue
+  (panique : …, à fichier:ligne, étape « … ») : recréée », recrée la fenêtre tout de suite et
+  refait le clic qui était en train de s'ouvrir (`Liens::poser_en_cours`) ;
+- plus de 3 pertes en 60 s : le menu de secours pour ce clic, la fenêtre recréée au clic
+  suivant (jamais de boucle folle) ; un échec de recréation après une première préparation
+  est passager (secours pour ce clic, nouvel essai au suivant), plus jamais définitif ;
+- une fermeture de la fenêtre par Windows est notée aussi ;
+- `GardeDuFil` : si le fil s'arrête quand même, l'icône passe au menu de secours et le journal
+  le dit ; un clic dont la demande ne peut plus partir ouvre aussi le menu de secours ;
+- `sonde::retenir_les_paniques()` (posé par le fil des fenêtres) garde le lieu de la panique
+  (deux derniers éléments du chemin seulement), puis passe la main au crochet déjà en place.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

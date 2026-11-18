@@ -254,6 +254,8 @@ impl Volet<'_> {
                 liens.mettre(Ouvert::Surface(s));
                 self.a_eu_le_focus = false;
                 self.focus_redemande = false;
+                // Refait par le fil des fenêtres si la fenêtre est perdue avant de se montrer.
+                liens.poser_en_cours(Some(d.clone()));
                 self.sortie.borrow_mut().en_cours = Some(d);
                 self.etape = Etape::MiseEnPlace { m, images: 0 };
                 // Visible, mais encore invisible (opacité 0) : elle reçoit de quoi se
@@ -323,6 +325,7 @@ impl Volet<'_> {
             *f = Some((Instant::now(), surface));
         }
         self.sortie.borrow_mut().en_cours = None;
+        liens.poser_en_cours(None);
         self.etape = Etape::Cachee;
     }
 
@@ -441,6 +444,10 @@ impl Volet<'_> {
             return;
         }
         let Some(h) = self.hwnd else {
+            noter(
+                &self.logiciel,
+                "Ouverture impossible : la fenêtre du volet n'a pas de fenêtre Windows.".into(),
+            );
             self.cacher(ctx, m.surface);
             return;
         };
@@ -486,6 +493,7 @@ impl Volet<'_> {
             mise_en_place: maintenant.saturating_duration_since(m.recue),
             images,
         };
+        self.liens.poser_en_cours(None);
         let premiere = !DEJA_OUVERTE[rang(m.surface)].swap(true, Ordering::AcqRel);
         if mesure.a_noter(premiere) {
             noter(&self.logiciel, mesure.phrase(m.surface, premiere));

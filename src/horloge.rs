@@ -646,6 +646,11 @@ impl Ouvreur for Fenetres {
 }
 
 fn fil_des_fenetres(logiciel: Arc<dyn Logiciel>, liens: Arc<Liens>, reception: Reception) {
+    // Le lieu d'une panique est gardé pour le journal (la boucle des fenêtres l'attrape et
+    // recrée la fenêtre) ; si le fil s'arrête quand même, l'icône passe au menu de secours.
+    crate::sonde::retenir_les_paniques();
+    let pour_la_garde = logiciel.clone();
+    let _garde = fenetres::GardeDuFil::new(liens.clone(), move |t| pour_la_garde.noter(t));
     // Surveillé : une image demandée le réveille s'il dort (le volet caché ne tourne qu'à la demande).
     let pour_reveiller = liens.clone();
     let _surveille = crate::sonde::inscrire(
@@ -882,7 +887,18 @@ impl Principal {
                     None => Demande::Volet { icone, clic },
                     Some(ancre) => Demande::Menu { icone, ancre, clic },
                 };
-                let _ = self.poste.demandes.send(d);
+                if self.poste.demandes.send(d).is_err() {
+                    // Le fil des fenêtres n'existe plus : le menu de secours, pour que le
+                    // clic ouvre quand même quelque chose.
+                    liens.egui_impossible.store(true, Ordering::Release);
+                    self.logiciel.noter(
+                        "Clic sur l'icône : le fil des fenêtres ne répond plus ; menu de secours de Windows."
+                            .into(),
+                    );
+                    let [x, y] = ancre.unwrap_or([icone[0], icone[1]]);
+                    self.menu_de_secours(x, y);
+                    return;
+                }
                 // La fenêtre prête se montre tout de suite, encore invisible.
                 reveiller(liens.surface_prete.load(Ordering::Acquire));
             }
