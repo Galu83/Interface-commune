@@ -192,27 +192,28 @@ pub const ARRONDI_CONTROLE: u8 = 4;
 // ---------------------------------------------------------------------------------------
 // Les animations du volet et du petit menu (règles : interface Windows 11, point 10)
 //
-// Les durées sont celles de Windows 11, prises dans la documentation de Microsoft (« Timing
-// and easing », guide Fluent de WinUI 3, learn.microsoft.com/windows/apps/design/motion/
-// timing-and-easing) : les trois durées standard des contrôles de Windows,
-// `ControlNormalAnimationDuration` = 250 ms, `ControlFastAnimationDuration` = 167 ms et
-// `ControlFasterAnimationDuration` = 83 ms ; la courbe d'entrée « Fast Out, Slow In »,
-// cubic-bezier(0, 0, 0, 1) (rapide au départ, ralentie à l'arrivée). La distance du
-// glissement vient du guide des fenêtres surgissantes de Microsoft (« Animating pop-up UI ») :
-// 50 pixels, depuis le côté de ce qui les ouvre (ici, la barre des tâches).
+// Les durées viennent de la documentation de Microsoft (« Timing and easing », guide Fluent
+// de WinUI 3, learn.microsoft.com/windows/apps/design/motion/timing-and-easing) :
+// `ControlFasterAnimationDuration` = 83 ms, la plus courte des durées des contrôles de
+// Windows, et la courbe d'entrée « Fast Out, Slow In », cubic-bezier(0, 0, 0, 1) (rapide au
+// départ, ralentie à l'arrivée).
+//
+// Ouvrir doit être vif : le volet et le petit menu apparaissent **à leur place**, sans
+// glisser, en un fondu de 83 ms qui part déjà à 50 % d'opacité. Mesuré image par image
+// (`examples/mesure_ouverture.rs`) : l'ancienne animation (montée de 50 px en 250 ms, fondu
+// de 167 ms parti de 0) ne rendait le volet lisible qu'à ~150 ms du clic, et sa première
+// image montrée était transparente ; la sensation de latence venait d'elle, pas d'un
+// retard avant elle (2 à 7 ms). Désormais lisible dès la première image montrée.
 // Les mêmes valeurs dans tous les projets.
 
-/// Le volet monte depuis la barre des tâches : `ControlNormalAnimationDuration`.
-pub const VOLET_GLISSEMENT_MS: u32 = 250;
-/// Il apparaît en fondu pendant ce temps : `ControlFastAnimationDuration`.
-pub const VOLET_FONDU_MS: u32 = 167;
-/// Le petit menu apparaît en fondu rapide, sans glisser : `ControlFastAnimationDuration`.
-pub const MENU_FONDU_MS: u32 = 167;
+/// Le volet et le petit menu apparaissent en fondu court, sur place :
+/// `ControlFasterAnimationDuration`.
+pub const OUVERTURE_FONDU_MS: u32 = 83;
+/// L'opacité de la première image montrée (sur 255) : déjà visible, jamais transparente.
+pub const OUVERTURE_OPACITE_DE_DEPART: u8 = 128;
 /// À la fermeture, le volet comme le petit menu disparaissent en fondu court :
 /// `ControlFasterAnimationDuration`.
 pub const FERMETURE_FONDU_MS: u32 = 83;
-/// La distance du glissement du volet, en points (multipliée par l'échelle de l'écran).
-pub const VOLET_DECALAGE: f32 = 50.0;
 
 /// La courbe « Fast Out, Slow In » de Windows, cubic-bezier(0, 0, 0, 1) : pour l'avancée `x`
 /// du temps (0 à 1), la part du chemin faite (0 à 1). Avec ces points de contrôle, la courbe
@@ -230,44 +231,28 @@ pub enum Surface {
     Menu,
 }
 
-/// Une image de l'animation : l'opacité (0 à 255) et le décalage vers la barre des tâches,
-/// en points (0 : à sa place).
+/// Une image de l'animation : l'opacité (0 à 255).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Image {
     pub opacite: u8,
-    pub decalage: f32,
     /// L'animation est finie.
     pub finie: bool,
 }
 
 /// L'image de l'ouverture `ms` millisecondes après son début. `effets` : « Effets
-/// d'animation » de Windows ; coupés, tout est à sa place tout de suite.
-pub fn ouverture(surface: Surface, ms: u32, effets: bool) -> Image {
-    if !effets {
+/// d'animation » de Windows ; coupés, tout est opaque tout de suite.
+pub fn ouverture(ms: u32, effets: bool) -> Image {
+    if !effets || ms >= OUVERTURE_FONDU_MS {
         return Image {
             opacite: 255,
-            decalage: 0.0,
             finie: true,
         };
     }
-    let (fondu, glissement) = match surface {
-        Surface::Volet => (VOLET_FONDU_MS, VOLET_GLISSEMENT_MS),
-        Surface::Menu => (MENU_FONDU_MS, 0),
-    };
-    let part = |duree: u32| {
-        if duree == 0 {
-            1.0
-        } else {
-            (ms as f32 / duree as f32).clamp(0.0, 1.0)
-        }
-    };
-    let opacite = (255.0 * part(fondu)).round() as u8;
-    let decalage = VOLET_DECALAGE * (1.0 - ralenti_a_l_arrivee(part(glissement)));
-    let decalage = if glissement == 0 { 0.0 } else { decalage };
+    let depart = f32::from(OUVERTURE_OPACITE_DE_DEPART);
+    let part = ralenti_a_l_arrivee(ms as f32 / OUVERTURE_FONDU_MS as f32);
     Image {
-        opacite,
-        decalage,
-        finie: ms >= fondu.max(glissement),
+        opacite: (depart + (255.0 - depart) * part).round() as u8,
+        finie: false,
     }
 }
 
@@ -276,14 +261,12 @@ pub fn fermeture(ms: u32, effets: bool) -> Image {
     if !effets || ms >= FERMETURE_FONDU_MS {
         return Image {
             opacite: 0,
-            decalage: 0.0,
             finie: true,
         };
     }
     let reste = 1.0 - ms as f32 / FERMETURE_FONDU_MS as f32;
     Image {
         opacite: (255.0 * reste).round() as u8,
-        decalage: 0.0,
         finie: false,
     }
 }
@@ -380,33 +363,37 @@ mod tests {
         assert!(ralenti_a_l_arrivee(-1.0).abs() < 1e-6);
     }
 
-    /// Les durées de Windows 11 : environ 0,2 s pour ouvrir, environ 0,1 s pour fermer.
+    /// Les durées de Windows 11 : ouvrir et fermer en 83 ms, la plus courte des durées des
+    /// contrôles de Windows (une ouverture plus longue se ressent comme une attente).
     #[test]
     fn durees_de_windows() {
-        assert_eq!(VOLET_GLISSEMENT_MS, 250);
-        assert_eq!(VOLET_FONDU_MS, 167);
-        assert_eq!(MENU_FONDU_MS, 167);
+        assert_eq!(OUVERTURE_FONDU_MS, 83);
         assert_eq!(FERMETURE_FONDU_MS, 83);
     }
 
+    /// L'ouverture est vive : la première image montrée est déjà visible (jamais
+    /// transparente), lisible (80 % d'opacité) au plus tard à la deuxième image d'un écran à
+    /// 60 Hz, opaque et finie en 83 ms, toujours croissante.
     #[test]
-    fn animation_du_volet() {
-        let debut = ouverture(Surface::Volet, 0, true);
-        assert_eq!(debut.opacite, 0);
-        assert!((debut.decalage - VOLET_DECALAGE).abs() < 1e-3);
+    fn ouverture_vive() {
+        let debut = ouverture(0, true);
+        assert_eq!(debut.opacite, OUVERTURE_OPACITE_DE_DEPART);
+        assert!(debut.opacite >= 128, "{}", debut.opacite);
         assert!(!debut.finie);
-        let milieu = ouverture(Surface::Volet, 100, true);
-        assert!(milieu.opacite > 100 && milieu.opacite < 255);
-        assert!(milieu.decalage > 0.0 && milieu.decalage < VOLET_DECALAGE / 2.0);
-        let fin = ouverture(Surface::Volet, VOLET_GLISSEMENT_MS, true);
+        assert!(
+            ouverture(17, true).opacite >= 204,
+            "{}",
+            ouverture(17, true).opacite
+        );
+        let mut avant = 0;
+        for ms in 0..=OUVERTURE_FONDU_MS {
+            let i = ouverture(ms, true);
+            assert!(i.opacite >= avant, "{ms} ms");
+            avant = i.opacite;
+        }
+        let fin = ouverture(OUVERTURE_FONDU_MS, true);
         assert_eq!(fin.opacite, 255);
-        assert!(fin.decalage.abs() < 1e-3);
         assert!(fin.finie);
-        // Le petit menu ne glisse pas : un fondu seul.
-        let menu = ouverture(Surface::Menu, 50, true);
-        assert!(menu.decalage.abs() < 1e-6);
-        assert!(menu.opacite > 0 && menu.opacite < 255);
-        assert!(ouverture(Surface::Menu, MENU_FONDU_MS, true).finie);
         // Fermeture : un fondu court.
         assert_eq!(fermeture(0, true).opacite, 255);
         assert!(!fermeture(40, true).finie);
@@ -416,12 +403,9 @@ mod tests {
     /// « Effets d'animation » coupé dans Windows : aucune animation.
     #[test]
     fn sans_effets_aucune_animation() {
-        for s in [Surface::Volet, Surface::Menu] {
-            let i = ouverture(s, 0, false);
-            assert_eq!(i.opacite, 255);
-            assert!(i.decalage.abs() < 1e-6);
-            assert!(i.finie);
-        }
+        let i = ouverture(0, false);
+        assert_eq!(i.opacite, 255);
+        assert!(i.finie);
         assert!(fermeture(0, false).finie);
     }
 }

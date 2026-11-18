@@ -8,8 +8,9 @@ l'horloge de Windows : la même allure Windows 11, le même comportement, écrit
 - **Le thème Windows 11** (`theme`, `apparence`, `polices`) : clair ou sombre comme Windows, la
   couleur d'accentuation suivie en direct, la palette Fluent, Segoe UI Variable (repli : Segoe UI)
   et Segoe Fluent Icons (repli : Segoe MDL2 Assets), lues sur le PC, jamais livrées. Les durées
-  d'animation communes (règles de l'interface, point 10) : volet 250 ms (+ fondu 167 ms, 50 px),
-  petit menu 167 ms, fermeture 83 ms ; aucune animation si Windows les a coupées.
+  d'animation communes (règles de l'interface, point 10) : volet et petit menu, à leur place,
+  fondu de 83 ms parti de 50 % ; fermeture, fondu de 83 ms ; aucune animation si Windows les a
+  coupées.
 - **L'icône près de l'horloge** (`horloge`) : clic gauche = le volet, clic droit = le petit menu,
   double-clic = les Paramètres, clavier (Entrée, Espace, touche menu) ; notifications ; une seule
   copie du logiciel à la fois ; l'icône revient si l'Explorateur redémarre.

@@ -271,6 +271,21 @@ Maintenant, sans rien à changer dans un projet :
 - `sonde::retenir_les_paniques()` (posé par le fil des fenêtres) garde le lieu de la panique
   (deux derniers éléments du chemin seulement), puis passe la main au crochet déjà en place.
 
+## Le volet et le petit menu s'ouvrent sous le doigt (branche `latence-volet`, pour tous)
+
+Le défaut : une impression d'attente à chaque ouverture. Mesuré image par image
+(`examples/mesure_ouverture.rs`, fenêtre voilée, rien à l'écran) : le retard avant
+l'animation était déjà minime (2 à 7 ms du clic à la première image) ; c'est l'animation qui
+faisait attendre. Sa première image montrée était transparente, le fondu partait de 0 sur
+167 ms et le volet montait de 50 px en 250 ms : lisible vers 150 ms, à sa place à 260 ms.
+
+Maintenant, sans rien à changer dans un projet : le volet et le petit menu apparaissent à leur
+place, sans glisser, en un fondu de 83 ms parti de 50 % d'opacité ; lisibles dès ~20 ms,
+animation finie vers 90 ms. « Effets d'animation » coupés : opaques tout de suite. Dans
+`theme` : `VOLET_GLISSEMENT_MS`, `VOLET_FONDU_MS`, `MENU_FONDU_MS`, `VOLET_DECALAGE` et
+`Image::decalage` disparaissent ; `OUVERTURE_FONDU_MS`, `OUVERTURE_OPACITE_DE_DEPART` ;
+`ouverture(ms, effets)` ne prend plus la surface. `volet::observer` sert aux mesures seulement.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

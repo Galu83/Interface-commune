@@ -5,8 +5,8 @@
 //! ([`veiller`]) : au clic, elle est mise à jour et montrée, jamais reconstruite (ni fenêtre,
 //! ni OpenGL, ni polices). C'est la fenêtre principale de la seule boucle de fenêtres du
 //! programme : les Paramètres et les autres fenêtres du logiciel sont dessinés avec elle
-//! ([`crate::autres_fenetres`]), même quand elle est cachée. Elle monte depuis la barre des tâches en fondu (le volet) ou
-//! apparaît en fondu (le petit menu), avec les durées de Windows (`theme`), et rien si
+//! ([`crate::autres_fenetres`]), même quand elle est cachée. Elle apparaît à sa place, prête
+//! et déjà visible dès sa première image, en un fondu court (`theme`), et sans fondu si
 //! « Effets d'animation » est coupé. Elle se ferme par Échap, un clic à côté ou la perte du
 //! focus, en fondu court.
 //!
@@ -28,7 +28,7 @@ use crate::fenetres::{
     Demande, GARDE, GARDE_MAX, Garde, LENTE, Liens, Mesure, Ouvert, Reception, Suite, suite,
 };
 use crate::menu::Choix;
-use crate::place::{Cote, Rect, cote_de_la_barre, placer, placer_au_point};
+use crate::place::{Rect, placer, placer_au_point};
 use crate::surface::{self, Choisi, LARGEUR, LARGEUR_MENU};
 use crate::systeme::{self, hwnd_de};
 use crate::theme::{self, Surface};
@@ -89,6 +89,43 @@ fn noter(logiciel: &Arc<dyn Logiciel>, texte: String) {
         .spawn(move || l.noter(texte));
 }
 
+/// Une image du volet ou du petit menu pendant son ouverture, pour les mesures
+/// ([`observer`]).
+#[derive(Debug, Clone, Copy)]
+pub struct ImageVue {
+    pub surface: Surface,
+    /// Du clic sur l'icône à la fin du dessin de cette image (avant l'échange des tampons).
+    pub depuis_clic: Duration,
+    /// L'image est encore une image de mise en place (fenêtre voilée, rien à l'écran).
+    pub mise_en_place: bool,
+    /// L'opacité posée pour cette image (0 à 255).
+    pub opacite: u8,
+    /// L'animation d'ouverture est finie : la fenêtre est à sa place, opaque.
+    pub finie: bool,
+}
+
+type Observateur = Box<dyn FnMut(ImageVue) + Send>;
+
+/// Le mode d'essai des mesures : chaque image d'une ouverture est rendue à l'observateur ;
+/// la fenêtre reste voilée et ne prend jamais le premier plan (rien ne s'ouvre à l'écran,
+/// le clavier reste à l'application en cours).
+static OBSERVATEUR: std::sync::Mutex<Option<Observateur>> = std::sync::Mutex::new(None);
+static DISCRET: AtomicBool = AtomicBool::new(false);
+
+/// Pour les mesures (`examples/mesure_ouverture.rs`) seulement : `Some`, chaque image d'une
+/// ouverture est rendue à `f`, la fenêtre reste voilée (invisible) et ne prend jamais le
+/// focus ; `None` revient au fonctionnement normal.
+pub fn observer(f: Option<Observateur>) {
+    DISCRET.store(f.is_some(), Ordering::Release);
+    if let Ok(mut o) = OBSERVATEUR.lock() {
+        *o = f;
+    }
+}
+
+fn discret() -> bool {
+    DISCRET.load(Ordering::Acquire)
+}
+
 /// La première ouverture de chaque surface, et la première préparation, depuis le lancement.
 static DEJA_OUVERTE: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(false)];
 static DEJA_PREPAREE: AtomicBool = AtomicBool::new(false);
@@ -145,9 +182,6 @@ enum Etape {
     Montree {
         m: Montrer,
         debut: Instant,
-        place: [i32; 2],
-        /// Vers la barre des tâches (le volet en part) : (x, y), de -1 à 1.
-        sens: [f32; 2],
         finie: bool,
         /// La taille a changé (contenu nouveau) : la replacer contre la barre.
         replacer: bool,
@@ -203,6 +237,8 @@ struct Volet<'a> {
     creee_a: Instant,
     /// Un clic arrivé avant la préparation : montré dès qu'elle est finie.
     premiere: Option<Demande>,
+    /// L'opacité posée à la dernière image (pour les mesures).
+    vue: u8,
 }
 
 impl Volet<'_> {
@@ -263,7 +299,11 @@ impl Volet<'_> {
                 if let (Some(h), true) = (self.hwnd, self.transparente) {
                     systeme::transparente(h, 0);
                 }
-                ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+                self.vue = 0;
+                match (discret(), self.hwnd) {
+                    (true, Some(h)) => systeme::montrer_sans_activer(h),
+                    _ => ctx.send_viewport_cmd(ViewportCommand::Visible(true)),
+                }
                 ctx.request_repaint();
             }
             Suite::Parametres => {
@@ -394,32 +434,23 @@ impl Volet<'_> {
         self.lire(ctx);
     }
 
-    /// La place de la fenêtre pour cette image de l'animation.
-    fn poser(&self, h: isize, place: [i32; 2], sens: [f32; 2], image: theme::Image, ppp: f32) {
-        let d = image.decalage * ppp;
-        let x = place[0] + (sens[0] * d).round() as i32;
-        let y = place[1] + (sens[1] * d).round() as i32;
-        systeme::deplacer(h, x, y, true);
+    /// L'opacité de la fenêtre pour cette image de l'animation (elle ne bouge pas : posée
+    /// une fois à sa place).
+    fn opacite(&mut self, h: isize, image: theme::Image) {
+        self.vue = image.opacite;
         if self.transparente {
             systeme::transparente(h, image.opacite);
         }
     }
 
-    /// La place finale (pixels) et le sens du glissement, d'après l'écran de l'icône.
-    fn place(&self, m: &Montrer, taille: [i32; 2]) -> Option<([i32; 2], [f32; 2])> {
+    /// La place de la fenêtre (pixels), d'après l'écran de l'icône.
+    fn place(&self, m: &Montrer, taille: [i32; 2]) -> Option<[i32; 2]> {
         let (e, t) = systeme::ecran_autour(m.ancre[0], m.ancre[1])?;
         let r = match m.surface {
             Surface::Volet => placer(m.icone, taille, e, t, 12),
             Surface::Menu => placer_au_point(m.ancre, m.icone, taille, e, t, 8),
         };
-        let sens = match (m.surface, cote_de_la_barre(m.icone, e, t)) {
-            (Surface::Menu, _) => [0.0, 0.0],
-            (Surface::Volet, Cote::Bas) => [0.0, 1.0],
-            (Surface::Volet, Cote::Haut) => [0.0, -1.0],
-            (Surface::Volet, Cote::Gauche) => [-1.0, 0.0],
-            (Surface::Volet, Cote::Droite) => [1.0, 0.0],
-        };
-        Some(([r[0], r[1]], sens))
+        Some([r[0], r[1]])
     }
 
     /// La taille voulue (pixels) ; `None` si la fenêtre l'a déjà (à un pixel près).
@@ -478,15 +509,19 @@ impl Volet<'_> {
             return;
         }
         let taille = systeme::taille_fenetre(h).unwrap_or([1, 1]);
-        let (place, sens) = self.place(&m, taille).unwrap_or_else(|| {
+        let place = self.place(&m, taille).unwrap_or_else(|| {
             let r = systeme::rect_fenetre(h).unwrap_or_default();
-            ([r[0], r[1]], [0.0, 0.0])
+            [r[0], r[1]]
         });
-        let image = theme::ouverture(m.surface, 0, self.effets);
-        self.poser(h, place, sens, image, ctx.pixels_per_point());
-        ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-        ctx.send_viewport_cmd(ViewportCommand::Focus);
-        systeme::premier_plan(h);
+        // À sa place, déjà visible (jamais une première image transparente), avant que le
+        // voile se lève à la fin de cette image.
+        systeme::deplacer(h, place[0], place[1], true);
+        self.opacite(h, theme::ouverture(0, self.effets));
+        if !discret() {
+            ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(ViewportCommand::Focus);
+            systeme::premier_plan(h);
+        }
         let maintenant = Instant::now();
         let mesure = Mesure {
             attente: m.recue.saturating_duration_since(m.clic),
@@ -501,8 +536,6 @@ impl Volet<'_> {
         self.etape = Etape::Montree {
             m,
             debut: maintenant,
-            place,
-            sens,
             finie: false,
             replacer: false,
             garde: Garde::default(),
@@ -558,8 +591,6 @@ impl Volet<'_> {
         let Etape::Montree {
             m,
             debut,
-            place,
-            sens,
             finie,
             replacer,
             garde,
@@ -570,8 +601,8 @@ impl Volet<'_> {
         let Some(h) = self.hwnd else { return };
         if !finie {
             let ms = u32::try_from(debut.elapsed().as_millis()).unwrap_or(u32::MAX);
-            let image = theme::ouverture(m.surface, ms, self.effets);
-            self.poser(h, place, sens, image, ctx.pixels_per_point());
+            let image = theme::ouverture(ms, self.effets);
+            self.opacite(h, image);
             if let Etape::Montree { finie, .. } = &mut self.etape {
                 *finie = image.finie;
             }
@@ -586,10 +617,9 @@ impl Volet<'_> {
             }
         } else if replacer {
             let taille = systeme::taille_fenetre(h).unwrap_or([1, 1]);
-            if let Some((p, _)) = self.place(&m, taille) {
+            if let Some(p) = self.place(&m, taille) {
                 systeme::deplacer(h, p[0], p[1], true);
-                if let Etape::Montree { place, replacer, .. } = &mut self.etape {
-                    *place = p;
+                if let Etape::Montree { replacer, .. } = &mut self.etape {
                     *replacer = false;
                 }
             }
@@ -612,7 +642,10 @@ impl Volet<'_> {
         let focus = ui.input(|i| i.viewport().focused);
         if focus == Some(true) {
             self.a_eu_le_focus = true;
-        } else if !self.a_eu_le_focus && !self.focus_redemande && debut.elapsed() > Duration::from_millis(300)
+        } else if !self.a_eu_le_focus
+            && !self.focus_redemande
+            && !discret()
+            && debut.elapsed() > Duration::from_millis(300)
         {
             // Windows n'a pas donné le focus : un seul nouvel essai (sans focus, un clic à
             // côté ne fermerait pas la fenêtre).
@@ -696,6 +729,11 @@ impl eframe::App for Volet<'_> {
             systeme::habiller(h, self.apparence.palette.sombre);
         }
         let surface = self.dessinee();
+        let observee = match &self.etape {
+            Etape::MiseEnPlace { m, .. } => Some((m.clic, true)),
+            Etape::Montree { m, finie: false, .. } => Some((m.clic, false)),
+            _ => None,
+        };
         let p = self.apparence.palette.clone();
         let logiciel = self.logiciel.clone();
         let (action, taille) = surface::dessiner(ui, &p, surface, &*logiciel);
@@ -716,7 +754,21 @@ impl eframe::App for Volet<'_> {
         // fenêtre à sa première image, même préparée cachée. Fait avant la fin de l'image,
         // donc avant que la demande de la montrer soit appliquée.
         crate::sonde::etape("volet : voile et fenêtre (appels à Windows)");
-        let voile = voilee(&self.etape);
+        if let Some((clic, mise_en_place)) = observee
+            && discret()
+            && let Ok(mut o) = OBSERVATEUR.lock()
+            && let Some(f) = o.as_mut()
+        {
+            let finie = matches!(self.etape, Etape::Montree { finie: true, .. });
+            f(ImageVue {
+                surface,
+                depuis_clic: clic.elapsed(),
+                mise_en_place: mise_en_place && !matches!(self.etape, Etape::Montree { .. }),
+                opacite: self.vue,
+                finie,
+            });
+        }
+        let voile = voilee(&self.etape) || discret();
         if let Some(h) = self.hwnd
             && self.voilee != Some(voile)
             && systeme::voiler(h, voile)
@@ -797,6 +849,7 @@ pub fn veiller(
                 sortie: s2,
                 creee_a,
                 premiere,
+                vue: 0,
             }))
         }),
     );
@@ -832,10 +885,32 @@ mod essais {
         assert!(voilee(&Etape::Preparation(2)));
         assert!(voilee(&Etape::Cachee));
         assert!(voilee(&Etape::MiseEnPlace { m, images: 1 }));
+        assert!(!voilee(&Etape::Montree {
+            m,
+            debut: maintenant,
+            finie: false,
+            replacer: false,
+            garde: Garde::default(),
+        }));
         assert!(!voilee(&Etape::Fermeture {
             surface: Surface::Menu,
             debut: maintenant,
             puis: None,
         }));
+    }
+
+    /// Prête avant d'être montrée : le voile se lève à la fin de la dernière image de mise en
+    /// place, quand la fenêtre est déjà à sa taille, à sa place et à l'opacité de la première
+    /// image de l'ouverture. Cette image-là est déjà bien visible (l'ancienne ouverture
+    /// montrait d'abord une fenêtre transparente, puis la faisait monter et apparaître en
+    /// 250 ms : une attente ressentie à chaque clic).
+    #[test]
+    fn premiere_image_montree_deja_visible() {
+        let premiere = theme::ouverture(0, true);
+        assert!(premiere.opacite >= 128, "{}", premiere.opacite);
+        const { assert!(theme::OUVERTURE_FONDU_MS <= 100) };
+        // « Effets d'animation » coupés : opaque tout de suite.
+        assert_eq!(theme::ouverture(0, false).opacite, 255);
+        assert!(theme::ouverture(0, false).finie);
     }
 }

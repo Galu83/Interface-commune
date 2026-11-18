@@ -24,5 +24,6 @@
 | `docs/LICENCES.md` | avis MIT des crates publiées sans fichier de licence (egui…) |
 | `docs/MIGRATION.md`, `ETAT.md` | ce que chaque projet change ; où en est la bibliothèque |
 | `examples/demo.rs` | un logiciel d'exemple |
+| `examples/mesure_ouverture.rs` | mesure l'ouverture du volet et du petit menu, image par image, fenêtre voilée (rien à l'écran) |
 
 Tests : `cargo test -q` ; avant un envoi : `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.
