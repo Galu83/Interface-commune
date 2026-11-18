@@ -293,6 +293,22 @@ par image, d'au plus 20 ms par image : elle se joue toujours en entier. Le journ
 délai du clic à la première image présentée (au-delà de 150 ms) et toute image de l'ouverture
 bloquée plus de 100 ms : de quoi voir quand et combien l'écran fait attendre.
 
+## Les Paramètres glissent d'un écran à l'autre (branche `parametres-ecrans-dpi`, pour tous)
+
+Le défaut : sur deux écrans d'échelles différentes (un portable à 150 % sous un écran à
+100 %…), une fenêtre glissée d'un écran à l'autre sautait dans tous les sens et revenait sur le
+premier écran. La cause est dans winit 0.30 : à chaque changement d'échelle (`WM_DPICHANGED`),
+il « repousse » la fenêtre vers l'écran qu'elle quitte, ce qui relance un changement d'échelle.
+Le correctif de winit (#4341 : prendre le rectangle que Windows suggère) n'est que dans sa
+future version 0.31 ; la bibliothèque le reprend.
+
+Maintenant, sans rien à changer dans un projet : les Paramètres et toutes les fenêtres de
+`AutresFenetres` suivent la souris d'un écran à l'autre (`echelle::suivre_windows`), et les
+Paramètres seuls sont posés à leur place retenue à chaque image cachée (taille exacte même
+rouverts sur un écran d'une autre échelle). Un logiciel qui dessine les Paramètres dans **sa
+propre** fenêtre appelle `interface_commune::echelle::suivre_windows(hwnd)` une fois, sur le fil
+de cette fenêtre. Dans `place` : `place_au_changement_d_echelle`, `ecran_de`, `centre_de`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

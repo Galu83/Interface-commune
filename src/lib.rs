@@ -49,6 +49,9 @@ pub mod verification;
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
+pub mod echelle;
+#[cfg(windows)]
+#[allow(unsafe_code)]
 pub mod horloge;
 #[cfg(windows)]
 #[allow(unsafe_code)]

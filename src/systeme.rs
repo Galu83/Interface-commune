@@ -392,7 +392,8 @@ impl Drop for Reveil {
 
 /// La zone de travail de l'écran le plus proche de ce rectangle (gauche, haut, droite, bas).
 pub fn zone_de_travail_pres_de(r: Rect) -> Option<Rect> {
-    ecran_autour(r[0] / 2 + r[2] / 2, r[1] / 2 + r[3] / 2).map(|(_, t)| t)
+    let [x, y] = crate::place::centre_de(r);
+    ecran_autour(x, y).map(|(_, t)| t)
 }
 
 /// Pose la fenêtre à cette place (gauche, haut, largeur, hauteur, en pixels), sans changer

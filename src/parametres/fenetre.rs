@@ -195,10 +195,18 @@ impl eframe::App for Seuls {
                 // Voilée jusqu'à ce qu'elle soit habillée et dessinée : eframe la montre
                 // d'office à sa première image.
                 systeme::voiler(h, true);
-                if let Some(p) = self.place.take() {
-                    systeme::poser(h, p);
-                }
+                // Glissée vers un écran d'une autre échelle : elle suit la souris.
+                crate::echelle::suivre_windows(h);
             }
+        }
+        if let Some(h) = self.hwnd
+            && !self.montree
+            && let Some(p) = self.place
+        {
+            // Posée à chaque image cachée, comme les autres fenêtres : née sur l'écran
+            // principal, elle change d'échelle en arrivant sur un écran d'une autre échelle
+            // (l'écran du haut d'un portable…) ; la fois suivante lui rend sa taille exacte.
+            systeme::poser(h, p);
         }
         if let Some(h) = self.hwnd
             && (change || self.images == 0)

@@ -354,6 +354,9 @@ impl Fenetre {
             self.hwnd = systeme::fenetre_du_fil(&self.titre, &prises);
             if let Some(h) = self.hwnd {
                 prises.push(h);
+                // Glissée vers un écran d'une autre échelle : elle suit la souris
+                // (`crate::echelle`).
+                crate::echelle::suivre_windows(h);
             }
         }
         let Some(h) = self.hwnd else { return };

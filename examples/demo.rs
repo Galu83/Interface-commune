@@ -65,6 +65,9 @@ mod demo {
         rapide: AtomicBool,
         demarrage: AtomicBool,
         poste: Mutex<Option<Poste>>,
+        /// La place des Paramètres, retenue le temps du lancement (essai de la réouverture
+        /// sur un autre écran).
+        place: Mutex<Option<interface_commune::place::Place>>,
     }
 
     impl Logiciel for Exemple {
@@ -118,6 +121,16 @@ mod demo {
     impl Reglages for Exemple {
         fn identite(&self) -> &Identite {
             &self.identite
+        }
+
+        fn place_parametres(&self) -> Option<interface_commune::place::Place> {
+            self.place.lock().ok().and_then(|p| *p)
+        }
+
+        fn retenir_place(&self, place: interface_commune::place::Place) {
+            if let Ok(mut p) = self.place.lock() {
+                *p = Some(place);
+            }
         }
 
         fn action(&self, cle: &str) {
@@ -255,6 +268,7 @@ mod demo {
             rapide: AtomicBool::new(false),
             demarrage: AtomicBool::new(false),
             poste: Mutex::new(Some(horloge.poste())),
+            place: Mutex::new(None),
         });
         let _ = horloge.lancer(exemple, parametres::modele::page_demandee(&args));
     }
