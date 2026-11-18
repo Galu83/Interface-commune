@@ -48,8 +48,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
     RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetForegroundWindow,
     SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_ENDSESSION, WM_NULL,
-    WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_DISPLAYCHANGE,
+    WM_ENDSESSION, WM_NULL, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -310,7 +310,7 @@ pub struct MessageWindows {
 /// Ce que le logiciel fait des messages de Windows de la fenêtre cachée (`WM_HOTKEY`, ses
 /// messages à lui, `WM_POWERBROADCAST`…), sur le fil de l'icône. `Some(résultat)` : traité ;
 /// `None` : Windows fait le traitement par défaut. Il voit aussi, sans pouvoir les arrêter,
-/// `WM_QUERYENDSESSION`, `WM_ENDSESSION` et `WM_SETTINGCHANGE`. Il ne voit jamais les
+/// `WM_QUERYENDSESSION`, `WM_ENDSESSION`, `WM_SETTINGCHANGE` et `WM_DISPLAYCHANGE`. Il ne voit jamais les
 /// messages propres à la bibliothèque.
 pub type Recepteur = Box<dyn FnMut(&MessageWindows) -> Option<isize>>;
 
@@ -336,7 +336,7 @@ fn destinataire(msg: u32, wp: usize, taskbar_created: u32) -> Destinataire {
         WM_ICONE | WM_COMMANDE | WM_OUVRIR_PARAMETRES | WM_MENU_DE_SECOURS | WM_COPYDATA | WM_CLOSE
         | WM_DESTROY => Destinataire::Bibliotheque,
         m if m == taskbar_created && m != 0 => Destinataire::Bibliotheque,
-        WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE => Destinataire::LesDeux,
+        WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE | WM_DISPLAYCHANGE => Destinataire::LesDeux,
         _ => Destinataire::Logiciel,
     }
 }
@@ -1105,6 +1105,12 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
                 p.redessiner_icone(false);
                 false
             }
+            WM_DISPLAYCHANGE => {
+                // Windows refait l'affichage : les fenêtres pas encore créées attendent la fin
+                // de la reprise (`autres_fenetres::REPRISE`).
+                crate::autres_fenetres::affichage_change();
+                false
+            }
             WM_ENDSESSION => {
                 if wp.0 != 0 {
                     // La session se ferme : le programme peut être arrêté dès le retour.
@@ -1255,7 +1261,12 @@ mod essais {
         ] {
             assert_eq!(destinataire(m, 0, barre), Destinataire::Bibliotheque, "{m:#x}");
         }
-        for m in [WM_QUERYENDSESSION, WM_ENDSESSION, WM_SETTINGCHANGE] {
+        for m in [
+            WM_QUERYENDSESSION,
+            WM_ENDSESSION,
+            WM_SETTINGCHANGE,
+            WM_DISPLAYCHANGE,
+        ] {
             assert_eq!(destinataire(m, 0, barre), Destinataire::LesDeux, "{m:#x}");
         }
         for m in [WM_HOTKEY, WM_POWERBROADCAST, WM_APP + 100] {

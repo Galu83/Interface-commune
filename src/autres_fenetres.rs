@@ -269,6 +269,45 @@ pub const CREATIONS_MAX: u32 = 3;
 /// L'attente avant un nouvel essai de création.
 const NOUVEL_ESSAI: std::time::Duration = std::time::Duration::from_millis(500);
 
+/// Après un changement d'affichage de Windows (`WM_DISPLAYCHANGE` : écran retiré, rendu, autre
+/// résolution), une fenêtre qui n'existe pas encore n'est créée qu'au bout de ce temps : le
+/// pilote graphique refait alors son travail, et créer une fenêtre OpenGL au même moment a
+/// fait échouer la création, ou bloqué le fil dans SwapBuffers pendant des dizaines de
+/// secondes. Une fenêtre déjà créée n'attend jamais (egui détruit celle qu'on ne dessine pas).
+pub const REPRISE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Un premier dessin après un changement d'affichage est mesuré au journal pendant ce temps.
+const SUIVI_DE_LA_REPRISE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// L'heure du dernier changement d'affichage de Windows.
+static AFFICHAGE_CHANGE: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+/// Windows vient de changer l'affichage (`WM_DISPLAYCHANGE`) : les fenêtres pas encore créées
+/// attendent [`REPRISE`]. À appeler depuis le fil de l'icône.
+pub fn affichage_change() {
+    *verrou(&AFFICHAGE_CHANGE) = Some(std::time::Instant::now());
+}
+
+fn depuis_le_changement() -> Option<std::time::Duration> {
+    (*verrou(&AFFICHAGE_CHANGE)).map(|t| t.elapsed())
+}
+
+/// Combien de temps une fenêtre pas encore créée attend avant d'être dessinée (`None` :
+/// maintenant). `depuis` : le temps écoulé depuis le dernier changement d'affichage ;
+/// `essai` : ce qui reste avant le nouvel essai d'une création ratée. Elle attend le plus
+/// long des deux.
+pub fn attente_avant_creation(
+    depuis: Option<std::time::Duration>,
+    essai: Option<std::time::Duration>,
+) -> Option<std::time::Duration> {
+    let reprise = depuis.and_then(|d| REPRISE.checked_sub(d));
+    [reprise, essai]
+        .into_iter()
+        .flatten()
+        .filter(|d| !d.is_zero())
+        .max()
+}
+
 /// Ce que la fenêtre devient après une image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Apres {
@@ -288,9 +327,8 @@ impl Fenetre {
         if self.images > 0 || self.montree {
             return None;
         }
-        self.pas_avant
-            .and_then(|t| t.checked_duration_since(maintenant))
-            .filter(|d| !d.is_zero())
+        let essai = self.pas_avant.and_then(|t| t.checked_duration_since(maintenant));
+        attente_avant_creation(depuis_le_changement(), essai)
     }
 
     fn image(&mut self, ui: &mut egui::Ui, classe: ViewportClass, palette: &Palette) -> Apres {
@@ -642,7 +680,29 @@ impl AutresFenetres {
                 ctx.request_repaint_after_for(d, ViewportId::ROOT);
                 continue;
             } else {
-                self.image_ou_essai(ctx, &cle, &f, builder, palette)
+                let premiere = {
+                    let g = verrou(&f);
+                    g.images == 0 && !g.montree
+                };
+                let debut = std::time::Instant::now();
+                let apres = self.image_ou_essai(ctx, &cle, &f, builder, palette);
+                // Le premier dessin après un changement d'affichage, mesuré (la reprise s'est
+                // bien passée, ou non).
+                if premiere
+                    && let Some(depuis) = depuis_le_changement()
+                    && depuis < SUIVI_DE_LA_REPRISE
+                {
+                    let g = verrou(&f);
+                    if g.images > 0 {
+                        crate::sonde::noter(format!(
+                            "Fenêtre « {} » : premier dessin après le changement d'affichage de Windows : {} ms (le changement date de {} ms).",
+                            g.titre,
+                            debut.elapsed().as_millis(),
+                            depuis.as_millis()
+                        ));
+                    }
+                }
+                apres
             };
             if apres == Apres::Fermer {
                 self.retirer(&cle, &f);
@@ -880,6 +940,39 @@ mod tests {
         CREATION_RATEE.with(|c| c.set(false));
         assert!(!f.ouverte("p"), "abandonnée après {CREATIONS_MAX} échecs");
         assert!(trace.0.lock().unwrap().iter().any(|l| l == "p fermée"));
+    }
+
+    /// L'attente avant la création d'une fenêtre : après un changement d'affichage, jusqu'à la
+    /// fin de la reprise ; après une création ratée, jusqu'au nouvel essai ; le plus long des
+    /// deux ; rien sinon (dessiner tout de suite).
+    #[test]
+    fn attendre_ou_dessiner() {
+        use std::time::Duration as D;
+        let ms = D::from_millis;
+        // Aucun changement d'affichage, aucun échec : dessiner.
+        assert_eq!(attente_avant_creation(None, None), None);
+        // Un changement d'affichage tout juste arrivé : attendre la reprise entière.
+        assert_eq!(attente_avant_creation(Some(D::ZERO), None), Some(REPRISE));
+        // À mi-chemin : attendre le reste.
+        assert_eq!(attente_avant_creation(Some(ms(400)), None), Some(ms(600)));
+        // Reprise finie (pile, ou bien après) : dessiner.
+        assert_eq!(attente_avant_creation(Some(REPRISE), None), None);
+        assert_eq!(attente_avant_creation(Some(D::from_secs(30)), None), None);
+        // Une création ratée attend son nouvel essai ; avec un changement d'affichage : le plus
+        // long des deux.
+        assert_eq!(attente_avant_creation(None, Some(ms(500))), Some(ms(500)));
+        assert_eq!(
+            attente_avant_creation(Some(ms(900)), Some(ms(500))),
+            Some(ms(500))
+        );
+        assert_eq!(
+            attente_avant_creation(Some(ms(100)), Some(ms(500))),
+            Some(ms(900))
+        );
+        // Un reste nul n'est pas une attente.
+        assert_eq!(attente_avant_creation(None, Some(D::ZERO)), None);
+        // Jamais plus d'une seconde d'attente pour un changement d'affichage.
+        assert!(REPRISE <= D::from_secs(1));
     }
 
     /// Une panique du contenu lui-même (son dessin a commencé) n'est pas prise pour une
