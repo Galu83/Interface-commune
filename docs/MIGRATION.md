@@ -348,6 +348,15 @@ rouverts sur un écran d'une autre échelle). Un logiciel qui dessine les Param�
 propre** fenêtre appelle `interface_commune::echelle::suivre_windows(hwnd)` une fois, sur le fil
 de cette fenêtre. Dans `place` : `place_au_changement_d_echelle`, `ecran_de`, `centre_de`.
 
+## La version à droite du gros titre du volet (branche `volet-version`, pour tous)
+
+Le volet montre la version (« x.y.z », `Identite::version`) petite et grise, à droite du gros
+titre et sur sa ligne de base ; le bas du volet ne garde que la roue des Paramètres (il ne
+répète plus « Nom x.y.z »). Rien à changer dans le code d'un projet. **Le gros titre
+(`Etat::titre`) est le nom du logiciel** : un état (disposition, mode…) va dans la ligne d'état
+(`Etat::ligne`), pas dans le titre. Un test qui cherchait le texte « Nom x.y.z » dans le volet
+cherche maintenant « x.y.z », à droite du titre.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

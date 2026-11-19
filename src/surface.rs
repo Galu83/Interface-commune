@@ -1,9 +1,10 @@
 //! Le contenu du volet (clic gauche) et du petit menu (clic droit), dessiné par egui sans
 //! rien savoir de la fenêtre (règles : interface Windows 11, points 6 et 10) :
 //!
-//! - **le volet**, sur le modèle du volet réseau de Windows 11 : en haut, l'état en gros et
-//!   en couleur ; dessous, les réglages rapides du logiciel ; en bas, la version, discrète,
-//!   et à droite une roue dentée vers les Paramètres. Pas de « Quitter ».
+//! - **le volet**, sur le modèle du volet réseau de Windows 11 : en haut, le gros titre (le
+//!   nom du logiciel) avec sa version, petite et grise, à sa droite, puis l'état en couleur ;
+//!   dessous, les réglages rapides du logiciel ; en bas, la roue dentée des Paramètres.
+//!   Pas de « Quitter ».
 //! - **le petit menu**, au style des menus de Windows 11, dans l'ordre de [`crate::menu`].
 //!
 //! **Rien n'est coupé** : la largeur suit les textes mesurés, de la largeur de base à
@@ -16,9 +17,7 @@ use crate::apparence::couleur;
 use crate::briques::{self, Brique, Geste};
 use crate::dessin::{self, bouton_icone, ligne_menu};
 use crate::menu::{self, Choix};
-use crate::mesures::{
-    MENU_ECART, MENU_MARGE, SEPARATEUR, VOLET_MARGE, VOLET_MARGE_BAS, VOLET_MARGE_ETAT, VOLET_ROUE,
-};
+use crate::mesures::{MENU_ECART, MENU_MARGE, SEPARATEUR, VOLET_MARGE, VOLET_MARGE_ETAT, VOLET_ROUE};
 use crate::polices::{semibold, titre};
 use crate::theme::{Palette, Rgb, Surface, TAILLE_PETIT, TAILLE_TEXTE, TAILLE_TITRE_VOLET};
 use crate::{GenreEtat, Logiciel, icones};
@@ -26,7 +25,8 @@ use crate::{GenreEtat, Logiciel, icones};
 /// Largeur du volet et du petit menu : au moins, au plus (points ; [`crate::mesures`]).
 pub use crate::mesures::{LARGEUR_MAX, MENU_LARGEUR as LARGEUR_MENU, VOLET_LARGEUR as LARGEUR};
 const MARGE_ETAT: f32 = VOLET_MARGE_ETAT;
-const MARGE_BAS: f32 = VOLET_MARGE_BAS;
+/// L'écart entre le gros titre et sa version (points).
+const ECART_VERSION: f32 = 6.0;
 const ROUE: f32 = VOLET_ROUE;
 
 /// La marge autour du contenu de la surface.
@@ -59,9 +59,9 @@ pub fn couleur_etat(genre: GenreEtat, p: &Palette) -> (char, Rgb) {
     }
 }
 
+/// La version du logiciel (« x.y.z »), montrée à droite du gros titre.
 fn version(l: &dyn Logiciel) -> String {
-    let i = l.identite();
-    format!("{} {}", i.nom, i.version)
+    l.identite().version.clone()
 }
 
 fn lignes_du_menu(l: &dyn Logiciel) -> Vec<Option<menu::Ligne>> {
@@ -104,7 +104,11 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique])
         Surface::Volet => {
             let e = l.etat();
             let cote = 2.0 * MARGE_ETAT;
+            let v = version(l);
             let mut b = cote + mesure(&e.titre, titre(TAILLE_TITRE_VOLET));
+            if !v.is_empty() {
+                b += ECART_VERSION + mesure(&v, egui::FontId::proportional(TAILLE_PETIT));
+            }
             b = b.max(
                 cote + dessin::ETAT_ICONE
                     + ui.spacing().item_spacing.x
@@ -112,8 +116,7 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique])
             );
             b = b.max(l.largeur_rapides(ui));
             b = b.max(briques::largeur(ui, briques));
-            let bas = MARGE_BAS + mesure(&version(l), egui::FontId::proportional(TAILLE_PETIT));
-            b = b.max(bas + ui.spacing().item_spacing.x + ROUE);
+            b = b.max(ROUE);
             (LARGEUR, b)
         }
     };
@@ -132,7 +135,7 @@ pub fn dessiner(
 }
 
 /// Comme [`dessiner`], sans que le volet dépasse `hauteur_max` points (marges comprises) :
-/// au-delà, l'état en haut et la version en bas restent en place et les briques défilent.
+/// au-delà, l'état en haut et la roue en bas restent en place et les briques défilent.
 /// `None`, ou le petit menu : aussi haut que le contenu. Les briques ne sont demandées au
 /// logiciel qu'une fois par image.
 pub fn dessiner_borne(
@@ -175,14 +178,44 @@ fn separateur(ui: &mut egui::Ui, p: &Palette) {
     );
 }
 
-/// Le volet : l'état, les réglages rapides, la version et la roue dentée.
+/// Le volet : le titre et sa version, l'état, les réglages rapides et la roue dentée.
 pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Option<Choisi> {
     let briques = l.briques_avec_contexte(ui.ctx());
     volet(ui, p, l, &briques, None)
 }
 
-/// La hauteur du bas du volet (séparateur, version et roue dentée) avant sa première mesure.
+/// La hauteur du bas du volet (séparateur et roue dentée) avant sa première mesure.
 const PIED_ESTIME: f32 = SEPARATEUR + ROUE + 12.0;
+
+/// La distance du haut d'un texte à sa ligne de base (points).
+fn ligne_de_base(g: &egui::Galley) -> f32 {
+    g.rows
+        .first()
+        .and_then(|r| r.glyphs.first().map(|c| r.pos.y + c.pos.y))
+        .unwrap_or_else(|| g.size().y)
+}
+
+/// Le gros titre, et à sa droite la version, petite et grise, sur la même ligne de base. Le
+/// titre se coupe par « … » si la place manque ; la version reste entière.
+fn titre_et_version(ui: &mut egui::Ui, p: &Palette, titre_texte: &str, version: &str) {
+    let police = titre(TAILLE_TITRE_VOLET);
+    let petite = egui::FontId::proportional(TAILLE_PETIT);
+    let gris = couleur(p.texte_secondaire);
+    let v = (!version.is_empty()).then(|| ui.painter().layout_no_wrap(version.to_string(), petite, gris));
+    let reserve = v.as_ref().map_or(0.0, |v| ECART_VERSION + v.size().x);
+    let place = ui.available_width();
+    let haut = ui
+        .allocate_ui(egui::vec2((place - reserve).max(1.0), 0.0), |ui| {
+            ui.add(egui::Label::new(RichText::new(titre_texte).font(police.clone())).truncate())
+        })
+        .inner;
+    let Some(v) = v else { return };
+    let g = ui.painter().layout_no_wrap(titre_texte.to_string(), police, gris);
+    let x = (haut.rect.left() + g.size().x.min(haut.rect.width()) + ECART_VERSION)
+        .min(haut.rect.left() + place - v.size().x);
+    let y = haut.rect.top() + ligne_de_base(&g) - ligne_de_base(&v);
+    ui.painter().galley(egui::pos2(x, y), v, gris);
+}
 
 /// Le volet, avec ses briques ; `hauteur_max` : la hauteur de son contenu à ne pas dépasser
 /// (points, sans les marges), les briques défilant au-delà.
@@ -205,7 +238,7 @@ fn volet(
         })
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.add(egui::Label::new(RichText::new(&e.titre).font(titre(TAILLE_TITRE_VOLET))).truncate());
+            titre_et_version(ui, p, &e.titre, &version(l));
             let (g, c) = couleur_etat(e.genre, p);
             dessin::etat_long(ui, c, g, &e.ligne);
             if let Some(m) = &e.detail {
@@ -256,12 +289,6 @@ fn volet(
     ui.add_space(2.0);
     separateur(ui, p);
     ui.horizontal(|ui| {
-        ui.add_space(MARGE_BAS);
-        ui.label(
-            RichText::new(version(l))
-                .color(couleur(p.texte_secondaire))
-                .size(TAILLE_PETIT),
-        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if bouton_icone(ui, p, icones::REGLAGES, l.textes().parametres).clicked() {
                 choisi = Some(Choisi::Parametres);

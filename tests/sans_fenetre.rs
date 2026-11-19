@@ -233,7 +233,23 @@ fn volet_et_petit_menu_sans_fenetre() {
                     "{ppp} : « {t} » dépasse ({r:?}, {taille:?})"
                 );
             }
-            assert!(textes.iter().any(|(t, _)| t == "Démo 1.2.3"));
+            // La version est petite, à droite du gros titre, sur la même ligne ; le bas du volet
+            // ne la répète pas.
+            let (_, nom) = textes
+                .iter()
+                .find(|(t, _)| t == "Bureau du salon")
+                .expect("le titre");
+            let (_, version) = textes.iter().find(|(t, _)| t == "1.2.3").expect("la version");
+            assert!(
+                version.min.x > nom.max.x,
+                "{ppp} : à droite du titre ({version:?} {nom:?})"
+            );
+            assert!(version.height() < nom.height(), "{ppp} : plus petite");
+            assert!(
+                version.center().y > nom.center().y && version.max.y <= nom.max.y + 1.0,
+                "{ppp} : posée sur la ligne de base ({version:?} {nom:?})"
+            );
+            assert!(!textes.iter().any(|(t, _)| t.contains("Démo 1.2.3")), "{ppp}");
         }
         let mut taille = egui::Vec2::ZERO;
         let textes = image(egui::vec2(800.0, 1200.0), ppp, |ui, p| {
@@ -1146,7 +1162,7 @@ impl Logiciel for Appareils {
 
 /// Le volet reçoit le contexte egui pour ses briques (une fois par image) ; sans hauteur
 /// maximale il est aussi haut que son contenu (comme avant) ; avec, il ne la dépasse pas et
-/// garde la version et la roue dentée en bas, les briques défilant au-dessus.
+/// garde le titre avec sa version en haut et la roue dentée en bas, les briques défilant entre.
 #[test]
 fn volet_borne_et_briques_avec_contexte() {
     let l = Appareils {
@@ -1175,8 +1191,8 @@ fn volet_borne_et_briques_avec_contexte() {
         if polices::polices().is_ok() {
             let (_, version) = textes
                 .iter()
-                .find(|(t, _)| t == "Démo 1.2.3")
-                .expect("la version reste en bas");
+                .find(|(t, _)| t == "1.2.3")
+                .expect("la version reste en haut, avec le titre");
             assert!(version.max.y <= borne.y, "{version:?} {borne:?}");
             let haut = textes
                 .iter()
