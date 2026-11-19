@@ -175,7 +175,7 @@ impl Palette {
 
 /// Titre de page, en points.
 pub const TAILLE_TITRE: f32 = 28.0;
-/// Le gros titre du volet (l'état, ce qu'on vient y voir).
+/// Le gros titre du volet (le nom du logiciel).
 pub const TAILLE_TITRE_VOLET: f32 = 20.0;
 /// Titre de section (semibold).
 pub const TAILLE_SECTION: f32 = 15.0;

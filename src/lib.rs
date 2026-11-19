@@ -127,9 +127,12 @@ pub enum GenreEtat {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Etat {
     pub genre: GenreEtat,
-    /// Le gros titre du volet (« Prêt », le nom de la disposition active…).
+    /// Le gros titre du volet : le nom du logiciel (la version s'écrit petite, à sa droite).
+    /// Un état (« Prêt », la disposition active, « Changement en cours… ») ne va pas ici mais
+    /// dans la ligne d'état.
     pub titre: String,
-    /// Une ligne d'état en couleur sous le titre (« Prêt », « Changement en cours… »).
+    /// La ligne d'état, en couleur, sous le titre : « Prêt · <disposition> », « Changement en
+    /// cours… ».
     pub ligne: String,
     /// Une explication plus longue, en texte secondaire, s'il y en a une.
     pub detail: Option<String>,
