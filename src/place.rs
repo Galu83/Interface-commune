@@ -160,8 +160,8 @@ pub struct PlacementVolet {
     /// L'écart avec l'icône (ou la barre) et les bords, en points : converti en pixels réels à
     /// l'échelle de l'écran du volet. `None` : [`ECART_VOLET`] pixels.
     pub ecart: Option<f32>,
-    /// La hauteur maximale du volet, en points. Au-delà, l'état et le bas du volet restent en
-    /// place et les briques défilent. Le volet ne dépasse jamais non plus la zone de travail de
+    /// La hauteur maximale du volet, en points. Au-delà, l'en-tête (titre, roue) et l'état
+    /// restent en place et les briques défilent. Le volet ne dépasse jamais non plus la zone de travail de
     /// son écran. `None` : aussi haut que son contenu.
     pub hauteur_max: Option<f32>,
 }

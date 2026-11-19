@@ -130,10 +130,13 @@ pub fn ligne_de(
     r
 }
 
-/// Un bouton carré qui n'est qu'une icône (la roue dentée du volet), 36 × 36 : survol
+/// Un bouton carré qui n'est qu'une icône (la roue dentée, en haut à droite du volet), 36 × 36 : survol
 /// arrondi, contour de focus, et son nom pour le lecteur d'écran et l'info-bulle.
 pub fn bouton_icone(ui: &mut Ui, p: &Palette, glyphe: char, nom: &str) -> Response {
-    let (rect, r) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::click());
+    let (rect, r) = ui.allocate_exact_size(
+        vec2(crate::mesures::VOLET_ROUE, crate::mesures::VOLET_ROUE),
+        Sense::click(),
+    );
     let r = r.on_hover_text(nom);
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, nom));
     if ui.is_rect_visible(rect) {

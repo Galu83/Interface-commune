@@ -41,6 +41,8 @@ struct Demo {
     anglais: AtomicBool,
     changes: Mutex<Vec<(String, Valeur)>>,
     actions: Mutex<Vec<String>>,
+    /// Un gros titre à la place du nom « Bureau du salon » (essai des noms longs).
+    titre: Mutex<Option<String>>,
 }
 
 impl Demo {
@@ -50,6 +52,7 @@ impl Demo {
             anglais: AtomicBool::new(false),
             changes: Mutex::default(),
             actions: Mutex::default(),
+            titre: Mutex::default(),
         }
     }
 }
@@ -126,7 +129,12 @@ impl Logiciel for Demo {
     fn etat(&self) -> Etat {
         Etat {
             genre: GenreEtat::Pret,
-            titre: "Bureau du salon".into(),
+            titre: self
+                .titre
+                .lock()
+                .expect("verrou")
+                .clone()
+                .unwrap_or_else(|| "Bureau du salon".into()),
             ligne: "Prêt".into(),
             detail: Some("Une explication assez longue pour passer à la ligne dans le volet, sans jamais être coupée au bord droit de la fenêtre.".into()),
         }
@@ -233,8 +241,8 @@ fn volet_et_petit_menu_sans_fenetre() {
                     "{ppp} : « {t} » dépasse ({r:?}, {taille:?})"
                 );
             }
-            // La version est petite, à droite du gros titre, sur la même ligne ; le bas du volet
-            // ne la répète pas.
+            // La version est petite, à droite du gros titre, sur la même ligne ; elle n'est pas
+            // répétée ailleurs.
             let (_, nom) = textes
                 .iter()
                 .find(|(t, _)| t == "Bureau du salon")
@@ -250,6 +258,26 @@ fn volet_et_petit_menu_sans_fenetre() {
                 "{ppp} : posée sur la ligne de base ({version:?} {nom:?})"
             );
             assert!(!textes.iter().any(|(t, _)| t.contains("Démo 1.2.3")), "{ppp}");
+            // La roue des Paramètres est en haut à droite, sur la ligne du titre, au centre de
+            // sa hauteur ; rien en dessous des réglages (plus de ligne du bas).
+            let roue = textes
+                .iter()
+                .find(|(t, _)| t == interface_commune::icones::REGLAGES.to_string().as_str())
+                .map(|(_, r)| *r)
+                .expect("la roue");
+            assert!(
+                roue.center().x > taille.x - 36.0,
+                "{ppp} : à droite ({roue:?} {taille:?})"
+            );
+            assert!(
+                (roue.center().y - nom.center().y).abs() < 6.0,
+                "{ppp} : sur la ligne du titre ({roue:?} {nom:?})"
+            );
+            let dernier = textes.iter().map(|(_, r)| r.max.y).fold(0.0, f32::max);
+            assert!(
+                roue.max.y < dernier - 100.0,
+                "{ppp} : pas en bas ({roue:?} {dernier})"
+            );
         }
         let mut taille = egui::Vec2::ZERO;
         let textes = image(egui::vec2(800.0, 1200.0), ppp, |ui, p| {
@@ -1162,7 +1190,7 @@ impl Logiciel for Appareils {
 
 /// Le volet reçoit le contexte egui pour ses briques (une fois par image) ; sans hauteur
 /// maximale il est aussi haut que son contenu (comme avant) ; avec, il ne la dépasse pas et
-/// garde le titre avec sa version en haut et la roue dentée en bas, les briques défilant entre.
+/// garde en haut le titre, sa version et la roue dentée, les briques défilant dessous.
 #[test]
 fn volet_borne_et_briques_avec_contexte() {
     let l = Appareils {
@@ -1261,5 +1289,56 @@ fn raccourcis_en_toutes_lettres() {
             !t.contains(['⇧', '⌃', '⌥', '⌘', '→', '←']),
             "symbole dans « {t} »"
         );
+    }
+}
+
+/// Un nom de logiciel long, avec sa version, ne passe jamais sous la roue des Paramètres : le
+/// titre se coupe par « … », la version reste entière, et la roue garde sa place à droite.
+#[test]
+fn titre_long_ne_chevauche_pas_la_roue() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let mut demo = Demo::new();
+    demo.identite.version = "12.34.56".into();
+    let long = "Un nom de logiciel vraiment beaucoup trop long pour tenir sur une seule ligne du volet";
+    *demo.titre.lock().expect("verrou") = Some(long.into());
+    let roue_texte = interface_commune::icones::REGLAGES.to_string();
+    for ppp in [1.0, 1.25, 1.5, 2.0] {
+        let mut taille = egui::Vec2::ZERO;
+        let textes = image(egui::vec2(800.0, 1200.0), ppp, |ui, p| {
+            taille = surface::dessiner(ui, p, Surface::Volet, &demo).1;
+        });
+        let roue = textes
+            .iter()
+            .find(|(t, _)| *t == roue_texte)
+            .map(|(_, r)| *r)
+            .expect("la roue");
+        let titre = textes
+            .iter()
+            .find(|(t, _)| t.starts_with("Un nom de logiciel"))
+            .map(|(t, r)| (t.clone(), *r))
+            .expect("le titre");
+        let (_, version) = textes.iter().find(|(t, _)| t == "12.34.56").expect("la version");
+        // Le bouton fait 36 de large, centré sur l'icône : son bord gauche.
+        let bord = roue.center().x - 18.0;
+        assert!(
+            titre.1.max.x <= bord - 8.0 + 0.5,
+            "{ppp} : titre sous la roue ({:?} {roue:?})",
+            titre.1
+        );
+        assert!(
+            version.max.x <= bord - 8.0 + 0.5,
+            "{ppp} : version sous la roue ({version:?} {roue:?})"
+        );
+        assert!(
+            version.min.x >= titre.1.max.x,
+            "{ppp} : version à droite du titre"
+        );
+        assert!(
+            roue.center().x > taille.x - 36.0,
+            "{ppp} : la roue reste à droite"
+        );
+        assert!((LARGEUR..=LARGEUR_MAX).contains(&taille.x), "{ppp} : {taille:?}");
     }
 }

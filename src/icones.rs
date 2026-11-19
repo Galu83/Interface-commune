@@ -6,7 +6,7 @@
 //! Un logiciel ajoute les siennes dans son propre fichier d'icônes, et les fait vérifier par
 //! [`crate::verification`].
 
-/// « Paramètres » (petit menu, roue dentée du volet) et la page « Général » : la roue dentée.
+/// « Paramètres » (petit menu, roue dentée en haut à droite du volet) et la page « Général » : la roue dentée.
 pub const REGLAGES: char = '\u{E713}';
 /// « Rechercher une mise à jour » et la page « Mise à jour » : les deux flèches en cercle
 /// de Windows Update. Aussi l'état « en cours ».

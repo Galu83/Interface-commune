@@ -1,15 +1,16 @@
 //! Le contenu du volet (clic gauche) et du petit menu (clic droit), dessiné par egui sans
 //! rien savoir de la fenêtre (règles : interface Windows 11, points 6 et 10) :
 //!
-//! - **le volet**, sur le modèle du volet réseau de Windows 11 : en haut, le gros titre (le
-//!   nom du logiciel) avec sa version, petite et grise, à sa droite, puis l'état en couleur ;
-//!   dessous, les réglages rapides du logiciel ; en bas, la roue dentée des Paramètres.
-//!   Pas de « Quitter ».
+//! - **le volet**, sur le modèle du volet de OneDrive : en haut, le gros titre (le nom du
+//!   logiciel) avec sa version, petite et grise, à sa droite, et à l'extrême droite de la même
+//!   ligne la roue dentée des Paramètres ; puis l'état en couleur ; dessous, les réglages
+//!   rapides du logiciel. Pas de ligne du bas, pas de « Quitter ».
 //! - **le petit menu**, au style des menus de Windows 11, dans l'ordre de [`crate::menu`].
 //!
 //! **Rien n'est coupé** : la largeur suit les textes mesurés, de la largeur de base à
 //! [`LARGEUR_MAX`] ; au-delà, les phrases passent à la ligne. Le volet peut avoir une hauteur
-//! maximale ([`dessiner_borne`]) : l'état et le bas restent en place, les briques défilent.
+//! maximale ([`dessiner_borne`]) : l'en-tête (titre, roue) et l'état restent en place, les
+//! briques défilent.
 
 use egui::RichText;
 
@@ -17,7 +18,10 @@ use crate::apparence::couleur;
 use crate::briques::{self, Brique, Geste};
 use crate::dessin::{self, bouton_icone, ligne_menu};
 use crate::menu::{self, Choix};
-use crate::mesures::{MENU_ECART, MENU_MARGE, SEPARATEUR, VOLET_MARGE, VOLET_MARGE_ETAT, VOLET_ROUE};
+use crate::mesures::{
+    MENU_ECART, MENU_MARGE, SEPARATEUR, VOLET_ENTETE_DROITE, VOLET_ENTETE_ECART, VOLET_MARGE,
+    VOLET_MARGE_ETAT, VOLET_ROUE,
+};
 use crate::polices::{semibold, titre};
 use crate::theme::{Palette, Rgb, Surface, TAILLE_PETIT, TAILLE_TEXTE, TAILLE_TITRE_VOLET};
 use crate::{GenreEtat, Logiciel, icones};
@@ -28,6 +32,10 @@ const MARGE_ETAT: f32 = VOLET_MARGE_ETAT;
 /// L'écart entre le gros titre et sa version (points).
 const ECART_VERSION: f32 = 6.0;
 const ROUE: f32 = VOLET_ROUE;
+/// La marge à droite de l'en-tête, et l'écart minimal entre le titre (ou la version) et la
+/// roue (points).
+const ENTETE_DROITE: f32 = VOLET_ENTETE_DROITE;
+const ENTETE_ECART: f32 = VOLET_ENTETE_ECART;
 
 /// La marge autour du contenu de la surface.
 fn marge(s: Surface) -> f32 {
@@ -105,10 +113,12 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique])
             let e = l.etat();
             let cote = 2.0 * MARGE_ETAT;
             let v = version(l);
-            let mut b = cote + mesure(&e.titre, titre(TAILLE_TITRE_VOLET));
+            // L'en-tête : le titre, sa version, un écart, puis la roue à l'extrême droite.
+            let mut titre_v = mesure(&e.titre, titre(TAILLE_TITRE_VOLET));
             if !v.is_empty() {
-                b += ECART_VERSION + mesure(&v, egui::FontId::proportional(TAILLE_PETIT));
+                titre_v += ECART_VERSION + mesure(&v, egui::FontId::proportional(TAILLE_PETIT));
             }
+            let mut b = MARGE_ETAT + titre_v + ENTETE_ECART + ROUE + ENTETE_DROITE;
             b = b.max(
                 cote + dessin::ETAT_ICONE
                     + ui.spacing().item_spacing.x
@@ -116,7 +126,6 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique])
             );
             b = b.max(l.largeur_rapides(ui));
             b = b.max(briques::largeur(ui, briques));
-            b = b.max(ROUE);
             (LARGEUR, b)
         }
     };
@@ -135,7 +144,7 @@ pub fn dessiner(
 }
 
 /// Comme [`dessiner`], sans que le volet dépasse `hauteur_max` points (marges comprises) :
-/// au-delà, l'état en haut et la roue en bas restent en place et les briques défilent.
+/// au-delà, l'en-tête (titre, roue) et l'état restent en place et les briques défilent.
 /// `None`, ou le petit menu : aussi haut que le contenu. Les briques ne sont demandées au
 /// logiciel qu'une fois par image.
 pub fn dessiner_borne(
@@ -178,14 +187,11 @@ fn separateur(ui: &mut egui::Ui, p: &Palette) {
     );
 }
 
-/// Le volet : le titre et sa version, l'état, les réglages rapides et la roue dentée.
+/// Le volet : le titre, sa version et la roue dentée en haut, l'état, les réglages rapides.
 pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Option<Choisi> {
     let briques = l.briques_avec_contexte(ui.ctx());
     volet(ui, p, l, &briques, None)
 }
-
-/// La hauteur du bas du volet (séparateur et roue dentée) avant sa première mesure.
-const PIED_ESTIME: f32 = SEPARATEUR + ROUE + 12.0;
 
 /// La distance du haut d'un texte à sa ligne de base (points).
 fn ligne_de_base(g: &egui::Galley) -> f32 {
@@ -217,6 +223,40 @@ fn titre_et_version(ui: &mut egui::Ui, p: &Palette, titre_texte: &str, version: 
     ui.painter().galley(egui::pos2(x, y), v, gris);
 }
 
+/// L'en-tête du volet : à gauche le gros titre et sa version ([`titre_et_version`]), à droite
+/// la roue dentée des Paramètres, carrée (36 × 36), centrée sur la hauteur de la ligne. Le
+/// titre ne passe jamais sous la roue : il garde au moins [`ENTETE_ECART`] avec elle et se
+/// coupe par « … ». Rend `true` si la roue est cliquée.
+fn entete(ui: &mut egui::Ui, p: &Palette, titre_texte: &str, version: &str, nom_roue: &str) -> bool {
+    let largeur = ui.available_width();
+    let (ligne, _) = ui.allocate_exact_size(egui::vec2(largeur, ROUE), egui::Sense::hover());
+    // La roue : collée à droite, avant le titre (sa place dans l'ordre du clavier).
+    let rect_roue = egui::Rect::from_min_size(
+        egui::pos2(ligne.right() - ROUE, ligne.top()),
+        egui::vec2(ROUE, ROUE),
+    );
+    let clic = ui
+        .scope_builder(egui::UiBuilder::new().max_rect(rect_roue), |ui| {
+            bouton_icone(ui, p, icones::REGLAGES, nom_roue).clicked()
+        })
+        .inner;
+    // Le titre : à gauche, centré sur la hauteur de la roue, sur le reste de la place.
+    let police = titre(TAILLE_TITRE_VOLET);
+    let hauteur_titre = ui
+        .painter()
+        .layout_no_wrap(titre_texte.to_string(), police, egui::Color32::WHITE)
+        .size()
+        .y;
+    let haut = ligne.top() + ((ROUE - hauteur_titre) / 2.0).max(0.0);
+    let place = (largeur - ROUE - ENTETE_ECART).max(1.0);
+    let rect_titre =
+        egui::Rect::from_min_size(egui::pos2(ligne.left(), haut), egui::vec2(place, hauteur_titre));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect_titre), |ui| {
+        titre_et_version(ui, p, titre_texte, version);
+    });
+    clic
+}
+
 /// Le volet, avec ses briques ; `hauteur_max` : la hauteur de son contenu à ne pas dépasser
 /// (points, sans les marges), les briques défilant au-delà.
 fn volet(
@@ -229,16 +269,30 @@ fn volet(
     let mut choisi = None;
     let haut = ui.min_rect().top();
     let e = l.etat();
+    // L'en-tête : le titre et sa version à gauche, la roue des Paramètres à l'extrême droite,
+    // sur la même ligne (la roue d'abord pour le clavier : elle est la première en haut).
+    egui::Frame::new()
+        .inner_margin(egui::Margin {
+            left: MARGE_ETAT as i8,
+            right: ENTETE_DROITE as i8,
+            top: 4,
+            bottom: 0,
+        })
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            if entete(ui, p, &e.titre, &version(l), l.textes().parametres) {
+                choisi = Some(Choisi::Parametres);
+            }
+        });
     egui::Frame::new()
         .inner_margin(egui::Margin {
             left: MARGE_ETAT as i8,
             right: MARGE_ETAT as i8,
-            top: 10,
+            top: 0,
             bottom: 6,
         })
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            titre_et_version(ui, p, &e.titre, &version(l));
             let (g, c) = couleur_etat(e.genre, p);
             dessin::etat_long(ui, c, g, &e.ligne);
             if let Some(m) = &e.detail {
@@ -265,15 +319,13 @@ fn volet(
         }
         choisi
     };
-    // Avec une hauteur maximale, les briques défilent dans ce qui reste entre l'état et le
-    // bas (mesuré à l'image précédente).
-    let id_pied = egui::Id::unique("hauteur du bas du volet");
+    // Avec une hauteur maximale, les briques défilent dans ce qui reste sous l'état ; l'en-tête
+    // (avec la roue) reste en place.
     let rapide = match hauteur_max {
         None => milieu(ui),
         Some(max) => {
-            let pied = ui.data(|d| d.get_temp::<f32>(id_pied)).unwrap_or(PIED_ESTIME);
             let deja = ui.cursor().top() - haut;
-            let reste = (max - deja - pied).max(TAILLE_TEXTE * 2.0);
+            let reste = (max - deja).max(TAILLE_TEXTE * 2.0);
             egui::ScrollArea::vertical()
                 .id_salt("briques du volet")
                 .max_height(reste)
@@ -284,20 +336,6 @@ fn volet(
     };
     if rapide.is_some() {
         choisi = rapide;
-    }
-    let bas_du_milieu = ui.min_rect().bottom();
-    ui.add_space(2.0);
-    separateur(ui, p);
-    ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if bouton_icone(ui, p, icones::REGLAGES, l.textes().parametres).clicked() {
-                choisi = Some(Choisi::Parametres);
-            }
-        });
-    });
-    if hauteur_max.is_some() {
-        let pied = ui.min_rect().bottom() - bas_du_milieu;
-        ui.data_mut(|d| d.insert_temp(id_pied, pied));
     }
     choisi
 }

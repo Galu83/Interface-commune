@@ -54,9 +54,12 @@ pub const VOLET_SOUS_LIGNE: f32 = 18.0;
 /// petit bouton de sa sous-ligne (« Oublier »).
 pub const VOLET_TUILE: f32 = 44.0;
 pub const VOLET_BOUTON: f32 = 22.0;
-/// La ligne du bas : marge à gauche, et la roue dentée.
-pub const VOLET_MARGE_BAS: f32 = 10.0;
+/// La roue dentée des Paramètres, en haut à droite du volet, sur la ligne du titre : un bouton
+/// carré ; la marge à droite de cette ligne ; l'écart minimal entre le titre (ou la version)
+/// et la roue.
 pub const VOLET_ROUE: f32 = 36.0;
+pub const VOLET_ENTETE_DROITE: f32 = 6.0;
+pub const VOLET_ENTETE_ECART: f32 = 8.0;
 
 // ---- Les Paramètres (PowerPeek) -------------------------------------------------------
 
