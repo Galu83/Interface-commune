@@ -518,6 +518,7 @@ impl Volet<'_> {
         self.fin_voulue = true;
         self.liens.surface_prete.store(0, Ordering::Release);
         self.liens.autres.racine(0);
+        self.demandes.racine(0);
         self.sortie.borrow_mut().suite = self.sortie_voulue.take();
         ctx.send_viewport_cmd(ViewportCommand::Close);
     }
@@ -553,6 +554,7 @@ impl Volet<'_> {
         {
             self.liens.surface_prete.store(h, Ordering::Release);
             self.liens.autres.racine(h);
+            self.demandes.racine(h);
         }
         let duree = self.creee_a.elapsed();
         let premiere = !DEJA_PREPAREE.swap(true, Ordering::AcqRel);
@@ -1103,6 +1105,7 @@ pub fn veiller(
     liens.autres.lier(None);
     liens.surface_prete.store(0, Ordering::Release);
     liens.autres.racine(0);
+    demandes.racine(0);
     let mut s = sortie.borrow_mut();
     match r {
         Ok(()) => Ok(s.suite.take()),

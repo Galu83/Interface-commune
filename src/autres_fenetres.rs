@@ -399,6 +399,17 @@ enum Apres {
     Fermer,
 }
 
+/// Mode d'essai : les fenêtres sont créées et dessinées comme d'habitude, mais jamais montrées
+/// ni mises au premier plan ([`garder_cachees`]).
+static GARDER_CACHEES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Pour les essais seulement : `true`, les autres fenêtres (les Paramètres…) sont créées et
+/// dessinées en entier (egui, OpenGL), mais **jamais montrées** : rien n'apparaît à l'écran et
+/// le clavier reste à l'application en cours. `false` revient au fonctionnement normal.
+pub fn garder_cachees(oui: bool) {
+    GARDER_CACHEES.store(oui, std::sync::atomic::Ordering::Release);
+}
+
 /// Les images dessinées cachées avant de montrer la fenêtre : la première pour la mettre en
 /// page, la deuxième pour la dessiner à sa place et à sa taille.
 pub const IMAGES_CACHEES: u32 = 2;
@@ -439,7 +450,11 @@ impl Fenetre {
             self.windows(palette);
         }
         if !self.montree {
-            if reelle && (self.images < IMAGES_CACHEES || !self.contenu.prete()) {
+            if reelle
+                && (self.images < IMAGES_CACHEES
+                    || !self.contenu.prete()
+                    || GARDER_CACHEES.load(std::sync::atomic::Ordering::Acquire))
+            {
                 ctx.request_repaint();
             } else {
                 self.montree = true;

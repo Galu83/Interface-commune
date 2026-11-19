@@ -217,6 +217,7 @@ impl Liens {
         }
         self.autres.lier(None);
         self.autres.racine(0);
+        demandes.racine(0);
         demandes.lecteur(None);
     }
 
@@ -324,6 +325,8 @@ pub struct Demandes {
     envoi: Sender<Demande>,
     reveil: Arc<Reveil>,
     lecteur: Lecteur,
+    /// La fenêtre principale de la boucle (HWND ; 0 tant qu'elle n'est pas prête).
+    racine: Arc<std::sync::atomic::AtomicIsize>,
 }
 
 impl Demandes {
@@ -335,6 +338,12 @@ impl Demandes {
         {
             c.request_repaint();
         }
+        // Un message à la fenêtre principale cachée : l'image qui lit la demande se fait dans le
+        // contexte de winit, le seul où une fenêtre (les Paramètres…) peut être créée. Un
+        // simple `request_repaint` fait peindre la fenêtre cachée hors de ce contexte (minuterie
+        // d'eframe) : la création ratait au premier essai.
+        #[cfg(windows)]
+        crate::systeme::reveiller(self.racine.load(Ordering::Acquire));
         r
     }
 }
@@ -344,6 +353,7 @@ pub struct Reception {
     reception: Receiver<Demande>,
     reveil: Arc<Reveil>,
     lecteur: Lecteur,
+    racine: Arc<std::sync::atomic::AtomicIsize>,
 }
 
 impl Reception {
@@ -356,6 +366,12 @@ impl Reception {
             Err(TryRecvError::Empty) => Ok(None),
             Err(TryRecvError::Disconnected) => Err(()),
         }
+    }
+
+    /// La fenêtre principale de la boucle, prête (HWND ; 0 : plus aucune) : chaque demande
+    /// envoyée lui adresse un message pour la réveiller ([`Demandes::send`]).
+    pub fn racine(&self, h: isize) {
+        self.racine.store(h, Ordering::Release);
     }
 
     /// La fenêtre qui lit les demandes (`None` : plus aucune).
@@ -385,16 +401,19 @@ pub fn canal() -> (Demandes, Reception) {
     let (envoi, reception) = std::sync::mpsc::channel();
     let reveil = Arc::new(Reveil::default());
     let lecteur = Lecteur::default();
+    let racine = Arc::new(std::sync::atomic::AtomicIsize::new(0));
     (
         Demandes {
             envoi,
             reveil: reveil.clone(),
             lecteur: lecteur.clone(),
+            racine: racine.clone(),
         },
         Reception {
             reception,
             reveil,
             lecteur,
+            racine,
         },
     )
 }
