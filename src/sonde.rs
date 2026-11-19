@@ -335,6 +335,19 @@ struct Suivi {
 pub struct Surveillance {
     blocage: Duration,
     suivis: HashMap<usize, Suivi>,
+    /// Le pas entre deux tours, et l'heure du dernier tour : un écart bien plus long que le pas
+    /// veut dire que la boucle de surveillance elle-même n'a pas tourné (le PC dormait). `None`
+    /// sans pas : aucune veille n'est cherchée.
+    pas: Option<Duration>,
+    dernier_tour: Option<Instant>,
+}
+
+/// Un écart entre deux tours d'une boucle de surveillance qui dépasse largement son `pas`
+/// (plus de trois pas, et plus de 3 s) : la boucle elle-même n'a pas tourné, le PC dormait. Les
+/// horloges de Windows (`Instant`) continuent de compter pendant la veille : sans cela, au
+/// réveil, chaque fil paraîtrait bloqué depuis toute la durée du sommeil.
+pub fn est_une_veille(ecart: Duration, pas: Duration) -> bool {
+    ecart > (pas * 3).max(Duration::from_secs(3))
 }
 
 impl Surveillance {
@@ -342,11 +355,36 @@ impl Surveillance {
         Surveillance {
             blocage,
             suivis: HashMap::new(),
+            pas: None,
+            dernier_tour: None,
+        }
+    }
+
+    /// Comme [`Surveillance::new`], pour une boucle qui tourne tous les `pas` : un écart bien plus
+    /// long entre deux tours est une veille du PC ([`est_une_veille`]) ; les repères de tous les
+    /// fils repartent de zéro, sans alerte, avec une seule ligne au journal.
+    pub fn avec_pas(blocage: Duration, pas: Duration) -> Surveillance {
+        Surveillance {
+            pas: Some(pas),
+            ..Surveillance::new(blocage)
         }
     }
 
     /// Lit les compteurs de `fils` à `maintenant` ; `ecrire` reçoit les lignes à journaliser.
     fn tour(&mut self, maintenant: Instant, fils: &[Arc<Fil>], ecrire: &mut dyn FnMut(String)) {
+        let precedent = self.dernier_tour.replace(maintenant);
+        if let (Some(pas), Some(precedent)) = (self.pas, precedent) {
+            let ecart = maintenant.saturating_duration_since(precedent);
+            if est_une_veille(ecart, pas) {
+                // La boucle a dormi : aucun fil n'est bloqué pour autant. Les repères repartent
+                // de zéro (chaque fil est revu comme la première fois), sans alerte.
+                self.suivis.clear();
+                ecrire(format!(
+                    "Reprise après une veille d'environ {} s : les mesures de blocage repartent de zéro.",
+                    ecart.as_secs()
+                ));
+            }
+        }
         let cles: Vec<usize> = fils.iter().map(|f| Arc::as_ptr(f) as usize).collect();
         self.suivis.retain(|k, _| cles.contains(k));
         for (f, k) in fils.iter().zip(cles) {
@@ -411,7 +449,7 @@ fn demarrer_la_surveillance() {
     UNE_FOIS.get_or_init(|| {
         let d = delais();
         let _ = std::thread::Builder::new().name("sonde".into()).spawn(move || {
-            let mut s = Surveillance::new(d.blocage);
+            let mut s = Surveillance::avec_pas(d.blocage, d.pas);
             loop {
                 std::thread::sleep(d.pas);
                 let fils: Vec<Arc<Fil>> = FILS.lock().unwrap_or_else(PoisonError::into_inner).clone();
@@ -518,6 +556,29 @@ fn lignes_des_creations(l: &mut [EnCreation], maintenant: Instant, seuil: Durati
     lignes
 }
 
+/// Un tour du chien de garde des créations à `maintenant` : si l'écart avec le tour précédent
+/// (`dernier`) est une veille du PC ([`est_une_veille`]), les créations en cours repartent de
+/// zéro, sans alerte (la sonde écrit la ligne de reprise) ; sinon, les lignes de
+/// [`lignes_des_creations`].
+fn tour_des_creations(
+    l: &mut [EnCreation],
+    maintenant: Instant,
+    dernier: &mut Instant,
+    pas: Duration,
+    seuil: Duration,
+) -> Vec<String> {
+    let ecart = maintenant.saturating_duration_since(*dernier);
+    *dernier = maintenant;
+    if est_une_veille(ecart, pas) {
+        for c in l.iter_mut() {
+            c.debut = maintenant;
+            c.signalee = false;
+        }
+        return Vec::new();
+    }
+    lignes_des_creations(l, maintenant, seuil)
+}
+
 /// Lance l'unique fil du chien de garde des créations (une seule fois pour le programme). Il
 /// regarde souvent (un tiers du seuil, entre 20 ms et 1 s) et ne fait rien d'autre.
 fn demarrer_le_chien_des_creations() {
@@ -526,12 +587,14 @@ fn demarrer_le_chien_des_creations() {
         let _ = std::thread::Builder::new()
             .name("chien-des-creations".into())
             .spawn(|| {
+                let mut dernier = Instant::now();
                 loop {
                     let seuil = seuil_de_creation();
-                    std::thread::sleep((seuil / 3).clamp(Duration::from_millis(20), Duration::from_secs(1)));
+                    let pas = (seuil / 3).clamp(Duration::from_millis(20), Duration::from_secs(1));
+                    std::thread::sleep(pas);
                     let lignes = {
                         let mut l = CREATIONS.lock().unwrap_or_else(PoisonError::into_inner);
-                        lignes_des_creations(&mut l, Instant::now(), seuil)
+                        tour_des_creations(&mut l, Instant::now(), &mut dernier, pas, seuil)
                     };
                     for ligne in lignes {
                         noter(ligne);
@@ -863,5 +926,102 @@ mod essais {
         drop(c);
         assert!(attendre("s'est enfin terminée"), "{:?}", lignes.lock().unwrap());
         regler_le_seuil_de_creation(SEUIL_DE_CREATION);
+    }
+
+    /// Le PC dort : au réveil, la boucle de surveillance (qui a dormi aussi) ne signale aucun
+    /// fil comme bloqué ; une seule ligne dit la reprise ; un vrai blocage ensuite est toujours
+    /// signalé. L'heure est donnée à la main : aucune attente réelle.
+    #[test]
+    fn la_veille_du_pc_n_est_pas_un_blocage() {
+        let t0 = Instant::now();
+        let pas = Duration::from_secs(5);
+        let sec = Duration::from_secs;
+        let (a, b) = (Fil::nouveau("écrans", None), Fil::nouveau("placement", None));
+        a.battre();
+        b.battre();
+        let fils = [a.clone(), b.clone()];
+        let mut s = Surveillance::avec_pas(Duration::from_secs(15), pas);
+        assert!(tour(&mut s, t0, &fils).is_empty());
+        assert!(tour(&mut s, t0 + sec(5), &fils).is_empty());
+        // Quatre heures de sommeil : les fils n'ont pas battu (le PC dormait).
+        let reveil = t0 + sec(5) + sec(15_900);
+        let l = tour(&mut s, reveil, &fils);
+        assert_eq!(l.len(), 1, "{l:?}");
+        assert!(l[0].contains("veille") && l[0].contains("15900 s"), "{l:?}");
+        assert!(!l[0].contains("ne répond plus"), "{l:?}");
+        // Les tours suivants : aucune alerte, aucune « reprise » de fil, comme un fil qui bat.
+        for i in 1..=2 {
+            a.battre();
+            b.battre();
+            assert!(tour(&mut s, reveil + sec(5 * i), &fils).is_empty());
+        }
+        // Un vrai blocage après la veille est signalé comme avant (15 s sans battement).
+        a.battre();
+        let t = reveil + sec(10);
+        assert!(tour(&mut s, t + sec(5), &fils).is_empty());
+        assert!(tour(&mut s, t + sec(10), &fils).is_empty());
+        let l = tour(&mut s, t + sec(15), &fils);
+        assert_eq!(l.len(), 1, "{l:?}");
+        assert!(
+            l[0].contains("« placement »") && l[0].contains("ne répond plus"),
+            "{l:?}"
+        );
+    }
+
+    /// Sans pas connu (`Surveillance::new`), un grand écart reste un blocage : l'horloge est
+    /// celle de l'appelant.
+    #[test]
+    fn sans_pas_un_grand_ecart_reste_un_blocage() {
+        let t0 = Instant::now();
+        let f = Fil::nouveau("icône", None);
+        f.battre();
+        let fils = [f.clone()];
+        let mut s = Surveillance::new(Duration::from_secs(15));
+        assert!(tour(&mut s, t0, &fils).is_empty());
+        let l = tour(&mut s, t0 + Duration::from_secs(15_900), &fils);
+        assert_eq!(l.len(), 1, "{l:?}");
+        assert!(l[0].contains("ne répond plus"), "{l:?}");
+    }
+
+    /// Une veille se reconnaît à un écart de plus de trois pas, et de plus de 3 s.
+    #[test]
+    fn reconnaitre_une_veille() {
+        let ms = Duration::from_millis;
+        assert!(!est_une_veille(Duration::from_secs(5), Duration::from_secs(5)));
+        assert!(!est_une_veille(Duration::from_secs(15), Duration::from_secs(5)));
+        assert!(est_une_veille(Duration::from_secs(16), Duration::from_secs(5)));
+        // Un pas court (le chien des créations) : jamais moins de 3 s.
+        assert!(!est_une_veille(ms(2_500), ms(100)));
+        assert!(est_une_veille(ms(3_100), ms(100)));
+    }
+
+    /// Le chien des créations : une création qui dure vraiment est signalée ; après une veille du
+    /// PC, elle repart de zéro, sans alerte.
+    #[test]
+    fn la_veille_n_allonge_pas_une_creation() {
+        let t0 = Instant::now();
+        let pas = Duration::from_secs(1);
+        let seuil = Duration::from_secs(3);
+        let sec = Duration::from_secs;
+        let utc = SystemTime::now();
+        let mut l = vec![EnCreation {
+            id: 1,
+            nom: "Paramètres".into(),
+            debut: t0,
+            debut_utc: utc,
+            signalee: false,
+        }];
+        let mut dernier = t0;
+        assert!(tour_des_creations(&mut l, t0 + sec(1), &mut dernier, pas, seuil).is_empty());
+        // Le PC dort une heure : pas de ligne, la création repart de zéro.
+        let reveil = t0 + sec(3_600);
+        assert!(tour_des_creations(&mut l, reveil, &mut dernier, pas, seuil).is_empty());
+        assert!(tour_des_creations(&mut l, reveil + sec(1), &mut dernier, pas, seuil).is_empty());
+        assert!(tour_des_creations(&mut l, reveil + sec(2), &mut dernier, pas, seuil).is_empty());
+        // Une vraie création qui dure plus que le seuil est signalée, une fois.
+        let v = tour_des_creations(&mut l, reveil + sec(3), &mut dernier, pas, seuil);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].contains("« Paramètres »"), "{v:?}");
+        assert!(tour_des_creations(&mut l, reveil + sec(4), &mut dernier, pas, seuil).is_empty());
     }
 }
