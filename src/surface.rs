@@ -76,22 +76,24 @@ fn lignes_du_menu(l: &dyn Logiciel) -> Vec<Option<menu::Ligne>> {
     menu::lignes(l.textes(), &l.actions_menu(), &l.lignes_en_plus())
 }
 
-/// Les briques de la surface à cette image (aucune pour le petit menu).
-fn briques_de(ui: &egui::Ui, s: Surface, l: &dyn Logiciel) -> Vec<Brique> {
+/// Les briques de la surface à cette image : la liste, puis le pied fixe (aucune pour le
+/// petit menu).
+fn briques_de(ui: &egui::Ui, s: Surface, l: &dyn Logiciel) -> (Vec<Brique>, Vec<Brique>) {
     match s {
-        Surface::Volet => l.briques_avec_contexte(ui.ctx()),
-        Surface::Menu => Vec::new(),
+        Surface::Volet => (l.briques_avec_contexte(ui.ctx()), l.briques_du_pied()),
+        Surface::Menu => (Vec::new(), Vec::new()),
     }
 }
 
 /// La largeur de la surface (points) : ce qu'il faut pour que ses textes tiennent sur une
 /// ligne, mesurés avec les polices du moment, entre la largeur minimale et [`LARGEUR_MAX`].
 pub fn largeur(ui: &egui::Ui, s: Surface, l: &dyn Logiciel) -> f32 {
-    largeur_avec(ui, s, l, &briques_de(ui, s, l))
+    let (briques, pied) = briques_de(ui, s, l);
+    largeur_avec(ui, s, l, &briques, &pied)
 }
 
 /// [`largeur`], avec les briques déjà demandées au logiciel pour cette image.
-fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique]) -> f32 {
+fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique], pied: &[Brique]) -> f32 {
     let mesure = |t: &str, f: egui::FontId| {
         ui.painter()
             .layout_no_wrap(t.to_string(), f, egui::Color32::WHITE)
@@ -126,6 +128,7 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique])
             );
             b = b.max(l.largeur_rapides(ui));
             b = b.max(briques::largeur(ui, briques));
+            b = b.max(briques::largeur(ui, pied));
             (LARGEUR, b)
         }
     };
@@ -154,8 +157,8 @@ pub fn dessiner_borne(
     l: &dyn Logiciel,
     hauteur_max: Option<f32>,
 ) -> (Option<Choisi>, egui::Vec2) {
-    let briques = briques_de(ui, s, l);
-    let largeur = largeur_avec(ui, s, l, &briques);
+    let (briques, pied) = briques_de(ui, s, l);
+    let largeur = largeur_avec(ui, s, l, &briques, &pied);
     let m = marge(s);
     let hauteur_max = match s {
         Surface::Volet => hauteur_max.filter(|h| h.is_finite()).map(|h| h.max(1.0)),
@@ -167,7 +170,7 @@ pub fn dessiner_borne(
             .show(ui, |ui| {
                 ui.set_width(largeur - 2.0 * m);
                 match s {
-                    Surface::Volet => volet(ui, p, l, &briques, hauteur_max.map(|h| h - 2.0 * m)),
+                    Surface::Volet => volet(ui, p, l, (&briques, &pied), hauteur_max.map(|h| h - 2.0 * m)),
                     Surface::Menu => dessiner_menu(ui, p, l),
                 }
             })
@@ -207,7 +210,8 @@ fn separateur(ui: &mut egui::Ui, p: &Palette) {
 /// Le volet : le titre, sa version et la roue dentée en haut, l'état, les réglages rapides.
 pub fn dessiner_volet(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Option<Choisi> {
     let briques = l.briques_avec_contexte(ui.ctx());
-    volet(ui, p, l, &briques, None)
+    let pied = l.briques_du_pied();
+    volet(ui, p, l, (&briques, &pied), None)
 }
 
 /// La distance du haut d'un texte à sa ligne de base (points).
@@ -274,13 +278,14 @@ fn entete(ui: &mut egui::Ui, p: &Palette, titre_texte: &str, version: &str, nom_
     clic
 }
 
-/// Le volet, avec ses briques ; `hauteur_max` : la hauteur de son contenu à ne pas dépasser
-/// (points, sans les marges), les briques défilant au-delà.
+/// Le volet, avec ses briques et son pied fixe (`briques`, `pied`) ; `hauteur_max` : la hauteur
+/// de son contenu à ne pas dépasser (points, sans les marges). Au-delà, seule la liste des
+/// briques défile, dans la place qui reste entre l'état et le pied ; le pied reste en bas.
 fn volet(
     ui: &mut egui::Ui,
     p: &Palette,
     l: &dyn Logiciel,
-    briques: &[Brique],
+    (briques, pied): (&[Brique], &[Brique]),
     hauteur_max: Option<f32>,
 ) -> Option<Choisi> {
     let mut choisi = None;
@@ -336,13 +341,21 @@ fn volet(
         }
         choisi
     };
-    // Avec une hauteur maximale, les briques défilent dans ce qui reste sous l'état ; l'en-tête
-    // (avec la roue) reste en place.
+    // La place du pied, mesurée à l'image d'avant (il ne change presque jamais de hauteur).
+    let id_pied = ui.scope_id().with("hauteur du pied du volet");
+    let place_pied = if pied.is_empty() {
+        0.0
+    } else {
+        ui.ctx().data(|d| d.get_temp::<f32>(id_pied)).unwrap_or(0.0)
+    };
+    // Avec une hauteur maximale, les briques défilent dans ce qui reste sous l'état, au-dessus
+    // du pied ; l'en-tête (avec la roue) et le pied restent en place. La barre se voit quand la
+    // liste dépasse (celle d'egui n'apparaît qu'au survol, et ne se voit pas sur une capture).
     let rapide = match hauteur_max {
         None => milieu(ui),
         Some(max) => {
             let deja = ui.cursor().top() - haut;
-            let reste = (max - deja).max(TAILLE_TEXTE * 2.0);
+            let reste = (max - deja - place_pied).max(TAILLE_TEXTE * 2.0);
             egui::ScrollArea::vertical()
                 .id_salt("briques du volet")
                 .max_height(reste)
@@ -353,6 +366,17 @@ fn volet(
     };
     if rapide.is_some() {
         choisi = rapide;
+    }
+    if !pied.is_empty() {
+        let avant = ui.cursor().top() - ui.spacing().item_spacing.y;
+        separateur(ui, p);
+        match briques::dessiner(ui, p, pied) {
+            Some(Geste::Action(cle)) => choisi = Some(Choisi::Rapide(cle)),
+            Some(Geste::Changer(cle, v)) => l.changer(&cle, v),
+            None => {}
+        }
+        let hauteur = ui.min_rect().bottom() - avant;
+        ui.ctx().data_mut(|d| d.insert_temp(id_pied, hauteur));
     }
     choisi
 }

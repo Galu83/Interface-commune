@@ -356,6 +356,15 @@ pub trait Logiciel: Reglages {
         self.briques()
     }
 
+    /// Le pied du volet : des briques **fixes, toujours visibles en bas** (sous un séparateur),
+    /// que la liste des [`Logiciel::briques`] ne fait jamais défiler (par exemple « Rechercher
+    /// les appareils »). Avec une hauteur maximale ([`place::PlacementVolet::hauteur_max`]),
+    /// seule la liste défile, dans la place qui reste au-dessus du pied. Mêmes briques et mêmes
+    /// gestes que [`Logiciel::briques`] ; vide par défaut (pas de pied).
+    fn briques_du_pied(&self) -> Vec<briques::Brique> {
+        Vec::new()
+    }
+
     /// Où et comment le volet se place : collé à la barre des tâches comme les volets de
     /// Windows 11 (par défaut), ou contre l'icône ; l'écart en points ; une hauteur maximale,
     /// au-delà de laquelle les briques défilent. Lu à chaque image du volet.
