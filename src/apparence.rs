@@ -16,6 +16,11 @@ pub fn couleur(c: Rgb) -> Color32 {
     Color32::from_rgb(c.0, c.1, c.2)
 }
 
+/// Les 6 couleurs des pastilles d'appareils du volet (voir [`crate::pastilles`]).
+pub fn couleurs_pastilles() -> [Rgb; 6] {
+    crate::pastilles::couleurs_pastilles()
+}
+
 /// Ce que Windows a choisi (sous Windows) ; ailleurs, le clair et l'accent par défaut.
 pub fn choix_windows() -> ChoixWindows {
     #[cfg(windows)]

@@ -9,6 +9,8 @@ use crate::Valeur;
 use crate::apparence::couleur;
 use crate::dessin::{self, icone, interrupteur, ligne};
 use crate::icones;
+use crate::pastilles;
+pub use crate::pastilles::{Case, Pastille};
 use crate::mesures::{
     LIGNE_ARRONDI, LIGNE_ECART, LIGNE_ICONE, LIGNE_ICONE_X, LIGNE_MARGE_DROITE, LIGNE_TEXTE_X, VOLET_BARRE,
     VOLET_BOUTON, VOLET_ECART, VOLET_LIGNE, VOLET_RACCOURCI, VOLET_SECTION, VOLET_SEGMENTS, VOLET_SOUS_LIGNE,
@@ -67,6 +69,25 @@ pub enum Brique {
         cle: String,
         glyphe: char,
         texte: String,
+    },
+    /// Une rangée d'appareils (ordinateurs, claviers…) en pastilles colorées, sur 2 colonnes
+    /// (retour à la ligne à partir de 3), sous un titre facultatif. Une pastille avec `cle` :
+    /// un clic ferme le volet et rend la clé. Couleurs : [`crate::apparence::couleurs_pastilles`].
+    Pastilles {
+        titre: Option<String>,
+        pastilles: Vec<Pastille>,
+    },
+    /// Un choix à deux lignes avec l'illustration de ce qu'il fait (une case par écran, de 1 à
+    /// 4) : texte et raccourci, sous-ligne et, quand il est actif, « ✓ » et `etiquette_active`
+    /// en accent, une barre d'accent à gauche. Un clic ferme le volet et rend `cle`.
+    ChoixIllustre {
+        cle: String,
+        texte: String,
+        sous_ligne: Option<String>,
+        illustration: Vec<Case>,
+        raccourci: Option<String>,
+        actif: bool,
+        etiquette_active: Option<String>,
     },
 }
 
@@ -173,6 +194,22 @@ pub fn largeur(ui: &Ui, briques: &[Brique]) -> f32 {
                 })
                 .fold(0.0, f32::max),
             Brique::Action { texte, .. } => dessin::largeur_ligne(mesure(texte, TAILLE_TEXTE), None),
+            Brique::Pastilles { titre, pastilles } => {
+                pastilles::largeur_pastilles(ui, titre.as_deref(), pastilles)
+            }
+            Brique::ChoixIllustre {
+                texte,
+                sous_ligne,
+                raccourci,
+                etiquette_active,
+                ..
+            } => pastilles::largeur_choix(
+                ui,
+                texte,
+                sous_ligne.as_deref(),
+                raccourci.as_deref(),
+                etiquette_active.as_deref(),
+            ),
         })
         .fold(0.0, f32::max)
 }
@@ -555,6 +592,28 @@ fn brique(ui: &mut Ui, p: &Palette, b: &Brique) -> Option<Geste> {
         Brique::Action { cle, glyphe, texte } => ligne(ui, p, *glyphe, p.texte, texte, None)
             .clicked()
             .then(|| Geste::Action(cle.clone())),
+        Brique::Pastilles { titre, pastilles } => {
+            pastilles::dessiner_pastilles(ui, p, titre.as_deref(), pastilles)
+        }
+        Brique::ChoixIllustre {
+            cle,
+            texte,
+            sous_ligne,
+            illustration,
+            raccourci,
+            actif,
+            etiquette_active,
+        } => pastilles::dessiner_choix(
+            ui,
+            p,
+            cle,
+            texte,
+            sous_ligne.as_deref(),
+            illustration,
+            raccourci.as_deref(),
+            *actif,
+            etiquette_active.as_deref(),
+        ),
     }
 }
 

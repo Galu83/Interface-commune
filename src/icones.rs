@@ -55,8 +55,11 @@ pub const CLAVIER: char = '\u{E765}';
 /// Un appareil en charge : l'éclair devant son niveau (volet).
 pub const ECLAIR: char = '\u{E945}';
 
+/// Un écran en veille : la lune d'un choix illustré du volet.
+pub const LUNE: char = '\u{E708}';
+
 /// Toutes les icônes communes, pour le contrôle des polices.
-pub const TOUTES: [char; 23] = [
+pub const TOUTES: [char; 24] = [
     REGLAGES,
     MISE_A_JOUR,
     A_PROPOS,
@@ -80,4 +83,5 @@ pub const TOUTES: [char; 23] = [
     LICENCE,
     CLAVIER,
     ECLAIR,
+    LUNE,
 ];

@@ -54,6 +54,22 @@ pub const VOLET_SOUS_LIGNE: f32 = 18.0;
 /// petit bouton de sa sous-ligne (« Oublier »).
 pub const VOLET_TUILE: f32 = 44.0;
 pub const VOLET_BOUTON: f32 = 22.0;
+/// Une pastille d'appareil (rangée « Ordinateurs ») : la taille de son carré coloré.
+pub const PASTILLE_LARGEUR: f32 = 26.0;
+pub const PASTILLE_HAUTEUR: f32 = 20.0;
+/// Un choix illustré : sa hauteur (deux lignes), la taille d'une case d'écran de son
+/// illustration, l'écart entre deux cases, le nombre de cases au plus, et la largeur fixe de
+/// l'illustration (le texte commence au même endroit d'une ligne à l'autre).
+pub const ILLUSTRE_LIGNE: f32 = 52.0;
+pub const ILLUSTRE_CASE_L: f32 = 24.0;
+pub const ILLUSTRE_CASE_H: f32 = 18.0;
+pub const ILLUSTRE_CASE_ECART: f32 = 3.0;
+pub const ILLUSTRE_CASES_MAX: usize = 4;
+pub const ILLUSTRE_LARGEUR: f32 =
+    ILLUSTRE_CASES_MAX as f32 * ILLUSTRE_CASE_L + (ILLUSTRE_CASES_MAX - 1) as f32 * ILLUSTRE_CASE_ECART;
+/// La barre d'accent à gauche d'un choix illustré actif : largeur et hauteur.
+pub const ILLUSTRE_BARRE: [f32; 2] = [3.0, 18.0];
+
 /// La roue dentée des Paramètres, en haut à droite du volet, sur la ligne du titre : un bouton
 /// carré ; la marge à droite de cette ligne ; l'écart minimal entre le titre (ou la version)
 /// et la roue.
