@@ -356,12 +356,18 @@ fn volet(
         Some(max) => {
             let deja = ui.cursor().top() - haut;
             let reste = (max - deja - place_pied).max(TAILLE_TEXTE * 2.0);
-            egui::ScrollArea::vertical()
-                .id_salt("briques du volet")
-                .max_height(reste)
-                .auto_shrink([false, true])
-                .show(ui, milieu)
-                .inner
+            ui.scope(|ui| {
+                // La poignée se voit même au repos (sans survol ni défilement) : sinon, rien
+                // n'indique que la liste continue.
+                ui.spacing_mut().scroll.dormant_handle_opacity = 0.55;
+                egui::ScrollArea::vertical()
+                    .id_salt("briques du volet")
+                    .max_height(reste)
+                    .auto_shrink([false, true])
+                    .show(ui, milieu)
+                    .inner
+            })
+            .inner
         }
     };
     if rapide.is_some() {
