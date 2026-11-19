@@ -1125,6 +1125,8 @@ struct Appareils {
     texture: Mutex<Option<egui::TextureHandle>>,
     /// Le nombre d'appareils montrés (il peut changer entre deux images).
     nombre: std::sync::atomic::AtomicUsize,
+    /// Un pied fixe (« Rechercher les appareils ») sous la liste.
+    pied: AtomicBool,
 }
 
 impl Appareils {
@@ -1134,6 +1136,7 @@ impl Appareils {
             appels: Default::default(),
             texture: Mutex::default(),
             nombre: nombre.into(),
+            pied: AtomicBool::new(false),
         }
     }
 }
@@ -1196,10 +1199,25 @@ impl Logiciel for Appareils {
             .collect()
     }
 
+    fn briques_du_pied(&self) -> Vec<interface_commune::briques::Brique> {
+        if self.pied.load(Ordering::Acquire) {
+            vec![interface_commune::briques::Brique::Action {
+                cle: "rechercher".into(),
+                glyphe: '\u{E72C}',
+                texte: PIED.into(),
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+
     fn quitter(&self) {}
 
     fn noter(&self, _: String) {}
 }
+
+/// Le texte du pied fixe des essais.
+const PIED: &str = "Rechercher les appareils";
 
 /// Le volet reçoit le contexte egui pour ses briques (une fois par image) ; sans hauteur
 /// maximale il est aussi haut que son contenu (comme avant) ; avec, il ne la dépasse pas et
@@ -1260,10 +1278,22 @@ fn fenetre_qui_suit(
     p: &Palette,
     depart: egui::Vec2,
     images: usize,
-    mut dessin: impl FnMut(&mut egui::Ui, &Palette) -> egui::Vec2,
+    dessin: impl FnMut(&mut egui::Ui, &Palette) -> egui::Vec2,
 ) -> egui::Vec2 {
+    fenetre_qui_suit_et_formes(ctx, p, depart, images, dessin).0
+}
+
+/// Comme [`fenetre_qui_suit`], avec aussi les formes de la dernière image.
+fn fenetre_qui_suit_et_formes(
+    ctx: &egui::Context,
+    p: &Palette,
+    depart: egui::Vec2,
+    images: usize,
+    mut dessin: impl FnMut(&mut egui::Ui, &Palette) -> egui::Vec2,
+) -> (egui::Vec2, Vec<egui::epaint::ClippedShape>) {
     let mut fenetre = depart;
     let mut voulue = depart;
+    let mut formes = Vec::new();
     for _ in 0..images {
         let mut entree = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, fenetre)),
@@ -1276,9 +1306,108 @@ fn fenetre_qui_suit(
             .native_pixels_per_point = Some(1.0);
         let mut s = ctx.run_ui(entree, |ui| voulue = dessin(ui, p));
         s.textures_delta.clear();
+        formes = s.shapes;
         fenetre = voulue;
     }
-    voulue
+    (voulue, formes)
+}
+
+/// Les textes (avec leur place) et les rectangles dessinés (place, remplissage) d'une image.
+fn textes_et_rects(formes: &[egui::epaint::ClippedShape]) -> (Vec<(String, egui::Rect)>, Vec<egui::Rect>) {
+    fn parcourir(s: &egui::Shape, textes: &mut Vec<(String, egui::Rect)>, rects: &mut Vec<egui::Rect>) {
+        match s {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| parcourir(s, textes, rects)),
+            egui::Shape::Text(t) => textes.push((
+                t.galley.text().to_string(),
+                egui::Rect::from_min_size(t.pos, t.galley.size()),
+            )),
+            egui::Shape::Rect(r) if r.fill.a() > 0 => rects.push(r.rect),
+            _ => {}
+        }
+    }
+    let (mut textes, mut rects) = (Vec::new(), Vec::new());
+    for c in formes {
+        parcourir(&c.shape, &mut textes, &mut rects);
+    }
+    (textes, rects)
+}
+
+/// Une barre de défilement : un rectangle étroit et haut, collé au bord droit du volet.
+fn barres(rects: &[egui::Rect], largeur: f32) -> usize {
+    rects
+        .iter()
+        .filter(|r| r.width() <= 12.0 && r.height() >= 20.0 && r.max.x >= largeur - 14.0)
+        .count()
+}
+
+/// Le pied du volet (« Rechercher les appareils ») reste fixe, visible, en bas : seule la
+/// liste défile, avec une barre visible quand elle dépasse ; la fenêtre regrandit jusqu'à la
+/// hauteur maximale et le pied suit la liste quand elle est courte.
+#[test]
+fn volet_borne_pied_fixe_et_barre_visible() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let l = Appareils::avec(2);
+    l.pied.store(true, Ordering::Release);
+    let ctx = egui::Context::default();
+    ctx.set_fonts(polices::polices_ou_vides());
+    let a = apparence::Apparence::de(Default::default(), Some(false));
+    a.appliquer(&ctx);
+    let p = a.palette.clone();
+    let mesure = |depart: egui::Vec2| {
+        let (t, formes) = fenetre_qui_suit_et_formes(&ctx, &p, depart, 8, |ui, p| {
+            surface::dessiner_borne(ui, p, Surface::Volet, &l, Some(600.0)).1
+        });
+        let (textes, rects) = textes_et_rects(&formes);
+        let pied = textes
+            .iter()
+            .find(|(t, _)| t == PIED)
+            .map(|(_, r)| *r)
+            .expect("le pied est dessiné");
+        let dernier = textes
+            .iter()
+            .filter(|(t, _)| t.starts_with("Appareil "))
+            .map(|(_, r)| r.max.y)
+            .fold(0.0, f32::max);
+        (t, pied, dernier, barres(&rects, t.x))
+    };
+    // Deux appareils : le pied suit la liste, pas de barre.
+    let (petit, pied, dernier, barre) = mesure(egui::vec2(400.0, 800.0));
+    assert!(
+        pied.min.y > dernier && pied.max.y <= petit.y,
+        "{pied:?} {dernier} {petit:?}"
+    );
+    assert_eq!(barre, 0, "pas de barre quand tout tient {petit:?} {pied:?}");
+    // Six appareils (la fenêtre regrandit), puis huit : le pied reste visible dans la fenêtre.
+    l.nombre.store(6, Ordering::Release);
+    let (six, pied6, dernier6, barre6) = mesure(petit);
+    assert!(six.y > petit.y + 100.0 && six.y <= 600.0, "{petit:?} {six:?}");
+    assert!(
+        pied6.min.y > dernier6 && pied6.max.y <= six.y,
+        "{pied6:?} {six:?}"
+    );
+    assert_eq!(barre6, 0);
+    // Trente appareils : la fenêtre est à la borne, le pied est fixe tout en bas, la barre se voit.
+    l.nombre.store(30, Ordering::Release);
+    let (plein, pied30, _, barre30) = mesure(six);
+    assert!(plein.y <= 600.0 && plein.y >= 600.0 - 60.0, "{plein:?}");
+    assert!(
+        pied30.max.y <= plein.y && pied30.max.y >= plein.y - 30.0,
+        "{pied30:?} {plein:?}"
+    );
+    assert!(barre30 >= 1, "la barre de défilement doit se voir ({barre30})");
+    // Huit appareils, comme sur le portable : même chose, jamais coupé.
+    l.nombre.store(8, Ordering::Release);
+    let (huit, pied8, _, _) = mesure(plein);
+    assert!(huit.y <= 600.0 && pied8.max.y <= huit.y, "{pied8:?} {huit:?}");
+    // Sans pied, rien ne change : plus de texte du pied.
+    l.pied.store(false, Ordering::Release);
+    let (sans, formes) = fenetre_qui_suit_et_formes(&ctx, &p, huit, 8, |ui, p| {
+        surface::dessiner_borne(ui, p, Surface::Volet, &l, Some(600.0)).1
+    });
+    assert!(!textes_et_rects(&formes).0.iter().any(|(t, _)| t == PIED));
+    assert!(sans.y >= huit.y - 60.0 - 1.0);
 }
 
 /// Le contenu grandit après l'ouverture (des appareils déconnectés apparaissent) : la fenêtre,

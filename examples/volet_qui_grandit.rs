@@ -1,6 +1,7 @@
-//! Un volet à hauteur maximale (600 points) dont le contenu grandit : 2, puis 6, puis 30
-//! appareils inventés. Sans aucune fenêtre : trois captures PNG, et leurs hauteurs sur la
-//! sortie. Le volet doit grandir avec son contenu jusqu'à 600 points, puis défiler.
+//! Un volet à hauteur maximale (600 points) dont le contenu grandit : 2, 6, 8 puis 30
+//! appareils inventés, avec un pied fixe (« Rechercher les appareils »). Sans aucune fenêtre :
+//! quatre captures PNG, et leurs hauteurs sur la sortie. Le volet doit grandir avec son
+//! contenu jusqu'à 600 points, puis seule la liste défile (barre visible) : le pied reste en bas.
 //!
 //! `cargo run --example volet_qui_grandit [dossier]` (Windows : il faut les polices Segoe).
 
@@ -60,6 +61,14 @@ impl Logiciel for Appareils {
             .collect()
     }
 
+    fn briques_du_pied(&self) -> Vec<Brique> {
+        vec![Brique::Action {
+            cle: "rechercher".into(),
+            glyphe: '\u{E72C}',
+            texte: "Rechercher les appareils".into(),
+        }]
+    }
+
     fn quitter(&self) {}
 
     fn noter(&self, _: String) {}
@@ -81,7 +90,7 @@ fn main() -> Result<(), String> {
         },
         nombre: AtomicUsize::new(2),
     };
-    for n in [2, 6, 30] {
+    for n in [2, 6, 8, 30] {
         l.nombre.store(n, Ordering::Release);
         let image = capture::volet_borne(&l, 600.0, Options::default())?;
         let f = dossier.join(format!("volet-{n}-appareils.png"));

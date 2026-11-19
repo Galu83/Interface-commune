@@ -244,6 +244,10 @@ changer pour KVMSoft ni Vocalis (tout est facultatif, avec la valeur d'avant par
   Le volet borné **grandit avec son contenu** jusqu'à cette hauteur (corrigé : il restait à la
   taille de la fenêtre du moment, donc ne grandissait plus quand des appareils apparaissaient
   après l'ouverture). Capture sans fenêtre : `capture::volet_borne`.
+  **Le pied fixe** : `Logiciel::briques_du_pied()` (vide par défaut) rend des briques toujours
+  visibles en bas, sous un séparateur (« Rechercher les appareils » pour PowerPeek : à sortir de
+  `briques()` pour l'y mettre). Avec une hauteur maximale, seule la liste défile au-dessus du
+  pied, avec une barre de défilement visible dès qu'elle dépasse.
 - **L'icône par les mécanismes communs** : `zone::FenetresCommunes::lancer(&zone, logiciel,
   parametres, secours)` lance le fil des fenêtres de la bibliothèque (le même que celui
   d'`Horloge`, aussi public : `horloge::lancer_le_fil_des_fenetres`). Chaque événement de
