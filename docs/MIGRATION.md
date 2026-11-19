@@ -239,7 +239,7 @@ changer pour KVMSoft ni Vocalis (tout est facultatif, avec la valeur d'avant par
   `contre_l_icone` (en face de l'icône, du côté opposé à la barre, comme `lbt::popup::place`),
   `ecart` en points (converti en pixels réels à l'échelle de l'écran : 8 points pour PowerPeek)
   et `hauteur_max` en points (600 pour PowerPeek ; toujours bornée aussi par la zone de travail
-  de l'écran). Au-delà, l'état et le bas du volet restent en place et **les briques
+  de l'écran). Au-delà, l'en-tête (titre, roue) et l'état restent en place et **les briques
   défilent**. Hors fenêtre : `surface::dessiner_borne(ui, p, s, l, Some(hauteur))`.
 - **L'icône par les mécanismes communs** : `zone::FenetresCommunes::lancer(&zone, logiciel,
   parametres, secours)` lance le fil des fenêtres de la bibliothèque (le même que celui
@@ -351,11 +351,30 @@ de cette fenêtre. Dans `place` : `place_au_changement_d_echelle`, `ecran_de`, `
 ## La version à droite du gros titre du volet (pour tous)
 
 Le volet montre la version (« x.y.z », `Identite::version`) petite et grise, à droite du gros
-titre et sur sa ligne de base ; le bas du volet ne garde que la roue des Paramètres (il ne
-répète plus « Nom x.y.z »). Rien à changer dans le code d'un projet. **Le gros titre
+titre et sur sa ligne de base. Rien à changer dans le code d'un projet. **Le gros titre
 (`Etat::titre`) est le nom du logiciel** : un état (disposition, mode…) va dans la ligne d'état
 (`Etat::ligne`), pas dans le titre. Un test qui cherchait le texte « Nom x.y.z » dans le volet
 cherche maintenant « x.y.z », à droite du titre.
+
+## La roue des Paramètres en haut à droite du volet (pour tous)
+
+La roue dentée n'est plus en bas du volet : elle est **en haut à droite, sur la ligne du
+titre** (comme le volet de OneDrive), toujours au même endroit. Il n'y a plus de ligne du
+bas (ni trait ni marge) : le volet est plus court d'environ 60 points. Rien à changer dans le
+code d'un projet ; même bulle « Paramètres », même clic (`Choisi::Parametres`). Le titre ne
+passe jamais sous la roue : il garde au moins 8 points avec elle et se coupe par « … » ; la
+version reste entière. Avec une hauteur maximale (`PlacementVolet::hauteur_max`), l'en-tête
+(titre, roue) et l'état restent en place et les briques défilent dessous. Au clavier, la roue
+est le premier élément du volet (Tab) : elle est la première dans l'ordre de lecture, de haut
+en bas, comme dans les volets de Windows 11. Un test qui cherchait la roue en bas du volet la
+cherche en haut à droite.
+
+**Note signalée par PowerPeek : un cache de textures et `capture`.** Le contexte egui d'une
+capture (`capture::volet`, `capture::toutes`…) est **neuf à chaque passe**. Un logiciel qui
+garde d'une passe à l'autre un cache de textures (les images de ses appareils, via
+`briques_avec_contexte(ctx)`) rend des **carrés noirs** : le cache pointe vers des textures
+d'un ancien contexte. Dans un contexte de capture, recharger les textures à chaque passe (ne
+pas réutiliser le cache), ou le vider dès que le contexte change.
 
 ## Les raccourcis clavier en toutes lettres (pour tous)
 
