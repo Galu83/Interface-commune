@@ -16,6 +16,7 @@ use crate::mesures::{
 };
 use crate::polices::semibold;
 use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE};
+use crate::touches;
 
 /// Une brique du volet.
 #[derive(Debug, Clone, PartialEq)]
@@ -133,7 +134,9 @@ pub fn largeur(ui: &Ui, briques: &[Brique]) -> f32 {
             }
             Brique::Choix { texte, raccourci, .. } => dessin::largeur_ligne(
                 mesure(texte, TAILLE_TEXTE),
-                raccourci.as_deref().map(|r| mesure(r, TAILLE_PETIT)),
+                raccourci
+                    .as_deref()
+                    .map(|r| mesure(&touches::lisible(r), TAILLE_PETIT)),
             ),
             Brique::Segments { options, .. } => {
                 options
@@ -163,7 +166,10 @@ pub fn largeur(ui: &Ui, briques: &[Brique]) -> f32 {
             Brique::Raccourcis(l) => l
                 .iter()
                 .map(|(t, k)| {
-                    2.0 * LIGNE_MARGE_DROITE + mesure(t, TAILLE_PETIT) + LIGNE_ECART + mesure(k, TAILLE_PETIT)
+                    2.0 * LIGNE_MARGE_DROITE
+                        + mesure(t, TAILLE_PETIT)
+                        + LIGNE_ECART
+                        + mesure(&touches::lisible(k), TAILLE_PETIT)
                 })
                 .fold(0.0, f32::max),
             Brique::Action { texte, .. } => dessin::largeur_ligne(mesure(texte, TAILLE_TEXTE), None),
@@ -442,6 +448,7 @@ fn brique(ui: &mut Ui, p: &Palette, b: &Brique) -> Option<Geste> {
             } else {
                 (glyphe.unwrap_or(' '), p.texte)
             };
+            let raccourci = raccourci.as_deref().map(touches::lisible);
             ligne(ui, p, g, c, texte, raccourci.as_deref())
                 .clicked()
                 .then(|| Geste::Action(cle.clone()))
@@ -538,7 +545,7 @@ fn brique(ui: &mut Ui, p: &Palette, b: &Brique) -> Option<Geste> {
                 ui.painter().text(
                     pos2(rect.right() - LIGNE_MARGE_DROITE, y),
                     Align2::RIGHT_CENTER,
-                    k,
+                    touches::lisible(k),
                     petit,
                     couleur(p.texte_secondaire),
                 );

@@ -44,6 +44,7 @@ pub mod sonde;
 pub mod surface;
 pub mod textes;
 pub mod theme;
+pub mod touches;
 pub mod toutes_faites;
 pub mod verification;
 

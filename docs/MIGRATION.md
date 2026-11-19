@@ -357,6 +357,20 @@ répète plus « Nom x.y.z »). Rien à changer dans le code d'un projet. **Le g
 (`Etat::ligne`), pas dans le titre. Un test qui cherchait le texte « Nom x.y.z » dans le volet
 cherche maintenant « x.y.z », à droite du titre.
 
+## Les raccourcis clavier en toutes lettres (même branche, pour tous)
+
+Un raccourci s'affiche comme dans Windows en français : « Ctrl+Maj+K », « Alt+Flèche droite »,
+« Win+Échap », jamais en symboles (⇧, ⌃, ⌘, →). Une seule fonction,
+`interface_commune::touches::lisible(&str) -> String`, met en forme n'importe quelle écriture
+(« ctrl+alt+shift+k », « Ctrl+Alt+→ », « ⌃⇧K », les noms d'egui comme « Down » ou « PageUp ») :
+modificateurs d'abord (Win, Ctrl, Alt, Maj), puis la touche ; elle ne change pas deux fois
+(`lisible(lisible(x)) == lisible(x)`). Le volet (`Brique::Choix::raccourci`,
+`Brique::Raccourcis`) et le champ `dessin::champ_raccourci` l'appliquent seuls, y compris pour
+mesurer la largeur : **la valeur gardée par le logiciel ne change pas**, seul l'affichage passe
+par elle. Un logiciel qui écrit ses propres raccourcis ailleurs (une info-bulle, un menu qu'il
+dessine lui-même) appelle `touches::lisible`. « Commande » (⌘) vaut Ctrl, comme dans egui sous
+Windows ; la touche Windows s'écrit « Win » (ou « Super »).
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

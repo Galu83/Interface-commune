@@ -1215,3 +1215,51 @@ fn volet_borne_et_briques_avec_contexte() {
     });
     assert!(menu.y > 10.0);
 }
+
+/// Les raccourcis des briques s'affichent en toutes lettres, comme Windows en français :
+/// jamais de symbole (⇧, ⌃, ⌘, →), quelle que soit l'écriture donnée par le logiciel.
+#[test]
+fn raccourcis_en_toutes_lettres() {
+    use interface_commune::briques::{self, Brique};
+    let liste = vec![
+        Brique::Choix {
+            cle: "a".into(),
+            glyphe: None,
+            texte: "Premier".into(),
+            coche: false,
+            raccourci: Some("ctrl+shift+k".into()),
+        },
+        Brique::Choix {
+            cle: "b".into(),
+            glyphe: None,
+            texte: "Deuxième".into(),
+            coche: false,
+            raccourci: Some("⌃⇧→".into()),
+        },
+        Brique::Raccourcis(vec![
+            ("Écran suivant".into(), "Win+Escape".into()),
+            ("Écran précédent".into(), "Ctrl+Alt+←".into()),
+        ]),
+    ];
+    let textes = image(egui::vec2(400.0, 400.0), 1.0, |ui, p| {
+        briques::dessiner(ui, p, &liste);
+    });
+    if polices::polices().is_err() {
+        return;
+    }
+    let vus: Vec<&str> = textes.iter().map(|(t, _)| t.as_str()).collect();
+    for attendu in [
+        "Ctrl+Maj+K",
+        "Ctrl+Maj+Flèche droite",
+        "Win+Échap",
+        "Ctrl+Alt+Flèche gauche",
+    ] {
+        assert!(vus.contains(&attendu), "« {attendu} » absent de {vus:?}");
+    }
+    for t in vus {
+        assert!(
+            !t.contains(['⇧', '⌃', '⌥', '⌘', '→', '←']),
+            "symbole dans « {t} »"
+        );
+    }
+}

@@ -284,7 +284,8 @@ pub enum Saisie {
     Changee,
 }
 
-/// Un raccourci saisi, au format « ctrl+alt+shift+k » (repris de Vocalis).
+/// Un raccourci saisi, au format « ctrl+alt+shift+k » (repris de Vocalis) ; l'affichage le met
+/// en toutes lettres (« Ctrl+Alt+Maj+K », [`crate::touches::lisible`]), la valeur ne change pas.
 pub fn raccourci_de(m: egui::Modifiers, touche: egui::Key) -> String {
     let mut parties = Vec::new();
     if m.ctrl || m.command {
@@ -331,7 +332,7 @@ pub fn champ_raccourci(ui: &mut Ui, p: &Palette, t: &Textes, id: &str, valeur: &
     }
     let mut saisie = Saisie::Rien;
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(valeur.as_str()).strong());
+        ui.label(egui::RichText::new(crate::touches::lisible(valeur)).strong());
         if bouton(ui, p, Some(icones::CLAVIER), t.changer_raccourci, Genre::Normal).clicked() {
             ui.memory_mut(|mem| mem.data.insert_temp(id, true));
             saisie = Saisie::Commencee;
