@@ -10,9 +10,9 @@ use crate::briques::Geste;
 use crate::dessin::{self, icone};
 use crate::icones;
 use crate::mesures::{
-    ILLUSTRE_BARRE, ILLUSTRE_CASE_ECART, ILLUSTRE_CASE_H, ILLUSTRE_CASE_L, ILLUSTRE_CASES_MAX, ILLUSTRE_LARGEUR,
-    ILLUSTRE_LIGNE, LIGNE_ARRONDI, LIGNE_ECART, LIGNE_ICONE, LIGNE_MARGE_DROITE, PASTILLE_HAUTEUR,
-    PASTILLE_LARGEUR, VOLET_LIGNE, VOLET_SECTION,
+    ILLUSTRE_BARRE, ILLUSTRE_CASE_ECART, ILLUSTRE_CASE_H, ILLUSTRE_CASE_L, ILLUSTRE_CASES_MAX,
+    ILLUSTRE_LARGEUR, ILLUSTRE_LIGNE, LIGNE_ARRONDI, LIGNE_ECART, LIGNE_ICONE, LIGNE_MARGE_DROITE,
+    PASTILLE_HAUTEUR, PASTILLE_LARGEUR, VOLET_LIGNE, VOLET_SECTION,
 };
 use crate::polices::semibold;
 use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE, contraste};
@@ -85,8 +85,7 @@ fn largeur_pastille(ui: &Ui, pa: &Pastille) -> f32 {
         + PASTILLE_LARGEUR
         + PASTILLE_ESPACE
         + mesure(ui, &pa.nom, TAILLE_TEXTE)
-        + pa
-            .mention
+        + pa.mention
             .as_deref()
             .map_or(0.0, |m| 4.0 + mesure(ui, &texte_mention(m), TAILLE_PETIT))
         + pa.glyphe.map_or(0.0, |_| 6.0 + LIGNE_ICONE)
@@ -131,7 +130,10 @@ fn carre(ui: &Ui, p: &Palette, rect: Rect, lettre: Option<char>, fond: Rgb, abse
         let dans = peintre.with_clip_rect(rect);
         let mut x = rect.left() - rect.height();
         while x < rect.right() {
-            dans.line_segment([pos2(x, rect.bottom()), pos2(x + rect.height(), rect.top())], hachure);
+            dans.line_segment(
+                [pos2(x, rect.bottom()), pos2(x + rect.height(), rect.top())],
+                hachure,
+            );
             x += 5.0;
         }
         peintre.rect_stroke(
@@ -149,7 +151,13 @@ fn carre(ui: &Ui, p: &Palette, rect: Rect, lettre: Option<char>, fond: Rgb, abse
         } else {
             couleur_lettre(fond)
         };
-        peintre.text(rect.center(), Align2::CENTER_CENTER, l, semibold(taille), couleur(c));
+        peintre.text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            l,
+            semibold(taille),
+            couleur(c),
+        );
     }
 }
 
@@ -181,7 +189,15 @@ fn pastille(ui: &mut Ui, p: &Palette, rect: Rect, num: usize, pa: &Pastille) -> 
         pos2(rect.left() + PASTILLE_MARGE, cy - PASTILLE_HAUTEUR / 2.0),
         vec2(PASTILLE_LARGEUR, PASTILLE_HAUTEUR),
     );
-    carre(ui, p, carre_rect, Some(pa.lettre), pa.couleur, pa.absent, TAILLE_PETIT);
+    carre(
+        ui,
+        p,
+        carre_rect,
+        Some(pa.lettre),
+        pa.couleur,
+        pa.absent,
+        TAILLE_PETIT,
+    );
     let (texte, second) = if pa.absent {
         (p.texte_desactive, p.texte_desactive)
     } else {
@@ -229,7 +245,12 @@ fn pastille(ui: &mut Ui, p: &Palette, rect: Rect, num: usize, pa: &Pastille) -> 
 }
 
 /// Dessine la rangée : le titre, puis les pastilles sur 2 colonnes (retour à la ligne).
-pub fn dessiner_pastilles(ui: &mut Ui, p: &Palette, titre: Option<&str>, pastilles: &[Pastille]) -> Option<Geste> {
+pub fn dessiner_pastilles(
+    ui: &mut Ui,
+    p: &Palette,
+    titre: Option<&str>,
+    pastilles: &[Pastille],
+) -> Option<Geste> {
     if let Some(t) = titre {
         titre_section(ui, p, t);
     }
@@ -237,14 +258,20 @@ pub fn dessiner_pastilles(ui: &mut Ui, p: &Palette, titre: Option<&str>, pastill
         return None;
     }
     let (rect, _) = ui.allocate_exact_size(
-        vec2(ui.available_width(), rangees(pastilles.len()) as f32 * VOLET_LIGNE),
+        vec2(
+            ui.available_width(),
+            rangees(pastilles.len()) as f32 * VOLET_LIGNE,
+        ),
         Sense::hover(),
     );
     let w = rect.width() / 2.0;
     let mut geste = None;
     for (i, pa) in pastilles.iter().enumerate() {
         let cellule = Rect::from_min_size(
-            pos2(rect.left() + w * (i % 2) as f32, rect.top() + VOLET_LIGNE * (i / 2) as f32),
+            pos2(
+                rect.left() + w * (i % 2) as f32,
+                rect.top() + VOLET_LIGNE * (i / 2) as f32,
+            ),
             vec2(w, VOLET_LIGNE),
         );
         if let Some(g) = pastille(ui, p, cellule, i, pa) {
@@ -281,9 +308,13 @@ pub fn largeur_choix(
     etiquette: Option<&str>,
 ) -> f32 {
     let haut = mesure(ui, texte, TAILLE_TEXTE)
-        + raccourci.map_or(0.0, |r| LIGNE_ECART + mesure(ui, &touches::lisible(r), TAILLE_PETIT));
+        + raccourci.map_or(0.0, |r| {
+            LIGNE_ECART + mesure(ui, &touches::lisible(r), TAILLE_PETIT)
+        });
     let bas = sous_ligne.map_or(0.0, |s| mesure(ui, s, TAILLE_PETIT))
-        + etiquette.map_or(0.0, |e| LIGNE_ECART + TAILLE_PETIT + 4.0 + mesure(ui, e, TAILLE_PETIT));
+        + etiquette.map_or(0.0, |e| {
+            LIGNE_ECART + TAILLE_PETIT + 4.0 + mesure(ui, e, TAILLE_PETIT)
+        });
     ILLUSTRE_MARGE + ILLUSTRE_LARGEUR + ILLUSTRE_ESPACE + haut.max(bas) + LIGNE_MARGE_DROITE
 }
 
@@ -291,7 +322,12 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case) {
     let arrondi = CornerRadius::same(3);
     if c.veille {
         ui.painter().rect_filled(rect, arrondi, couleur(FOND_VEILLE));
-        let (a, b, d, e) = (rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom());
+        let (a, b, d, e) = (
+            rect.left_top(),
+            rect.right_top(),
+            rect.right_bottom(),
+            rect.left_bottom(),
+        );
         ui.painter().extend(egui::Shape::dashed_line(
             &[a, b, d, e, a],
             Stroke::new(1.0, couleur(BORD_VEILLE)),
@@ -400,11 +436,9 @@ pub fn dessiner_choix(
     let petit = FontId::proportional(TAILLE_PETIT);
     let mut fin1 = x1;
     if let Some(rac) = raccourci {
-        let g = ui.painter().layout_no_wrap(
-            touches::lisible(rac),
-            petit.clone(),
-            couleur(p.texte_secondaire),
-        );
+        let g =
+            ui.painter()
+                .layout_no_wrap(touches::lisible(rac), petit.clone(), couleur(p.texte_secondaire));
         fin1 -= g.size().x;
         ui.painter()
             .galley(pos2(fin1, y1 - g.size().y / 2.0), g, couleur(p.texte_secondaire));
@@ -425,10 +459,22 @@ pub fn dessiner_choix(
         } else {
             fin2 -= TAILLE_PETIT;
         }
-        icone(ui, pos2(fin2 + TAILLE_PETIT / 2.0, y2), icones::COCHE, TAILLE_PETIT, accent);
+        icone(
+            ui,
+            pos2(fin2 + TAILLE_PETIT / 2.0, y2),
+            icones::COCHE,
+            TAILLE_PETIT,
+            accent,
+        );
     }
     if let Some(s) = sous_ligne {
-        let g = coupe(ui, s, TAILLE_PETIT, p.texte_secondaire, fin2 - LIGNE_ECART / 2.0 - x0);
+        let g = coupe(
+            ui,
+            s,
+            TAILLE_PETIT,
+            p.texte_secondaire,
+            fin2 - LIGNE_ECART / 2.0 - x0,
+        );
         ui.painter()
             .galley(pos2(x0, y2 - g.size().y / 2.0), g, couleur(p.texte_secondaire));
     }
@@ -535,13 +581,19 @@ mod essais {
         let c = couleurs_pastilles();
         for (i, a) in c.iter().enumerate() {
             assert!(!c[..i].contains(a), "{a:?} en double");
-            assert!(contraste(*a, couleur_lettre(*a)) >= 4.5, "{a:?} : lettre illisible");
+            assert!(
+                contraste(*a, couleur_lettre(*a)) >= 4.5,
+                "{a:?} : lettre illisible"
+            );
             for sombre in [false, true] {
                 let p = Palette::de(&ChoixWindows {
                     sombre,
                     ..Default::default()
                 });
-                assert!(contraste(*a, p.fond) >= 3.0, "{a:?} sur le fond (sombre : {sombre})");
+                assert!(
+                    contraste(*a, p.fond) >= 3.0,
+                    "{a:?} sur le fond (sombre : {sombre})"
+                );
                 for etat in [p.vert, p.orange, p.rouge, p.accent] {
                     let d = (i32::from(a.0) - i32::from(etat.0)).abs()
                         + (i32::from(a.1) - i32::from(etat.1)).abs()
@@ -557,7 +609,10 @@ mod essais {
     fn hauteurs() {
         let ctx = egui::Context::default();
         let (_, h) = image(&ctx, vec![]);
-        assert!((h[0] - (VOLET_SECTION + 2.0 * VOLET_LIGNE + 2.0 * 2.0)).abs() <= 8.0, "{h:?}");
+        assert!(
+            (h[0] - (VOLET_SECTION + 2.0 * VOLET_LIGNE + 2.0 * 2.0)).abs() <= 8.0,
+            "{h:?}"
+        );
         assert!((h[1] - ILLUSTRE_LIGNE).abs() <= 8.0, "{h:?}");
         assert_eq!(rangees(1), 1);
         assert_eq!(rangees(2), 1);

@@ -1558,3 +1558,65 @@ fn titre_long_ne_chevauche_pas_la_roue() {
         assert!((LARGEUR..=LARGEUR_MAX).contains(&taille.x), "{ppp} : {taille:?}");
     }
 }
+
+/// Les choix illustrés : l'illustration a une largeur fixe, donc le texte et la sous-ligne
+/// commencent au même endroit pour 1 ou 4 cases ; l'actif montre la coche et son étiquette ;
+/// les pastilles montrent le nom et la mention.
+#[test]
+fn choix_illustres_alignes() {
+    use interface_commune::briques::{self, Brique, Case, Pastille};
+    if polices::polices().is_err() {
+        return;
+    }
+    let c = |l| Case {
+        lettre: Some(l),
+        couleur: Some(interface_commune::apparence::couleurs_pastilles()[0]),
+        veille: false,
+    };
+    let choix = |cle: &str, texte: &str, n: usize, actif: bool| Brique::ChoixIllustre {
+        cle: cle.into(),
+        texte: texte.into(),
+        sous_ligne: Some(format!("sous {texte}")),
+        illustration: (0..n).map(|_| c('A')).collect(),
+        raccourci: Some("ctrl+alt+shift+1".into()),
+        actif,
+        etiquette_active: Some("Affiché".into()),
+    };
+    let liste = vec![
+        Brique::Pastilles {
+            titre: Some("Ordinateurs".into()),
+            pastilles: vec![Pastille {
+                cle: None,
+                lettre: 'F',
+                couleur: interface_commune::apparence::couleurs_pastilles()[1],
+                nom: "Fixe".into(),
+                mention: Some("ce PC".into()),
+                glyphe: None,
+                absent: false,
+            }],
+        },
+        choix("un", "Un", 1, true),
+        choix("quatre", "Quatre", 4, false),
+    ];
+    let textes = image(egui::vec2(400.0, 400.0), 1.0, |ui, p| {
+        briques::dessiner(ui, p, &liste);
+    });
+    let x = |t: &str| {
+        textes
+            .iter()
+            .find(|(s, _)| s == t)
+            .unwrap_or_else(|| panic!("« {t} » absent de {textes:?}"))
+            .1
+            .min
+            .x
+    };
+    assert!((x("Un") - x("Quatre")).abs() < 0.5, "texte décalé");
+    assert!(
+        (x("sous Un") - x("sous Quatre")).abs() < 0.5,
+        "sous-ligne décalée"
+    );
+    assert!((x("Un") - x("sous Un")).abs() < 0.5);
+    for attendu in ["Affiché", "Ctrl+Alt+Maj+1", "Fixe", "· ce PC", "Ordinateurs"] {
+        x(attendu);
+    }
+}

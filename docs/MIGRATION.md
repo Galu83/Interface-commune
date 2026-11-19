@@ -455,6 +455,18 @@ deux PC. Pas pour un simple thème ou une langue : « Annuler » suffit.
 Un exemple sans fenêtre, qui écrit deux captures (clair et sombre) : `cargo run --example
 conserver -- <dossier>`.
 
+## Deux briques de plus au volet : `Pastilles` et `ChoixIllustre` (branche `volet-pastilles`, pour tous)
+
+Deux **nouvelles variantes** de `Brique` (aucune brique existante ne change ; un `match` complet sur
+`Brique` doit en tenir compte). `Brique::Pastilles { titre, pastilles }` : une rangée d'appareils
+(`Pastille` : clé facultative, lettre, couleur, nom, mention « ce PC », glyphe, absent hachuré) sur
+2 colonnes, retour à la ligne dès 3 ; avec une clé, un clic ferme le volet et la rend.
+`apparence::couleurs_pastilles()` donne 6 couleurs lisibles en clair et en sombre.
+`Brique::ChoixIllustre` : un choix à deux lignes avec une illustration de 1 à 4 cases d'écran
+(`Case` : lettre, couleur, veille), le raccourci en toutes lettres, et, actif, « ✓ » et
+`etiquette_active` en accent ; un clic ferme le volet et rend la clé. `Choix` reste inchangé.
+Exemple et captures sans fenêtre : `cargo run --example volet_pastilles -- <dossier>`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

@@ -9,13 +9,13 @@ use crate::Valeur;
 use crate::apparence::couleur;
 use crate::dessin::{self, icone, interrupteur, ligne};
 use crate::icones;
-use crate::pastilles;
-pub use crate::pastilles::{Case, Pastille};
 use crate::mesures::{
     LIGNE_ARRONDI, LIGNE_ECART, LIGNE_ICONE, LIGNE_ICONE_X, LIGNE_MARGE_DROITE, LIGNE_TEXTE_X, VOLET_BARRE,
     VOLET_BOUTON, VOLET_ECART, VOLET_LIGNE, VOLET_RACCOURCI, VOLET_SECTION, VOLET_SEGMENTS, VOLET_SOUS_LIGNE,
     VOLET_TUILE,
 };
+use crate::pastilles;
+pub use crate::pastilles::{Case, Pastille};
 use crate::polices::semibold;
 use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE};
 use crate::touches;
@@ -78,7 +78,7 @@ pub enum Brique {
         pastilles: Vec<Pastille>,
     },
     /// Un choix à deux lignes avec l'illustration de ce qu'il fait (une case par écran, de 1 à
-    /// 4) : texte et raccourci, sous-ligne et, quand il est actif, « ✓ » et `etiquette_active`
+    /// 4) : texte et raccourci, sous-ligne et, quand il est actif, la coche et `etiquette_active`
     /// en accent, une barre d'accent à gauche. Un clic ferme le volet et rend `cle`.
     ChoixIllustre {
         cle: String,
