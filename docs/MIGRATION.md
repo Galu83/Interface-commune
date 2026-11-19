@@ -390,6 +390,64 @@ par elle. Un logiciel qui écrit ses propres raccourcis ailleurs (une info-bulle
 dessine lui-même) appelle `touches::lisible`. « Commande » (⌘) vaut Ctrl, comme dans egui sous
 Windows ; la touche Windows s'écrit « Win » (ou « Super »).
 
+## « Conserver ces modifications ? » (pour tous)
+
+Règle commune des Paramètres : **effet immédiat partout** (la bulle « Annuler » reste), jamais
+de bouton Appliquer. Mais un réglage qui **peut couper l'écran, la souris, le clavier ou la
+liaison** est appliqué tout de suite, puis une carte demande « Conserver ces modifications ? »,
+comme Windows après un changement de résolution d'écran : deux boutons « Conserver » et
+« Revenir », et le compte à rebours « Retour au réglage d'avant dans 15 s ». Sans réponse au
+bout de 15 s, tout revient comme avant.
+
+Dans la page du réglage, **une ligne de plus** : `changer_a_confirmer` à la place de `changer`.
+
+```rust
+fn dessiner_page(&self, _cle: &str, ui: &mut egui::Ui, page: &mut Contexte) {
+    // … la carte, le choix de l'utilisateur : `avant` et `apres` …
+    if apres != avant {
+        // Au lieu de `page.changer(…)` : appliqué tout de suite, puis « Conserver ? ».
+        page.changer_a_confirmer("affichage.mode", "Mode d'affichage",
+                                 Valeur::Texte(avant), Valeur::Texte(apres));
+    }
+}
+```
+
+Les mêmes trois formes qu'« Annuler » : `Contexte::changer_a_confirmer(cle, titre, avant,
+apres)`, `Contexte::changer_groupe_a_confirmer(titre, changements)` (plusieurs réglages d'un
+geste) et `Contexte::brouillon_a_confirmer(titre)` (un brouillon entier, pour les logiciels qui
+ont `Reglages::instantane` et `Reglages::remettre`).
+
+**Ce que fait la bibliothèque, sans rien d'autre à écrire :**
+- le changement part au logiciel tout de suite (`Reglages::changer`), **sans** bulle
+  « Annuler » (la carte la remplace) ;
+- « Revenir », **Entrée** (le bouton par défaut, qui a le focus), **Échap**, le délai écoulé et
+  la **fermeture des Paramètres** rendent la valeur d'avant **par le même chemin qu'« Annuler »** :
+  `Reglages::changer(cle, avant)` (ou `Reglages::remettre(&brouillon)`). Le logiciel n'a donc
+  rien de nouveau à gérer : il applique et enregistre comme pour tout changement ;
+- « Conserver » : les changements restent, rien n'est rendu ;
+- **une seule confirmation à la fois** : un nouveau changement à confirmer pendant le compte à
+  rebours **garde l'état d'avant le premier**, et le compte à rebours repart de 15 s ; revenu à la
+  valeur de départ, il n'y a plus rien à confirmer ;
+- la carte est devant les Paramètres (le reste ne répond plus tant qu'elle est là) ; sombre et
+  clair comme le reste ; textes dans `Textes` (`conserver_question`, `conserver_retour` avec le
+  nombre de secondes, `conserver`, `revenir`), en français et en anglais.
+
+Le délai est la constante publique `parametres::modele::DUREE_CONSERVER` (15 s). Le calcul pur
+(compte à rebours, valeurs d'avant, retour) est `parametres::modele::Confirmation`, testé sans
+fenêtre. Pour un logiciel qui dessine les Paramètres dans sa propre boucle : `Parametres::dessiner`
+fait tout (il vérifie le délai à chaque image, et demande lui-même la prochaine image à
+chaque seconde) ; à la fermeture, `Parametres::fermer(l)` doit être appelé **avant** l'enregistrement
+(la fenêtre des Paramètres de la bibliothèque le fait seule). Limite : le délai n'est vérifié
+qu'à l'image suivante ; une fenêtre réduite et jamais redessinée ne reviendrait qu'à sa
+réouverture ou à sa fermeture.
+
+À quoi s'en servir : un mode d'affichage ou de disposition des écrans, la vitesse ou le bouton
+principal de la souris, un raccourci clavier global, l'adresse ou le port de la liaison entre
+deux PC. Pas pour un simple thème ou une langue : « Annuler » suffit.
+
+Un exemple sans fenêtre, qui écrit deux captures (clair et sombre) : `cargo run --example
+conserver -- <dossier>`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

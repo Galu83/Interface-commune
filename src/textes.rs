@@ -44,6 +44,13 @@ pub struct Textes {
     pub confirmer: &'static str,
     pub redemarrer_maintenant: &'static str,
     pub retour: &'static str,
+    /// « Conserver ces modifications ? » : la question, la ligne du compte à rebours
+    /// (« Retour au réglage d'avant dans {} s », les secondes qui restent), et les deux
+    /// boutons.
+    pub conserver_question: &'static str,
+    pub conserver_retour: &'static str,
+    pub conserver: &'static str,
+    pub revenir: &'static str,
 
     // Page Général
     pub demarrer_avec_windows: &'static str,
@@ -132,6 +139,10 @@ pub const FRANCAIS: Textes = Textes {
     confirmer: "Confirmer",
     redemarrer_maintenant: "Redémarrer maintenant",
     retour: "Retour",
+    conserver_question: "Conserver ces modifications ?",
+    conserver_retour: "Retour au réglage d'avant dans {} s",
+    conserver: "Conserver",
+    revenir: "Revenir",
     demarrer_avec_windows: "Démarrer avec Windows",
     demarrer_explication: "Le logiciel s'ouvre tout seul à l'ouverture de la session.",
     langue: "Langue",
@@ -202,6 +213,10 @@ pub const ANGLAIS: Textes = Textes {
     confirmer: "Confirm",
     redemarrer_maintenant: "Restart now",
     retour: "Back",
+    conserver_question: "Keep these changes?",
+    conserver_retour: "Going back to the previous setting in {} s",
+    conserver: "Keep",
+    revenir: "Revert",
     demarrer_avec_windows: "Start with Windows",
     demarrer_explication: "The app opens by itself when you sign in.",
     langue: "Language",
@@ -324,6 +339,10 @@ mod tests {
                 t.confirmer,
                 t.redemarrer_maintenant,
                 t.retour,
+                t.conserver_question,
+                t.conserver_retour,
+                t.conserver,
+                t.revenir,
                 t.demarrer_avec_windows,
                 t.demarrer_explication,
                 t.langue,

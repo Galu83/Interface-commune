@@ -114,10 +114,15 @@ impl Contenu for ContenuParametres {
     }
 
     fn peut_fermer(&mut self, imposee: bool) -> bool {
+        // « Conserver ces modifications ? » sans réponse : fermer les Paramètres, c'est
+        // « Revenir », avant que le logiciel enregistre.
+        self.parametres.fermer(&*self.reglages);
         self.reglages.peut_fermer(imposee)
     }
 
     fn fermee(&mut self, place: Option<Place>) {
+        // Rien n'attend plus « Conserver » ici si `peut_fermer` est passé par là ; sinon, retour.
+        self.parametres.fermer(&*self.reglages);
         if let Some(p) = place.filter(|_| !self.hors_place) {
             self.reglages.retenir_place(p);
         }

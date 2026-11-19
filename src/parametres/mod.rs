@@ -10,6 +10,8 @@
 //!   Mise à jour et À propos (juste après, jamais collées au bas de la fenêtre) ;
 //! - « Rechercher un paramètre » dès sept pages ;
 //! - une carte par réglage, effet immédiat, bulle « Annuler », bandeau de redémarrage ;
+//! - « Conserver ces modifications ? » (15 s, retour automatique) pour un réglage qui peut
+//!   couper l'écran, la souris, le clavier ou la liaison ([`Contexte::changer_a_confirmer`]) ;
 //! - une sous-page s'ouvre par un chevron « › », avec le chemin « Page › Sous-page » ;
 //! - la fenêtre retient sa taille et sa place (sous Windows, `fenetre`).
 //!
@@ -33,7 +35,7 @@ use crate::polices::semibold;
 use crate::textes::{Textes, remplir};
 use crate::theme::{Palette, TAILLE_PETIT};
 use crate::{Communs, EtatMiseAJour, Reglages, cles, icones};
-use modele::{Annulation, Changement, PAGES_POUR_RECHERCHE, Page, Valeur};
+use modele::{Annulation, Changement, Confirmation, PAGES_POUR_RECHERCHE, Page, Retour, Valeur};
 
 /// La clé de la fenêtre des Paramètres parmi les autres fenêtres de la boucle
 /// ([`crate::autres_fenetres`]) : réservée.
@@ -61,6 +63,9 @@ pub struct Contexte<'a> {
     redemarrage: Option<String>,
     aller_a: Option<String>,
     brouillon: Option<String>,
+    a_confirmer: Vec<(String, String, Valeur, Valeur)>,
+    groupes_a_confirmer: Vec<(String, Vec<Changement>)>,
+    brouillon_a_confirmer: Option<String>,
 }
 
 impl Contexte<'_> {
@@ -82,6 +87,29 @@ impl Contexte<'_> {
     /// logiciel, et une seule bulle « Annuler » (titre `titre`) qui les remet tous.
     pub fn changer_groupe(&mut self, titre: &str, changements: Vec<Changement>) {
         self.groupes.push((titre.into(), changements));
+    }
+
+    /// Comme [`Contexte::changer`], pour un réglage qui peut couper l'écran, la souris, le
+    /// clavier ou la liaison : il est rendu au logiciel tout de suite, puis une carte demande
+    /// « Conserver ces modifications ? » (« Conserver » ou « Revenir », [`modele::DUREE_CONSERVER`]
+    /// pour répondre). Sans réponse, comme avec « Revenir » ou la fermeture des Paramètres,
+    /// la valeur d'avant revient au logiciel par [`Reglages::changer`], le chemin d'« Annuler ».
+    /// Pas de bulle « Annuler » pour ce changement. Pendant la confirmation, un nouveau
+    /// changement à confirmer garde la valeur d'avant le **premier**.
+    pub fn changer_a_confirmer(&mut self, cle: &str, titre: &str, avant: Valeur, apres: Valeur) {
+        self.a_confirmer.push((cle.into(), titre.into(), avant, apres));
+    }
+
+    /// Comme [`Contexte::changer_groupe`], à confirmer d'un seul coup
+    /// ([`Contexte::changer_a_confirmer`]).
+    pub fn changer_groupe_a_confirmer(&mut self, titre: &str, changements: Vec<Changement>) {
+        self.groupes_a_confirmer.push((titre.into(), changements));
+    }
+
+    /// Comme [`Contexte::brouillon_modifie`], à confirmer ([`Contexte::changer_a_confirmer`]) :
+    /// « Revenir » remet le brouillon entier d'avant ([`Reglages::remettre`]).
+    pub fn brouillon_a_confirmer(&mut self, titre: &str) {
+        self.brouillon_a_confirmer = Some(titre.into());
     }
 
     /// Ce changement ne prend effet qu'au redémarrage : le bandeau le dit en haut de la page.
@@ -114,6 +142,10 @@ pub struct Parametres {
     pub sous_page: Option<String>,
     pub recherche: String,
     pub annulation: Annulation,
+    /// « Conserver ces modifications ? » : ce qui attend la réponse.
+    pub confirmation: Confirmation,
+    /// Le focus est déjà posé sur « Revenir » (le bouton par défaut) pour cette carte.
+    focus_conserver: bool,
     /// Le redémarrage demandé par un réglage (la raison), jusqu'au redémarrage.
     pub redemarrage: Option<String>,
     /// Le brouillon entier du logiciel au début de l'image en cours (pour « Annuler »).
@@ -138,6 +170,8 @@ impl Parametres {
             sous_page: None,
             recherche: String::new(),
             annulation: Annulation::default(),
+            confirmation: Confirmation::default(),
+            focus_conserver: false,
             redemarrage: None,
             avant_image: None,
             confirmer_retablir: false,
@@ -174,6 +208,102 @@ impl Parametres {
             }
         }
         self.annulation.changer_groupe(titre, changements, Instant::now());
+    }
+
+    /// Rend au logiciel ce que « Revenir » ramène : le brouillon d'avant, puis chaque
+    /// valeur d'avant, par le même chemin qu'« Annuler ».
+    fn rendre(l: &dyn Reglages, retour: Retour) {
+        if let Some(avant) = &retour.brouillon {
+            l.remettre(avant);
+        }
+        for (cle, avant) in retour.valeurs {
+            l.changer(&cle, avant);
+        }
+    }
+
+    /// Un changement **à confirmer** : rendu au logiciel tout de suite, puis la carte
+    /// « Conserver ces modifications ? » ([`Contexte::changer_a_confirmer`]).
+    pub fn changer_a_confirmer(
+        &mut self,
+        l: &dyn Reglages,
+        cle: &str,
+        titre: &str,
+        avant: Valeur,
+        apres: Valeur,
+    ) {
+        self.tic(l);
+        if avant == apres {
+            return;
+        }
+        self.annulation.oublier();
+        self.confirmation
+            .changer(cle, titre, avant, &apres, Instant::now());
+        l.changer(cle, apres);
+    }
+
+    /// Un groupe de changements **à confirmer**, d'un seul coup.
+    pub fn changer_groupe_a_confirmer(
+        &mut self,
+        l: &dyn Reglages,
+        titre: &str,
+        changements: Vec<Changement>,
+    ) {
+        self.tic(l);
+        if changements.iter().all(|(_, avant, apres)| avant == apres) {
+            return;
+        }
+        self.annulation.oublier();
+        for (cle, avant, apres) in &changements {
+            if avant != apres {
+                l.changer(cle, apres.clone());
+            }
+        }
+        self.confirmation
+            .changer_groupe(titre, changements, Instant::now());
+    }
+
+    /// Un brouillon entier **à confirmer** : `avant` est son état avant ce changement (le
+    /// logiciel l'a déjà modifié).
+    pub fn brouillon_a_confirmer(&mut self, l: &dyn Reglages, titre: &str, avant: modele::Instantane) {
+        self.tic(l);
+        self.annulation.oublier();
+        self.confirmation.changer_brouillon(titre, avant, Instant::now());
+    }
+
+    /// « Conserver » : les changements restent.
+    pub fn conserver(&mut self) {
+        self.confirmation.conserver(Instant::now());
+    }
+
+    /// « Revenir » : tout revient comme avant le premier changement à confirmer. Appelé aussi
+    /// par la fermeture des Paramètres ([`Parametres::fermer`]).
+    pub fn revenir(&mut self, l: &dyn Reglages) {
+        Self::rendre(l, self.confirmation.revenir());
+        self.annulation.oublier();
+    }
+
+    /// À appeler à chaque image (la bibliothèque le fait) : le délai de « Conserver » est-il
+    /// écoulé ? Alors tout revient comme avant. Rend `true` si cela vient d'arriver.
+    pub fn tic(&mut self, l: &dyn Reglages) -> bool {
+        self.tic_a(l, Instant::now())
+    }
+
+    /// Comme [`Parametres::tic`], à une heure donnée (pour les essais : pas d'attente de 15 s).
+    pub fn tic_a(&mut self, l: &dyn Reglages, maintenant: Instant) -> bool {
+        match self.confirmation.echu(maintenant) {
+            Some(retour) => {
+                Self::rendre(l, retour);
+                self.annulation.oublier();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Les Paramètres se ferment : ce qui attendait « Conserver » revient comme avant
+    /// ([`Parametres::revenir`]), avant que le logiciel enregistre ([`Reglages::peut_fermer`]).
+    pub fn fermer(&mut self, l: &dyn Reglages) {
+        self.revenir(l);
     }
 
     /// Le titre de la fenêtre : « Paramètres de <logiciel> », dans la langue du logiciel.
@@ -223,6 +353,7 @@ impl Parametres {
     /// Toute la fenêtre : navigation et page.
     pub fn dessiner(&mut self, ui: &mut egui::Ui, p: &Palette, l: &dyn Reglages) {
         self.suivre_la_langue(l);
+        self.tic(l);
         let largeur = self.largeur_navigation(ui, l);
         let [g, d, h, b] = MARGE_NAVIGATION;
         egui::Panel::left("navigation")
@@ -268,6 +399,8 @@ impl Parametres {
                             });
                     });
             });
+        // « Conserver ces modifications ? », devant tout le reste.
+        self.carte_conserver(ui, p, l);
     }
 
     /// Le logo à sa taille réelle (pixels de l'écran), sans flou.
@@ -474,6 +607,9 @@ impl Parametres {
             redemarrage: None,
             aller_a: None,
             brouillon: None,
+            a_confirmer: Vec::new(),
+            groupes_a_confirmer: Vec::new(),
+            brouillon_a_confirmer: None,
         };
         dessin(l, ui, &mut c);
         for (cle, titre, avant, apres) in c.changements {
@@ -486,6 +622,17 @@ impl Parametres {
             && let Some(avant) = self.avant_image.clone()
         {
             self.annulation.changer_brouillon(&titre, avant, Instant::now());
+        }
+        for (cle, titre, avant, apres) in c.a_confirmer {
+            self.changer_a_confirmer(l, &cle, &titre, avant, apres);
+        }
+        for (titre, changements) in c.groupes_a_confirmer {
+            self.changer_groupe_a_confirmer(l, &titre, changements);
+        }
+        if let Some(titre) = c.brouillon_a_confirmer
+            && let Some(avant) = self.avant_image.clone()
+        {
+            self.brouillon_a_confirmer(l, &titre, avant);
         }
         if let Some(r) = c.redemarrage {
             self.redemarrage = Some(r);
@@ -530,6 +677,83 @@ impl Parametres {
             }
         } else if fermer {
             self.annulation.oublier();
+        }
+    }
+
+    /// La carte « Conserver ces modifications ? », devant les Paramètres (le reste ne répond
+    /// plus tant qu'elle est là), avec le compte à rebours. « Revenir » est le bouton par
+    /// défaut (Entrée) ; Échap = « Revenir ».
+    fn carte_conserver(&mut self, ui: &mut egui::Ui, p: &Palette, l: &dyn Reglages) {
+        let maintenant = Instant::now();
+        let Some(titre) = self.confirmation.en_attente(maintenant).map(|a| a.titre.clone()) else {
+            self.focus_conserver = false;
+            return;
+        };
+        let secondes = self.confirmation.secondes(maintenant).unwrap_or(0);
+        let ctx = ui.ctx().clone();
+        if let Some(d) = self.confirmation.prochain_changement(maintenant) {
+            ctx.request_repaint_after(d);
+        }
+        let t = self.textes.clone();
+        let (mut garder, mut revenir) = (false, false);
+        let reste = self
+            .confirmation
+            .reste(maintenant)
+            .map_or(0.0, |r| r.as_secs_f32() / modele::DUREE_CONSERVER.as_secs_f32());
+        let donner_le_focus = !self.focus_conserver;
+        let cadre = dessin::cadre_carte(p)
+            .fill(couleur(p.fond_menu))
+            .inner_margin(egui::Margin::same(20))
+            .shadow(egui::Shadow {
+                offset: [0, 8],
+                blur: 24,
+                spread: 0,
+                color: egui::Color32::from_black_alpha(if p.sombre { 130 } else { 60 }),
+            });
+        let id = egui::Id::unique("interface_commune_conserver");
+        // Sans fondu : une boîte de dialogue de Windows apparaît d'un coup, tout de suite lisible.
+        let modale = egui::Modal::new(id)
+            .area(egui::Modal::default_area(id).fade_in(false))
+            .backdrop_color(egui::Color32::from_black_alpha(if p.sombre { 130 } else { 90 }))
+            .frame(cadre)
+            .show(&ctx, |ui| {
+                ui.set_width(380.0);
+                ui.label(RichText::new(t.conserver_question).font(semibold(18.0)));
+                ui.add_space(8.0);
+                ui.label(remplir(t.modifie, &[&titre]));
+                ui.add_space(2.0);
+                ui.label(
+                    RichText::new(remplir(t.conserver_retour, &[&secondes.to_string()]))
+                        .color(couleur(p.texte_secondaire)),
+                );
+                ui.add_space(10.0);
+                // Le temps qui reste, en barre fine : elle se vide jusqu'au retour automatique.
+                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 4.0), Sense::hover());
+                ui.painter()
+                    .rect_filled(rect, CornerRadius::same(2), couleur(p.survol));
+                let plein = egui::Rect::from_min_size(rect.min, vec2(rect.width() * reste, rect.height()));
+                ui.painter()
+                    .rect_filled(plein, CornerRadius::same(2), couleur(p.accent));
+                ui.add_space(16.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // De droite à gauche : « Revenir » (par défaut), puis « Conserver ».
+                    let r = bouton(ui, p, None, t.revenir, Genre::Accent);
+                    if donner_le_focus {
+                        r.request_focus();
+                    }
+                    revenir = r.clicked();
+                    garder = bouton(ui, p, None, t.conserver, Genre::Normal).clicked();
+                });
+            });
+        self.focus_conserver = true;
+        // Échap = « Revenir » (la carte est devant : rien d'autre ne le prend).
+        let echap = modale.is_top_modal
+            && !modale.any_popup_open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        if garder {
+            self.conserver();
+        } else if revenir || echap {
+            self.revenir(l);
         }
     }
 

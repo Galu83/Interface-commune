@@ -111,6 +111,12 @@ pub fn petit_menu(l: &dyn Logiciel, o: Options) -> Result<Image, Erreur> {
 /// Les Paramètres à cette page (sa clé ; `None` : la première), à leur taille d'ouverture.
 pub fn parametres(l: &dyn Reglages, page: Option<&str>, o: Options) -> Result<Image, Erreur> {
     let mut s = Parametres::new(l, page);
+    parametres_de(&mut s, l, o)
+}
+
+/// Des Paramètres déjà en route, tels qu'ils sont : par exemple avec la carte « Conserver
+/// ces modifications ? » ouverte ([`Parametres::changer_a_confirmer`]), pour la documentation.
+pub fn parametres_de(s: &mut Parametres, l: &dyn Reglages, o: Options) -> Result<Image, Erreur> {
     capturer(PARAMETRES_TAILLE.into(), o, false, |ui, p| s.dessiner(ui, p, l))
 }
 

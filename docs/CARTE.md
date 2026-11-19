@@ -13,7 +13,7 @@
 | `src/briques.rs`, `mesures.rs` | les briques du volet ; les mesures communes du volet, du menu et des Paramètres |
 | `src/toutes_faites.rs` | la fenêtre simple et la fenêtre de lecture |
 | `src/menu.rs` | l'ordre du petit menu |
-| `src/parametres/` | les Paramètres : modèle (pages, Annuler), dessin, fenêtre |
+| `src/parametres/` | les Paramètres : modèle (pages, Annuler, « Conserver ces modifications ? »), dessin, fenêtre |
 | `src/nuancier.rs` | le nuancier : pastille de couleur, grille, bouton qui ouvre la grille (choisir une couleur sans taper de code) |
 | `src/seuils.rs` | la barre à seuils : une barre de 0 à 100 coupée en zones colorées, dont on règle les limites en glissant les poignées (ou au clavier) |
 | `src/dessin.rs`, `icones.rs` | cartes, interrupteurs, bandeau, boutons, champ de raccourci ; les icônes communes |
@@ -24,6 +24,7 @@
 | `docs/LICENCES.md` | avis MIT des crates publiées sans fichier de licence (egui…) |
 | `docs/MIGRATION.md`, `ETAT.md` | ce que chaque projet change ; où en est la bibliothèque |
 | `examples/demo.rs` | un logiciel d'exemple |
+| `examples/conserver.rs` | « Conserver ces modifications ? » : un réglage à confirmer, deux captures sans fenêtre |
 | `examples/mesure_ouverture.rs` | mesure l'ouverture du volet et du petit menu, image par image, fenêtre voilée (rien à l'écran) |
 
 Tests : `cargo test -q` ; avant un envoi : `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.

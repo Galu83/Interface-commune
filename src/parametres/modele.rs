@@ -1,7 +1,8 @@
 //! Le squelette des Paramètres en calcul pur, sans fenêtre (tout est testé) : l'ordre des
 //! pages et leurs clés, la page demandée sur la ligne de commande (`--parametres <page>`), la
-//! recherche d'un paramètre, la bulle « Annuler » après un changement (règles : interface
-//! Windows 11, point 7).
+//! recherche d'un paramètre, la bulle « Annuler » après un changement, et « Conserver ces
+//! modifications ? » (retour automatique) pour ce qui peut couper l'écran, la souris, le
+//! clavier ou la liaison (règles : interface Windows 11, point 7).
 
 use std::time::{Duration, Instant};
 
@@ -344,6 +345,189 @@ impl Annulation {
     }
 }
 
+/// « Conserver ces modifications ? » attend la réponse ce temps ; sans réponse, retour au
+/// réglage d'avant (comme Windows après un changement de résolution d'écran).
+pub const DUREE_CONSERVER: Duration = Duration::from_secs(15);
+
+/// Ce qui attend la réponse « Conserver » ou « Revenir ».
+#[derive(Debug, Clone, PartialEq)]
+pub struct AConfirmer {
+    /// Le nom du réglage changé en dernier, montré dans la carte (« Mode d'affichage »).
+    pub titre: String,
+    /// Les réglages changés (clé, valeur d'**avant le premier changement**), dans l'ordre où
+    /// ils ont changé.
+    pub valeurs: Vec<(String, Valeur)>,
+    /// Un brouillon entier : son état d'avant le premier changement.
+    pub brouillon: Option<Instantane>,
+    /// Le dernier changement : le compte à rebours repart de là.
+    quand: Instant,
+}
+
+/// Ce que « Revenir » (ou le délai écoulé, ou la fermeture) rend au logiciel : le brouillon
+/// d'avant, à remettre d'abord par [`crate::Reglages::remettre`], puis les valeurs d'avant, à
+/// remettre par [`crate::Reglages::changer`] (le même chemin que « Annuler »).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Retour {
+    pub valeurs: Vec<(String, Valeur)>,
+    pub brouillon: Option<Instantane>,
+}
+
+impl Retour {
+    /// Rien à remettre.
+    pub fn est_vide(&self) -> bool {
+        self.valeurs.is_empty() && self.brouillon.is_none()
+    }
+}
+
+/// « Conserver ces modifications ? » : un réglage qui peut couper l'écran, la souris, le
+/// clavier ou la liaison est appliqué tout de suite (le logiciel s'en charge), puis la
+/// carte demande de le garder ; sans réponse en [`DUREE_CONSERVER`], tout revient comme avant.
+/// **Une seule confirmation à la fois** : un nouveau changement pendant le compte à rebours
+/// garde l'état d'avant le **premier**, et le compte à rebours repart de zéro.
+#[derive(Debug, Default)]
+pub struct Confirmation {
+    attente: Option<AConfirmer>,
+}
+
+impl Confirmation {
+    /// Ouvre la confirmation, ou la continue (le titre du dernier changement ; compte à
+    /// rebours remis à [`DUREE_CONSERVER`]).
+    fn continuer(&mut self, titre: &str, maintenant: Instant) -> &mut AConfirmer {
+        let a = self.attente.get_or_insert_with(|| AConfirmer {
+            titre: String::new(),
+            valeurs: Vec::new(),
+            brouillon: None,
+            quand: maintenant,
+        });
+        a.titre = titre.to_string();
+        a.quand = maintenant;
+        a
+    }
+
+    /// Garde la valeur d'avant d'une clé (celle d'avant le premier changement) ; revenue à
+    /// cette valeur, la clé n'a plus rien à confirmer.
+    fn noter(&mut self, cle: &str, avant: Valeur, apres: &Valeur) {
+        let Some(a) = &mut self.attente else { return };
+        if !a.valeurs.iter().any(|(k, _)| k == cle) {
+            a.valeurs.push((cle.to_string(), avant));
+        }
+        if let Some(i) = a.valeurs.iter().position(|(k, v)| k == cle && v == apres) {
+            a.valeurs.remove(i);
+        }
+    }
+
+    /// Plus rien à confirmer : la carte disparaît.
+    fn nettoyer(&mut self) {
+        if self
+            .attente
+            .as_ref()
+            .is_some_and(|a| a.valeurs.is_empty() && a.brouillon.is_none())
+        {
+            self.attente = None;
+        }
+    }
+
+    /// Le réglage `cle` vient de passer de `avant` à `apres`, et doit être confirmé.
+    /// Appeler [`Confirmation::echu`] avant (la bibliothèque le fait).
+    pub fn changer(&mut self, cle: &str, titre: &str, avant: Valeur, apres: &Valeur, maintenant: Instant) {
+        if avant == *apres {
+            return;
+        }
+        self.continuer(titre, maintenant);
+        self.noter(cle, avant, apres);
+        self.nettoyer();
+    }
+
+    /// Plusieurs réglages changés d'un seul geste (clé, avant, après), à confirmer d'un seul
+    /// coup. Ceux qui ne changent rien sont oubliés.
+    pub fn changer_groupe(&mut self, titre: &str, changements: Vec<Changement>, maintenant: Instant) {
+        let changements: Vec<Changement> = changements.into_iter().filter(|(_, a, b)| a != b).collect();
+        if changements.is_empty() {
+            return;
+        }
+        self.continuer(titre, maintenant);
+        for (cle, avant, apres) in changements {
+            self.noter(&cle, avant, &apres);
+        }
+        self.nettoyer();
+    }
+
+    /// Un brouillon entier vient d'être changé : `avant` est son état avant ce changement.
+    /// Pendant une confirmation déjà ouverte, l'état d'avant le premier est gardé.
+    pub fn changer_brouillon(&mut self, titre: &str, avant: Instantane, maintenant: Instant) {
+        let a = self.continuer(titre, maintenant);
+        if a.brouillon.is_none() {
+            a.brouillon = Some(avant);
+        }
+    }
+
+    /// La confirmation attendue, tant que le temps n'est pas écoulé.
+    pub fn en_attente(&self, maintenant: Instant) -> Option<&AConfirmer> {
+        self.attente
+            .as_ref()
+            .filter(|a| maintenant.saturating_duration_since(a.quand) < DUREE_CONSERVER)
+    }
+
+    /// Le temps qu'il reste avant le retour automatique.
+    pub fn reste(&self, maintenant: Instant) -> Option<Duration> {
+        self.en_attente(maintenant)
+            .map(|a| DUREE_CONSERVER.saturating_sub(maintenant.saturating_duration_since(a.quand)))
+    }
+
+    /// Les secondes montrées (15, 14… 1) : le temps qui reste, arrondi au-dessus.
+    pub fn secondes(&self, maintenant: Instant) -> Option<u64> {
+        self.reste(maintenant)
+            .map(|r| r.as_secs() + u64::from(r.subsec_nanos() > 0))
+    }
+
+    /// Dans combien de temps la carte change de seconde (pour redessiner juste à ce
+    /// moment-là, pas plus souvent).
+    pub fn prochain_changement(&self, maintenant: Instant) -> Option<Duration> {
+        self.reste(maintenant).map(|r| {
+            let dans_la_seconde = Duration::from_nanos(u64::from(r.subsec_nanos()));
+            let pas = if dans_la_seconde.is_zero() {
+                Duration::from_secs(1)
+            } else {
+                dans_la_seconde
+            };
+            // 5 ms de marge : on redessine juste après le changement de seconde.
+            pas + Duration::from_millis(5)
+        })
+    }
+
+    /// « Conserver » : les changements restent. `false` si rien n'attendait, ou si le délai
+    /// était déjà écoulé (le retour automatique l'emporte : voir [`Confirmation::echu`]).
+    pub fn conserver(&mut self, maintenant: Instant) -> bool {
+        if self.en_attente(maintenant).is_none() {
+            return false;
+        }
+        self.attente = None;
+        true
+    }
+
+    /// « Revenir » (ou la fermeture des Paramètres) : tout ce qui attendait, avec les valeurs
+    /// d'avant le premier changement, à rendre au logiciel. Vide si rien n'attendait.
+    pub fn revenir(&mut self) -> Retour {
+        match self.attente.take() {
+            Some(a) => Retour {
+                valeurs: a.valeurs,
+                brouillon: a.brouillon,
+            },
+            None => Retour::default(),
+        }
+    }
+
+    /// Le délai est écoulé : le retour automatique, à rendre au logiciel comme « Revenir ».
+    /// `None` tant qu'il reste du temps (et quand rien n'attend).
+    pub fn echu(&mut self, maintenant: Instant) -> Option<Retour> {
+        let ecoule = self
+            .attente
+            .as_ref()
+            .is_some_and(|a| maintenant.saturating_duration_since(a.quand) >= DUREE_CONSERVER);
+        ecoule.then(|| self.revenir())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -506,5 +690,162 @@ mod tests {
         );
         a.changer_groupe("Rien", vec![("x".into(), b(true), b(true))], t);
         assert!(a.a_annuler(t).is_none());
+    }
+
+    fn s(ms: u64) -> Duration {
+        Duration::from_millis(ms)
+    }
+
+    /// Le compte à rebours : 15 s, puis 14… jusqu'à 1 ; il disparaît à 0 ; le prochain
+    /// redessin tombe juste après le changement de seconde.
+    #[test]
+    fn conserver_compte_a_rebours() {
+        let t = Instant::now();
+        let mut c = Confirmation::default();
+        assert_eq!(DUREE_CONSERVER, Duration::from_secs(15));
+        assert!(c.en_attente(t).is_none());
+        assert_eq!(c.secondes(t), None);
+        c.changer(
+            "mode",
+            "Mode",
+            Valeur::Texte("a".into()),
+            &Valeur::Texte("b".into()),
+            t,
+        );
+        assert_eq!(c.en_attente(t).map(|x| x.titre.as_str()), Some("Mode"));
+        assert_eq!(c.secondes(t), Some(15));
+        assert_eq!(c.secondes(t + s(1)), Some(15));
+        assert_eq!(c.secondes(t + s(1000)), Some(14));
+        assert_eq!(c.secondes(t + s(14_000)), Some(1));
+        assert_eq!(c.secondes(t + s(14_999)), Some(1));
+        assert_eq!(c.secondes(t + s(15_000)), None);
+        assert_eq!(c.reste(t + s(5_000)), Some(s(10_000)));
+        // Au milieu d'une seconde : redessiner à la fin de celle-ci ; pile sur une seconde :
+        // dans une seconde. Toujours un peu après le changement.
+        assert_eq!(c.prochain_changement(t + s(500)), Some(s(505)));
+        assert_eq!(c.prochain_changement(t + s(1000)), Some(s(1005)));
+        assert_eq!(c.prochain_changement(t + s(15_000)), None);
+    }
+
+    /// « Conserver » : les changements restent, plus rien n'attend, rien n'est rendu.
+    #[test]
+    fn conserver_garde_les_changements() {
+        let t = Instant::now();
+        let mut c = Confirmation::default();
+        c.changer("x", "X", Valeur::Booleen(false), &Valeur::Booleen(true), t);
+        assert!(c.conserver(t + s(3_000)));
+        assert!(c.en_attente(t + s(3_000)).is_none());
+        assert!(c.revenir().est_vide());
+        assert!(c.echu(t + s(60_000)).is_none());
+        // Rien n'attend : rien à conserver.
+        assert!(!c.conserver(t));
+        // Un changement qui ne change rien n'ouvre rien.
+        c.changer("x", "X", Valeur::Booleen(true), &Valeur::Booleen(true), t);
+        assert!(c.en_attente(t).is_none());
+    }
+
+    /// « Revenir » rend la valeur d'avant ; la fermeture des Paramètres fait de même (même
+    /// appel) ; une seconde fois : rien.
+    #[test]
+    fn revenir_rend_la_valeur_d_avant() {
+        let t = Instant::now();
+        let mut c = Confirmation::default();
+        c.changer("mode", "Mode", Valeur::Nombre(1.0), &Valeur::Nombre(2.0), t);
+        let r = c.revenir();
+        assert_eq!(r.valeurs, vec![("mode".to_string(), Valeur::Nombre(1.0))]);
+        assert!(r.brouillon.is_none());
+        assert!(c.en_attente(t).is_none());
+        assert!(c.revenir().est_vide());
+    }
+
+    /// Délai écoulé : retour automatique, une seule fois ; trop tard pour « Conserver ».
+    #[test]
+    fn delai_ecoule_retour_automatique() {
+        let t = Instant::now();
+        let mut c = Confirmation::default();
+        c.changer("mode", "Mode", Valeur::Nombre(1.0), &Valeur::Nombre(2.0), t);
+        assert!(c.echu(t + s(14_999)).is_none());
+        assert!(c.en_attente(t + s(14_999)).is_some());
+        // Un clic arrivé à l'instant où le délai finit ne garde rien.
+        assert!(!c.conserver(t + DUREE_CONSERVER));
+        let r = c.echu(t + DUREE_CONSERVER).expect("retour automatique");
+        assert_eq!(r.valeurs, vec![("mode".to_string(), Valeur::Nombre(1.0))]);
+        assert!(c.echu(t + DUREE_CONSERVER).is_none());
+        assert!(c.revenir().est_vide());
+    }
+
+    /// Deux changements de suite : une seule confirmation, l'état d'avant le PREMIER est
+    /// rendu, et le compte à rebours repart au second. Revenir à la valeur de départ : plus
+    /// rien à confirmer.
+    #[test]
+    fn deux_changements_gardent_l_avant_du_premier() {
+        let t = Instant::now();
+        let n = Valeur::Nombre;
+        let mut c = Confirmation::default();
+        c.changer("mode", "Mode", n(1.0), &n(2.0), t);
+        c.changer("mode", "Mode", n(2.0), &n(3.0), t + s(10_000));
+        // Le compte à rebours est reparti : 15 s après le second.
+        assert_eq!(c.secondes(t + s(10_000)), Some(15));
+        assert!(c.echu(t + s(20_000)).is_none());
+        // Un autre réglage s'ajoute ; le titre est celui du dernier.
+        c.changer("souris", "Souris", n(5.0), &n(6.0), t + s(12_000));
+        assert_eq!(
+            c.en_attente(t + s(12_000)).map(|a| a.titre.as_str()),
+            Some("Souris")
+        );
+        let r = c.revenir();
+        assert_eq!(
+            r.valeurs,
+            vec![("mode".to_string(), n(1.0)), ("souris".to_string(), n(5.0))]
+        );
+        // Revenu à la valeur de départ à la main : plus rien à confirmer.
+        c.changer("mode", "Mode", n(1.0), &n(2.0), t);
+        c.changer("mode", "Mode", n(2.0), &n(1.0), t + s(500));
+        assert!(c.en_attente(t + s(500)).is_none());
+        assert!(c.revenir().est_vide());
+        // Un groupe, puis un autre changement : tout revient, une seule fois chacun.
+        c.changer_groupe(
+            "Écran",
+            vec![
+                ("gauche".into(), n(1.0), n(2.0)),
+                ("pareil".into(), n(7.0), n(7.0)),
+                ("droite".into(), n(3.0), n(4.0)),
+            ],
+            t,
+        );
+        c.changer("gauche", "Gauche", n(2.0), &n(9.0), t + s(100));
+        let r = c.revenir();
+        assert_eq!(
+            r.valeurs,
+            vec![("gauche".to_string(), n(1.0)), ("droite".to_string(), n(3.0))]
+        );
+        c.changer_groupe("Rien", vec![("x".into(), n(1.0), n(1.0))], t);
+        assert!(c.en_attente(t).is_none());
+    }
+
+    /// Un brouillon entier : l'état d'avant le premier changement est rendu, avec les
+    /// valeurs seules s'il y en a ; un second brouillon n'écrase pas le premier.
+    #[test]
+    fn brouillon_a_confirmer() {
+        let t = Instant::now();
+        let mut c = Confirmation::default();
+        c.changer_brouillon("Réglages", Instantane::new(vec![1, 2]), t);
+        c.changer_brouillon("Réglages", Instantane::new(vec![9]), t + s(2_000));
+        c.changer(
+            "mode",
+            "Mode",
+            Valeur::Booleen(false),
+            &Valeur::Booleen(true),
+            t + s(3_000),
+        );
+        assert_eq!(c.secondes(t + s(3_000)), Some(15));
+        let r = c.revenir();
+        assert!(!r.est_vide());
+        assert_eq!(
+            r.brouillon.as_ref().and_then(|b| b.get::<Vec<i32>>()),
+            Some(&vec![1, 2])
+        );
+        assert_eq!(r.valeurs, vec![("mode".to_string(), Valeur::Booleen(false))]);
+        assert!(c.revenir().est_vide());
     }
 }
