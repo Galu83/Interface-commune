@@ -1123,6 +1123,19 @@ struct Appareils {
     identite: Identite,
     appels: std::sync::atomic::AtomicUsize,
     texture: Mutex<Option<egui::TextureHandle>>,
+    /// Le nombre d'appareils montrés (il peut changer entre deux images).
+    nombre: std::sync::atomic::AtomicUsize,
+}
+
+impl Appareils {
+    fn avec(nombre: usize) -> Self {
+        Appareils {
+            identite: identite(),
+            appels: Default::default(),
+            texture: Mutex::default(),
+            nombre: nombre.into(),
+        }
+    }
 }
 
 impl Reglages for Appareils {
@@ -1164,7 +1177,7 @@ impl Logiciel for Appareils {
                 )
             })
             .id();
-        (0..30)
+        (0..self.nombre.load(Ordering::Acquire))
             .map(|i| Brique::Appareil {
                 cle: None,
                 glyphe: '\u{E7F4}',
@@ -1193,11 +1206,7 @@ impl Logiciel for Appareils {
 /// garde en haut le titre, sa version et la roue dentée, les briques défilant dessous.
 #[test]
 fn volet_borne_et_briques_avec_contexte() {
-    let l = Appareils {
-        identite: identite(),
-        appels: Default::default(),
-        texture: Mutex::default(),
-    };
+    let l = Appareils::avec(30);
     let mut libre = egui::Vec2::ZERO;
     image(egui::vec2(800.0, 4000.0), 1.0, |ui, p| {
         libre = surface::dessiner(ui, p, Surface::Volet, &l).1;
@@ -1242,6 +1251,84 @@ fn volet_borne_et_briques_avec_contexte() {
         menu = surface::dessiner_borne(ui, p, Surface::Menu, &l, Some(10.0)).1;
     });
     assert!(menu.y > 10.0);
+}
+
+/// Une fenêtre qui suit la taille mesurée, comme celle du volet : à chaque image elle a la
+/// taille rendue à l'image d'avant. Rend la taille voulue après `images` images.
+fn fenetre_qui_suit(
+    ctx: &egui::Context,
+    p: &Palette,
+    depart: egui::Vec2,
+    images: usize,
+    mut dessin: impl FnMut(&mut egui::Ui, &Palette) -> egui::Vec2,
+) -> egui::Vec2 {
+    let mut fenetre = depart;
+    let mut voulue = depart;
+    for _ in 0..images {
+        let mut entree = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, fenetre)),
+            ..Default::default()
+        };
+        entree
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default()
+            .native_pixels_per_point = Some(1.0);
+        let mut s = ctx.run_ui(entree, |ui| voulue = dessin(ui, p));
+        s.textures_delta.clear();
+        fenetre = voulue;
+    }
+    voulue
+}
+
+/// Le contenu grandit après l'ouverture (des appareils déconnectés apparaissent) : la fenêtre,
+/// qui avait la taille du petit contenu, doit grandir avec lui, jusqu'à la hauteur maximale
+/// (elle ne reste pas bloquée à sa taille d'avant, avec une barre de défilement), et rapetisser
+/// quand le contenu rapetisse. Le petit menu et le volet sans borne font de même.
+#[test]
+fn volet_borne_grandit_avec_son_contenu() {
+    let l = Appareils::avec(2);
+    let ctx = egui::Context::default();
+    ctx.set_fonts(polices::polices_ou_vides());
+    let a = apparence::Apparence::de(Default::default(), Some(false));
+    a.appliquer(&ctx);
+    let p = a.palette.clone();
+    let mesure = |max: Option<f32>, depart: egui::Vec2| {
+        fenetre_qui_suit(&ctx, &p, depart, 6, |ui, p| {
+            surface::dessiner_borne(ui, p, Surface::Volet, &l, max).1
+        })
+    };
+    // Deux appareils : le volet tient largement sous la borne.
+    let petit = mesure(Some(600.0), egui::vec2(400.0, 800.0));
+    assert!(petit.y < 300.0, "{petit:?}");
+    // Six appareils (toujours sous la borne) : la fenêtre grandit avec le contenu.
+    l.nombre.store(6, Ordering::Release);
+    let grand = mesure(Some(600.0), petit);
+    let libre = mesure(None, egui::vec2(petit.x, 4000.0));
+    assert!(
+        grand.y > petit.y + 100.0,
+        "n'a pas grandi : {petit:?} -> {grand:?}"
+    );
+    assert!(
+        grand.y <= 600.0 && (grand.y - libre.y).abs() <= 1.0,
+        "doit valoir le contenu {libre:?} : {grand:?}"
+    );
+    // Trente appareils : elle grandit jusqu'à la borne, et pas au-delà.
+    l.nombre.store(30, Ordering::Release);
+    let plein = mesure(Some(600.0), grand);
+    assert!(plein.y <= 600.0 && plein.y >= 600.0 - 60.0, "{plein:?}");
+    // Le contenu rapetisse : la fenêtre aussi.
+    l.nombre.store(2, Ordering::Release);
+    let retour = mesure(Some(600.0), plein);
+    assert!((retour.y - petit.y).abs() <= 1.0, "{petit:?} {retour:?}");
+    // Sans borne et petit menu : la fenêtre grandit aussi (le contenu déborde, il est mesuré).
+    l.nombre.store(6, Ordering::Release);
+    let sans = mesure(None, petit);
+    assert!((sans.y - libre.y).abs() <= 1.0, "{sans:?} {libre:?}");
+    let menu = fenetre_qui_suit(&ctx, &p, egui::vec2(200.0, 40.0), 6, |ui, p| {
+        surface::dessiner_borne(ui, p, Surface::Menu, &l, Some(10.0)).1
+    });
+    assert!(menu.y > 100.0, "{menu:?}");
 }
 
 /// Les raccourcis des briques s'affichent en toutes lettres, comme Windows en français :

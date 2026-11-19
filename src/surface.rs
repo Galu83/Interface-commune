@@ -161,15 +161,32 @@ pub fn dessiner_borne(
         Surface::Volet => hauteur_max.filter(|h| h.is_finite()).map(|h| h.max(1.0)),
         Surface::Menu => None,
     };
-    let r = egui::Frame::new()
-        .inner_margin(egui::Margin::same(m as i8))
-        .show(ui, |ui| {
-            ui.set_width(largeur - 2.0 * m);
-            match s {
-                Surface::Volet => volet(ui, p, l, &briques, hauteur_max.map(|h| h - 2.0 * m)),
-                Surface::Menu => dessiner_menu(ui, p, l),
-            }
-        });
+    let dessin = |ui: &mut egui::Ui| {
+        egui::Frame::new()
+            .inner_margin(egui::Margin::same(m as i8))
+            .show(ui, |ui| {
+                ui.set_width(largeur - 2.0 * m);
+                match s {
+                    Surface::Volet => volet(ui, p, l, &briques, hauteur_max.map(|h| h - 2.0 * m)),
+                    Surface::Menu => dessiner_menu(ui, p, l),
+                }
+            })
+    };
+    let r = match hauteur_max {
+        // Avec une borne, le défilement ne dépasse jamais la place que lui laisse son parent :
+        // dessiné dans la fenêtre telle qu'elle est, le volet ne pourrait plus grandir quand
+        // son contenu grandit (la hauteur mesurée resterait celle de la fenêtre). On le dessine
+        // donc dans une zone qui a toute la hauteur permise, quelle que soit la fenêtre.
+        Some(max) => {
+            let zone = egui::Rect::from_min_size(
+                ui.cursor().min,
+                egui::vec2(largeur.max(ui.available_width()), max),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(zone), dessin)
+                .inner
+        }
+        None => dessin(ui),
+    };
     let mut hauteur = r.response.rect.height().ceil();
     if let Some(max) = hauteur_max {
         hauteur = hauteur.min(max.ceil());

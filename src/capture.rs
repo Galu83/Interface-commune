@@ -103,6 +103,24 @@ pub fn volet(l: &dyn Logiciel, o: Options) -> Result<Image, Erreur> {
     surface_du_logiciel(l, Surface::Volet, o)
 }
 
+/// Le volet du logiciel avec une hauteur maximale (`PlacementVolet::hauteur_max`, en points,
+/// marges comprises) : aussi haut que son contenu, sans dépasser `hauteur_max` ; au-delà, les
+/// briques défilent sous le titre et l'état.
+pub fn volet_borne(l: &dyn Logiciel, hauteur_max: f32, o: Options) -> Result<Image, Erreur> {
+    let mut taille = egui::Vec2::ZERO;
+    // Mesuré dans une fenêtre bien plus petite que le contenu : la taille voulue ne dépend pas
+    // de la fenêtre du moment.
+    let _ = capturer(egui::vec2(400.0, 120.0), o, true, |ui, p| {
+        taille = surface::dessiner_borne(ui, p, Surface::Volet, l, Some(hauteur_max)).1;
+    })?;
+    if taille.x < 1.0 || taille.y < 1.0 {
+        return Err("la surface n'a rien dessiné".into());
+    }
+    capturer(taille, o, true, |ui, p| {
+        surface::dessiner_borne(ui, p, Surface::Volet, l, Some(hauteur_max));
+    })
+}
+
 /// Le petit menu du logiciel, tel qu'il s'ouvre.
 pub fn petit_menu(l: &dyn Logiciel, o: Options) -> Result<Image, Erreur> {
     surface_du_logiciel(l, Surface::Menu, o)

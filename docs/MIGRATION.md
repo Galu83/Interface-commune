@@ -241,6 +241,9 @@ changer pour KVMSoft ni Vocalis (tout est facultatif, avec la valeur d'avant par
   et `hauteur_max` en points (600 pour PowerPeek ; toujours bornée aussi par la zone de travail
   de l'écran). Au-delà, l'en-tête (titre, roue) et l'état restent en place et **les briques
   défilent**. Hors fenêtre : `surface::dessiner_borne(ui, p, s, l, Some(hauteur))`.
+  Le volet borné **grandit avec son contenu** jusqu'à cette hauteur (corrigé : il restait à la
+  taille de la fenêtre du moment, donc ne grandissait plus quand des appareils apparaissaient
+  après l'ouverture). Capture sans fenêtre : `capture::volet_borne`.
 - **L'icône par les mécanismes communs** : `zone::FenetresCommunes::lancer(&zone, logiciel,
   parametres, secours)` lance le fil des fenêtres de la bibliothèque (le même que celui
   d'`Horloge`, aussi public : `horloge::lancer_le_fil_des_fenetres`). Chaque événement de
