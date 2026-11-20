@@ -35,6 +35,7 @@ pub mod dessin;
 pub mod fenetres;
 pub mod icones;
 pub mod menu;
+pub mod menu_choix;
 pub mod mesures;
 pub mod nuancier;
 pub mod parametres;

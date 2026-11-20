@@ -1,6 +1,6 @@
 //! Les couleurs dans les Paramètres, aux couleurs du volet :
 //!
-//! - [`pastille_de_carte`] : la pastille d'un appareil (le carré coloré et sa lettre, la même
+//! - [`pastille_de_carte`] : la pastille d'un appareil (le carré coloré et sa lettre ou son logo, la même
 //!   que celle de la brique [`crate::briques::Brique::Pastilles`]) posée dans une carte ;
 //! - [`choisir_couleur`] : une rangée de pastilles rondes à choisir, comme la couleur d'accent
 //!   de Windows 11 : contour sur la couleur choisie, flèches pour passer de l'une à l'autre,
@@ -35,6 +35,7 @@ pub fn pastille_de_carte(ui: &mut Ui, p: &Palette, pastille: &Pastille) -> Respo
         p,
         rect,
         Some(pastille.lettre),
+        pastille.logo,
         pastille.couleur,
         pastille.absent,
         crate::theme::TAILLE_PETIT,

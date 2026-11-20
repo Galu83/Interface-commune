@@ -93,3 +93,72 @@ pub fn caracteres_absents(sources: &[(&str, &str)]) -> Result<Vec<Absent>, Strin
 fn zone_privee(c: char) -> bool {
     ('\u{E000}'..='\u{F8FF}').contains(&c)
 }
+
+/// Les logos (glyphes de pastille ou de menu) que la police d'icônes de ce PC n'a pas : à la
+/// place de chacun, la **lettre** s'affiche. Le logiciel les vérifie dans ses tests comme ses
+/// propres icônes ([`icones_absentes`] contrôle Segoe Fluent Icons et Segoe MDL2 Assets ;
+/// celle-ci seulement la police réellement chargée, celle qui sert au dessin). `Err` : aucune
+/// police d'icônes sur ce PC.
+pub fn logos_absents(logos: &[char]) -> Result<Vec<char>, String> {
+    if polices::polices().is_err() {
+        return Err("ni Segoe Fluent Icons ni Segoe MDL2 Assets sur ce PC".into());
+    }
+    Ok(logos
+        .iter()
+        .copied()
+        .filter(|&c| !polices::icone_disponible(c))
+        .collect())
+}
+
+#[cfg(test)]
+mod essais {
+    use super::*;
+    use crate::pastilles::{Marque, marque};
+
+    /// Un glyphe absent de la police d'icônes (Windows 10 : Segoe MDL2 Assets n'a pas tout)
+    /// redonne la lettre : jamais un carré vide.
+    #[test]
+    fn glyphe_absent_redonne_la_lettre() {
+        let sans_police = |_: char| false;
+        let avec_police = |_: char| true;
+        assert_eq!(
+            marque(Some('\u{E977}'), Some('F'), sans_police),
+            Some(Marque::Lettre('F'))
+        );
+        assert_eq!(
+            marque(Some('\u{E977}'), Some('F'), avec_police),
+            Some(Marque::Logo('\u{E977}'))
+        );
+        assert_eq!(marque(None, Some('F'), avec_police), Some(Marque::Lettre('F')));
+        // Pas de lettre ni de glyphe disponible : rien, jamais un carré.
+        assert_eq!(marque(Some('\u{E977}'), None, sans_police), None);
+        // Seul le glyphe qui manque retombe sur la lettre.
+        let seulement_fixe = |c: char| c == '\u{E977}';
+        assert_eq!(
+            marque(Some('\u{EC59}'), Some('B'), seulement_fixe),
+            Some(Marque::Lettre('B'))
+        );
+    }
+
+    /// Sur un PC sans Segoe Fluent Icons ni MDL2 Assets, rien n'est « disponible ».
+    #[test]
+    fn la_police_chargee_repond_comme_le_controle() {
+        let logos = [
+            '\u{E977}', '\u{E7F8}', '\u{E7F4}', '\u{E70A}', '\u{EC59}', '\u{E7FC}',
+        ];
+        match logos_absents(&logos) {
+            Ok(absents) => {
+                // Ce qui manque à la police chargée redonne la lettre ; le reste est dessiné.
+                for c in logos {
+                    assert_eq!(!absents.contains(&c), polices::icone_disponible(c));
+                }
+            }
+            Err(e) => {
+                eprintln!("{e} : test sauté.");
+                assert!(logos.iter().all(|&c| !polices::icone_disponible(c)));
+            }
+        }
+        // Un caractère qui n'existe dans aucune police d'icônes : la lettre.
+        assert!(!polices::icone_disponible('\u{F8FE}'));
+    }
+}

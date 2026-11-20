@@ -56,6 +56,7 @@ impl Logiciel for Partage {
             .map(|i| Pastille {
                 cle: Some(format!("pc{i}")),
                 lettre: noms[i].0.chars().next().unwrap_or('?'),
+                logo: None,
                 couleur: couleurs[i],
                 nom: noms[i].1.into(),
                 mention: (i == 0).then(|| "ce PC".into()),
@@ -65,6 +66,7 @@ impl Logiciel for Partage {
             .collect();
         let case = |i: usize| Case {
             lettre: noms[i].0.chars().next(),
+            logo: None,
             couleur: Some(couleurs[i]),
             ..Default::default()
         };

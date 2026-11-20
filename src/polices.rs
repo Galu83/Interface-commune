@@ -4,8 +4,9 @@
 //!
 //! Elles sont lues une seule fois, au repos (au démarrage) : jamais au moment d'un clic.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use egui::epaint::text::VariationCoords;
 use egui::{FontData, FontDefinitions, FontFamily, FontId, FontTweak};
@@ -106,6 +107,28 @@ fn charger() -> Result<FontDefinitions, String> {
 pub fn polices() -> Result<FontDefinitions, String> {
     static POLICES: OnceLock<Result<FontDefinitions, String>> = OnceLock::new();
     POLICES.get_or_init(charger).clone()
+}
+
+/// La police d'icônes **déjà chargée** a-t-elle ce caractère ? Rien n'est relu sur le disque :
+/// on interroge la police que `polices()` a lue au démarrage (Segoe Fluent Icons, sinon Segoe
+/// MDL2 Assets), et chaque réponse est retenue. Sans police (hors Windows) : `false`. Sert à
+/// retomber sur une lettre quand un glyphe manque, jamais à dessiner un carré vide.
+pub fn icone_disponible(c: char) -> bool {
+    static REPONSES: OnceLock<Mutex<HashMap<char, bool>>> = OnceLock::new();
+    let table = REPONSES.get_or_init(Mutex::default);
+    if let Ok(t) = table.lock()
+        && let Some(r) = t.get(&c)
+    {
+        return *r;
+    }
+    let present = polices()
+        .ok()
+        .and_then(|d| d.font_data.get("icones").cloned())
+        .is_some_and(|f| crate::verification::contient(AsRef::<[u8]>::as_ref(&*f.font), c));
+    if let Ok(mut t) = table.lock() {
+        t.insert(c, present);
+    }
+    present
 }
 
 /// Pour les essais sans Windows : les polices d'egui ne sont pas compilées (licences), donc

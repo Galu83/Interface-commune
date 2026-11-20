@@ -64,6 +64,7 @@ impl Reglages for Exemple {
             let pastille = Pastille {
                 cle: None,
                 lettre: lettre.chars().next().unwrap_or('?'),
+                logo: None,
                 couleur: palette()[self.rang(i)],
                 nom: nom.into(),
                 mention: None,

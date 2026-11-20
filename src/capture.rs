@@ -98,6 +98,18 @@ impl Image {
     }
 }
 
+/// Une image de ce que dessine `dessin`, dans une fenêtre de `taille` points, sur le fond des
+/// fenêtres : pour la documentation d'un élément (un menu, une carte) hors d'une page des
+/// Paramètres. `dessin` est appelé à chaque passe (egui en fait plusieurs pour poser les
+/// tailles), l'image est celle de la dernière : garder l'état à l'extérieur du rappel.
+pub fn dessin(
+    taille: egui::Vec2,
+    o: Options,
+    dessin: impl FnMut(&mut egui::Ui, &Palette),
+) -> Result<Image, Erreur> {
+    capturer(taille, o, false, dessin)
+}
+
 /// Le volet du logiciel, tel qu'il s'ouvre.
 pub fn volet(l: &dyn Logiciel, o: Options) -> Result<Image, Erreur> {
     surface_du_logiciel(l, Surface::Volet, o)

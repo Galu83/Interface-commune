@@ -1570,6 +1570,7 @@ fn choix_illustres_alignes() {
     }
     let c = |l| Case {
         lettre: Some(l),
+        logo: None,
         couleur: Some(interface_commune::apparence::couleurs_pastilles()[0]),
         ..Default::default()
     };
@@ -1588,6 +1589,7 @@ fn choix_illustres_alignes() {
             pastilles: vec![Pastille {
                 cle: None,
                 lettre: 'F',
+                logo: None,
                 couleur: interface_commune::apparence::couleurs_pastilles()[1],
                 nom: "Fixe".into(),
                 mention: Some("ce PC".into()),

@@ -498,6 +498,42 @@ sont celles du volet : `couleurs::palette()` = `apparence::couleurs_pastilles()`
   le volet avec `palette()[rang]`).
 Exemple et captures sans fenêtre : `cargo run --example couleurs -- <dossier>`.
 
+## Les logos dans les pastilles et le menu flottant de choix : `menu_choix` (branche `glyphes-menu-choix`, pour tous, en option)
+
+**À faire dans chaque `Pastille { … }` écrite en entier : ajouter `logo: None`** (ou `..` si tu
+as un `Default` à toi). `Pastille` n'a pas de `Default` ; `Case` en a un, donc `Case { …, ..Default::default() }`
+ne change pas. Le champ s'appelle `logo` (et non `glyphe` : `Pastille::glyphe` existe déjà, c'est le
+petit glyphe après la mention « ce PC »).
+- **`Pastille::logo` et `Case::logo`** : `Option<char>`, un glyphe de Segoe Fluent Icons dessiné **à la
+  place de la lettre**, `None` par défaut = la lettre, comme avant. `couleurs::pastille_de_carte` le
+  prend aussi. Le glyphe est blanc ou noir selon la couleur du carré, avec la même règle que la lettre
+  (le plus fort contraste des deux, au moins 3:1), en clair et en sombre ; hachuré/absent : grisé.
+- **Jamais un carré vide** : si la police d'icônes chargée n'a pas ce glyphe (Windows 10 n'a que Segoe
+  MDL2 Assets), la **lettre** s'affiche. Aucune police de plus n'est lue : on interroge celle que
+  `polices::polices()` a déjà chargée (`polices::icone_disponible(c)`, réponses retenues). La décision
+  est pure : `pastilles::marque(logo, lettre, disponible) -> Option<Marque>`. Pour tes tests :
+  `verification::logos_absents(&[…])` rend les logos qui retomberaient sur la lettre.
+- **Nouveau module `menu_choix`** : un menu flottant au style des menus de Windows 11, des lignes
+  (`Ligne` : clé, logo, lettre, couleur, texte, sous-texte, coche, grisée). Il s'ouvre **dans la
+  fenêtre** (une `egui::Area`, jamais une fenêtre de plus), sous la case ou au-dessus si la place
+  manque, sans sortir de la fenêtre (défile si même alors il est trop haut).
+  - Dans l'état du logiciel : un `MenuChoix` (`ouvrir`, `fermer`, `basculer`, `est_ouvert`, `active`).
+    Dans la page : `menu_choix::afficher(ui, palette, &mut menu, id, case, &lignes, "coché")` rend
+    `Some(Resultat::Choisi(rang))` ou `Some(Resultat::Ferme)` ; le logiciel appelle `menu.basculer(..)`
+    au clic sur la case (un clic sur la case ne ferme pas le menu tout seul).
+  - Clavier : flèches (font le tour, sautent les lignes grisées), Début, Fin, Entrée, Échap ; contour
+    de focus sur la ligne active (au clavier seulement) ; Échap ou un clic à côté ferme. Souris : le
+    survol rend la ligne active, un clic la choisit (une ligne grisée ne se choisit pas).
+  - **Lecteur d'écran** : chaque ligne a un nom `texte, sous-texte, coché` (`nom_accessible`, le mot
+    « coché » vient du logiciel : français ou anglais), le rôle `MenuItemRadio` quand une ligne est
+    cochée. Le sens ne repose pas sur la couleur seule : texte + coche dessinée.
+  - **La logique est pure, sans fenêtre** : `suivre(grisees, active, touche) -> Effet`,
+    `ligne_initiale`, `placer(ancre, taille, fenetre) -> Rect`, `hauteur_totale`, `largeur_menu`.
+- `capture::dessin(taille, options, |ui, palette| …)` : une capture sans fenêtre de ce que dessine le
+  rappel (pour documenter un élément hors des Paramètres).
+Exemple et captures sans fenêtre, en clair, en sombre, à 150 % et menu au-dessus de la case :
+`cargo run --example menu_choix -- <dossier>`.
+
 ## Les sections repliables dans les Paramètres (branche `section-repliable`, pour tous, en option)
 
 Rien d'existant ne change. Dans une page, `Contexte` sait dessiner une section repliable, comme

@@ -265,6 +265,7 @@ fn la_pastille_de_carte_a_la_taille_de_celle_du_volet() {
     let pa = Pastille {
         cle: None,
         lettre: 'F',
+        logo: None,
         couleur: palette()[0],
         nom: "Fixe".into(),
         mention: None,

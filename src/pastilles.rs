@@ -36,7 +36,12 @@ const ILLUSTRE_ESPACE: f32 = 12.0;
 pub struct Pastille {
     /// Avec une clé, un clic ferme le volet et la rend (`Reglages::action`).
     pub cle: Option<String>,
+    /// La lettre du carré : aussi le repli quand `logo` manque dans la police d'icônes.
     pub lettre: char,
+    /// Un glyphe de Segoe Fluent Icons dessiné dans le carré **à la place de la lettre**
+    /// (le logo de l'appareil). `None` : la lettre, comme avant. Si la police d'icônes n'a pas
+    /// ce glyphe (Windows 10 : Segoe MDL2 Assets), la lettre s'affiche : jamais un carré vide.
+    pub logo: Option<char>,
     pub couleur: Rgb,
     pub nom: String,
     /// Une mention en secondaire après le nom (« ce PC »).
@@ -51,6 +56,9 @@ pub struct Pastille {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Case {
     pub lettre: Option<char>,
+    /// Un glyphe de Segoe Fluent Icons à la place de la lettre (le logo du PC). `None` par
+    /// défaut : la lettre. Absent de la police d'icônes : la lettre revient.
+    pub logo: Option<char>,
     pub couleur: Option<Rgb>,
     /// Écran en veille : case sombre, lune, bordure en tirets.
     pub veille: bool,
@@ -124,6 +132,22 @@ fn places_valides(cases: &[Case]) -> Option<Vec<[i32; 4]>> {
         .collect()
 }
 
+/// Ce qu'un carré montre : le logo (glyphe), ou la lettre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Marque {
+    Logo(char),
+    Lettre(char),
+}
+
+/// Le logo si la police d'icônes l'a (`disponible`), sinon la lettre, sinon rien : jamais un
+/// carré vide à la place d'un glyphe absent. Pure : la police est passée en paramètre.
+pub fn marque(logo: Option<char>, lettre: Option<char>, disponible: impl Fn(char) -> bool) -> Option<Marque> {
+    match logo {
+        Some(g) if disponible(g) => Some(Marque::Logo(g)),
+        _ => lettre.map(Marque::Lettre),
+    }
+}
+
 /// La lettre lisible sur ce fond : blanche, ou noire si le fond est clair (contraste
 /// calculé, le plus fort des deux).
 pub fn couleur_lettre(fond: Rgb) -> Rgb {
@@ -189,11 +213,13 @@ pub fn titre_section(ui: &mut Ui, p: &Palette, t: &str) {
 }
 
 /// Le carré coloré d'une pastille ou d'une case : un fond, sa lettre ; absent : hachuré.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn carre(
     ui: &Ui,
     p: &Palette,
     rect: Rect,
     lettre: Option<char>,
+    logo: Option<char>,
     fond: Rgb,
     absent: bool,
     taille: f32,
@@ -221,19 +247,28 @@ pub(crate) fn carre(
     } else {
         peintre.rect_filled(rect, arrondi, couleur(fond));
     }
-    if let Some(l) = lettre {
-        let c = if absent {
-            p.texte_desactive
-        } else {
-            couleur_lettre(fond)
-        };
-        peintre.text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            l,
-            semibold(taille),
-            couleur(c),
-        );
+    // Le glyphe prend la couleur de la lettre : blanc ou noir selon le fond (contraste au
+    // moins 3:1, comme la lettre), en clair comme en sombre.
+    let c = if absent {
+        p.texte_desactive
+    } else {
+        couleur_lettre(fond)
+    };
+    match marque(logo, lettre, crate::polices::icone_disponible) {
+        Some(Marque::Logo(g)) => {
+            let t = (taille + 4.0).min(rect.height() - 4.0).max(taille);
+            icone(ui, rect.center(), g, t, c);
+        }
+        Some(Marque::Lettre(l)) => {
+            peintre.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                l,
+                semibold(taille),
+                couleur(c),
+            );
+        }
+        None => {}
     }
 }
 
@@ -270,6 +305,7 @@ fn pastille(ui: &mut Ui, p: &Palette, rect: Rect, num: usize, pa: &Pastille) -> 
         p,
         carre_rect,
         Some(pa.lettre),
+        pa.logo,
         pa.couleur,
         pa.absent,
         TAILLE_PETIT,
@@ -457,7 +493,7 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
         ));
         icone(ui, rect.center(), icones::LUNE, 12.0, LUNE_VEILLE);
     } else if let Some(f) = c.couleur {
-        carre(ui, p, rect, c.lettre, f, false, TAILLE_PETIT);
+        carre(ui, p, rect, c.lettre, c.logo, f, false, TAILLE_PETIT);
     } else {
         ui.painter().rect_filled(rect, arrondi, couleur(p.controle));
         ui.painter().rect_stroke(
@@ -466,14 +502,18 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
             Stroke::new(1.0, couleur(p.bord_controle)),
             StrokeKind::Inside,
         );
-        if let Some(l) = c.lettre {
-            ui.painter().text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                l,
-                semibold(TAILLE_PETIT),
-                couleur(p.texte_secondaire),
-            );
+        match marque(c.logo, c.lettre, crate::polices::icone_disponible) {
+            Some(Marque::Logo(g)) => icone(ui, rect.center(), g, TAILLE_PETIT + 2.0, p.texte_secondaire),
+            Some(Marque::Lettre(l)) => {
+                ui.painter().text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    l,
+                    semibold(TAILLE_PETIT),
+                    couleur(p.texte_secondaire),
+                );
+            }
+            None => {}
         }
     }
     // Le pied de l'écran (pas dans le plan : il tomberait sur l'écran du dessous).
@@ -634,6 +674,7 @@ mod essais {
         Pastille {
             cle: cle.map(Into::into),
             lettre,
+            logo: None,
             couleur: couleurs_pastilles()[0],
             nom: nom.into(),
             mention: None,
