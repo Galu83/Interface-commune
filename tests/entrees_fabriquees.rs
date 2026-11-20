@@ -48,7 +48,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
     KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, MOUSE_EVENT_FLAGS, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN,
     MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MOVE, MOUSEINPUT, MapVirtualKeyW, SendInput, VIRTUAL_KEY, VK_DOWN,
-    VK_ESCAPE, VK_F4, VK_MENU, VK_RETURN, VK_SPACE, VK_TAB,
+    VK_ESCAPE, VK_F4, VK_MENU, VK_RETURN, VK_SPACE, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetForegroundWindow, GetSystemMetrics, GetWindowRect, GetWindowTextW,
@@ -140,7 +140,7 @@ fn envoyer(entrees: &[INPUT]) {
 
 fn touche_entree(vk: VIRTUAL_KEY, relache: bool) -> INPUT {
     // Les flèches (et quelques autres) sont des touches « étendues ».
-    let etendue = matches!(vk, VK_DOWN);
+    let etendue = matches!(vk, VK_DOWN | VK_UP);
     let mut drapeaux = KEYBD_EVENT_FLAGS(0);
     if etendue {
         drapeaux |= KEYEVENTF_EXTENDEDKEY;
@@ -511,6 +511,17 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
     e.ouvrir(Surface::Menu);
     touche(VK_ESCAPE);
     e.ferme("Échap ferme le petit menu");
+
+    // Diagnostic : ce que fait chaque touche dans le petit menu (photos, sans vérification).
+    let fen = e.ouvrir(Surface::Menu);
+    touche(VK_TAB);
+    photographier(fen, "1b-menu-apres-tab");
+    touche(VK_DOWN);
+    photographier(fen, "1c-menu-apres-tab-puis-bas");
+    touche(VK_UP);
+    photographier(fen, "1d-menu-apres-haut");
+    touche(VK_ESCAPE);
+    e.ferme("Échap ferme le petit menu (diagnostic)");
 
     // 2. Petit menu : flèche bas, Entrée → l'action du logiciel part, le menu se ferme.
     let fen = e.ouvrir(Surface::Menu);
