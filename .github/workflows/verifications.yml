@@ -62,7 +62,7 @@ jobs:
           $h = (Get-FileHash mesa.7z -Algorithm SHA256).Hash.ToLower()
           if ($h -ne "b2e00615feaba45942343c265cc8c5f576142ca682c1ac6661922d4b72492877") { throw "empreinte inattendue : $h" }
           7z x mesa.7z -omesa -y | Out-Null
-          Get-ChildItem mesa/x64 | Select-Object -ExpandProperty Name
+          Get-ChildItem mesa -Recurse -File | ForEach-Object { $_.FullName }
       - name: Compilation des tests
         run: cargo test --no-run
       - name: Mesa à côté des programmes d'essai
@@ -71,7 +71,7 @@ jobs:
           foreach ($d in "target\debug\deps", "target\debug\examples") {
             New-Item -ItemType Directory -Force $d | Out-Null
             foreach ($f in "opengl32.dll", "libgallium_wgl.dll", "libglapi.dll") {
-              Copy-Item "mesa/x64/$f" $d -Force
+              Copy-Item (Get-ChildItem mesa -Recurse -File -Filter $f | Select-Object -First 1).FullName $d -Force
             }
           }
       - name: Tests
