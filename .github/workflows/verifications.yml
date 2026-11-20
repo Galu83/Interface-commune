@@ -29,6 +29,9 @@ jobs:
     # tout son code se compile et où les polices de Windows sont là pour les tests.
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # Mesa dessine par le processeur (llvmpipe), pas par le pilote d3d12 de Windows.
+      GALLIUM_DRIVER: llvmpipe
     defaults:
       run:
         working-directory: .
@@ -49,6 +52,51 @@ jobs:
         run: cargo fmt -- --check
       - name: Contrôle du code
         run: cargo clippy --all-targets -- -D warnings
+      # Le runner n'a pas de carte graphique : Windows n'y offre qu'OpenGL 1.1, et egui veut
+      # 2.0 ou plus. Mesa (MIT, dessin par le processeur) le remplace, déclaré comme pilote
+      # du runner ; version et empreinte SHA-256 figées (sécurité, point 9).
+      - name: OpenGL logiciel (Mesa 26.2.6, empreinte vérifiée)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-mingw.7z"
+          Invoke-WebRequest -Uri $url -OutFile mesa.7z
+          $h = (Get-FileHash mesa.7z -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne "da0f71d9181b672c1918f3c342f11118c687f6059a46b16502845160733cc388") { throw "empreinte inattendue : $h" }
+          7z x mesa.7z -omesa -y | Out-Null
+      - name: Compilation des tests
+        run: cargo test --no-run
+      # Comme le fait « systemwidedeploy.cmd » de Mesa : le moteur dans System32, déclaré à
+      # Windows comme pilote OpenGL (clé MSOGL). Seulement sur ce runner jetable.
+      - name: Mesa, pilote OpenGL du runner
+        shell: pwsh
+        run: |
+          Copy-Item mesa/x64/libgallium_wgl.dll "$env:windir\System32\" -Force
+          $cle = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\OpenGLDrivers\MSOGL"
+          New-Item -Path $cle -Force | Out-Null
+          Set-ItemProperty -Path $cle -Name DLL -Value "libgallium_wgl.dll" -Type String
+          Set-ItemProperty -Path $cle -Name DriverVersion -Value 1 -Type DWord
+          Set-ItemProperty -Path $cle -Name Flags -Value 1 -Type DWord
+          Set-ItemProperty -Path $cle -Name Version -Value 2 -Type DWord
+          Get-ItemProperty -Path $cle
+      # Les vraies fenêtres, pilotées par des entrées fabriquées (SendInput) : clics, Tab,
+      # flèches, Entrée, Espace, Échap, Alt+F4 (`interface-windows11.md`, point 11). Seulement
+      # ici, jamais sur le PC du propriétaire : sans cette variable, l'essai ne fait rien.
+      - name: Essai des entrées fabriquées (SendInput)
+        env:
+          ESSAI_SENDINPUT: "oui"
+          MESA_DOSSIER: ${{ github.workspace }}\mesa\x64
+          GALLIUM_DRIVER: llvmpipe
+        run: cargo test --test entrees_fabriquees -- --nocapture
+      # Les photos des fenêtres pendant l'essai (valeurs inventées), pour comprendre un échec.
+      # v4.6.2
+      - name: Photos de l'essai
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: photos-de-l-essai
+          path: captures/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Tests
         run: cargo test
       - name: L'exemple se compile

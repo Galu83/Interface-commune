@@ -842,20 +842,9 @@ impl Volet<'_> {
             }
         }
 
-        // Clavier : flèches pour passer d'une ligne à l'autre, Échap pour fermer.
-        let (echap, bas, haut) = ui.input(|i| {
-            (
-                i.key_pressed(Key::Escape),
-                i.key_pressed(Key::ArrowDown),
-                i.key_pressed(Key::ArrowUp),
-            )
-        });
-        if bas {
-            ui.memory_mut(|m| m.move_focus(egui::FocusDirection::Next));
-        }
-        if haut {
-            ui.memory_mut(|m| m.move_focus(egui::FocusDirection::Previous));
-        }
+        // Clavier : Échap pour fermer ; les flèches passent d'une ligne à l'autre (elles sont
+        // changées en Tab avant egui : `raw_input_hook`).
+        let echap = ui.input(|i| i.key_pressed(Key::Escape));
         let focus = ui.input(|i| i.viewport().focused);
         if focus == Some(true) {
             self.a_eu_le_focus = true;
@@ -913,7 +902,33 @@ fn quoi(s: Surface) -> &'static str {
     }
 }
 
+/// Les flèches haut et bas passent d'une ligne à l'autre, comme Tab et Maj+Tab : elles sont
+/// changées en Tab avant qu'egui lise les touches. (Demander le changement de focus après le
+/// dessin d'une image ne fait rien : egui l'efface au début de l'image suivante, et il écrase
+/// aussi la recherche « vers le bas » qu'il faisait lui-même : les flèches ne servaient à
+/// rien. Un essai avec de vraies touches fabriquées l'a montré.)
+pub fn fleches_en_tab(events: &mut [egui::Event]) {
+    for e in events {
+        if let egui::Event::Key { key, modifiers, .. } = e
+            && !modifiers.any()
+        {
+            match *key {
+                Key::ArrowDown => *key = Key::Tab,
+                Key::ArrowUp => {
+                    *key = Key::Tab;
+                    modifiers.shift = true;
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 impl eframe::App for Volet<'_> {
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        fleches_en_tab(&mut raw_input.events);
+    }
+
     fn clear_color(&self, _: &egui::Visuals) -> [f32; 4] {
         couleur(self.apparence.palette.fond_menu).to_normalized_gamma_f32()
     }
@@ -1134,6 +1149,37 @@ mod essais {
         std::thread::sleep(PAS_DE_VEILLE * 2);
         drop(v);
         assert_eq!(appels.load(Ordering::Acquire), 0);
+    }
+
+    /// Flèche bas = Tab, flèche haut = Maj+Tab ; les autres touches et les touches avec un
+    /// modificateur ne changent pas.
+    #[test]
+    fn les_fleches_deviennent_tab() {
+        let touche = |key, shift| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers {
+                shift,
+                ..Default::default()
+            },
+        };
+        let mut e = vec![
+            touche(Key::ArrowDown, false),
+            touche(Key::ArrowUp, false),
+            touche(Key::ArrowDown, true),
+            touche(Key::Escape, false),
+        ];
+        fleches_en_tab(&mut e);
+        let lire = |e: &egui::Event| match e {
+            egui::Event::Key { key, modifiers, .. } => (*key, modifiers.shift),
+            _ => unreachable!(),
+        };
+        assert_eq!(lire(&e[0]), (Key::Tab, false));
+        assert_eq!(lire(&e[1]), (Key::Tab, true));
+        assert_eq!(lire(&e[2]), (Key::ArrowDown, true));
+        assert_eq!(lire(&e[3]), (Key::Escape, false));
     }
 
     /// Volet, petit menu et Paramètres sans synchronisation verticale : avec elle, le fil des
