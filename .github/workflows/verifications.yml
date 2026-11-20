@@ -4,7 +4,9 @@ name: Vérifications
 # rien quand seuls des documents changent.
 on:
   push:
-    branches: [main]
+    # `essai-sendinput` : la branche de l'essai des entrées fabriquées, le temps de son
+    # intégration.
+    branches: [main, essai-sendinput]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -49,8 +51,39 @@ jobs:
         run: cargo fmt -- --check
       - name: Contrôle du code
         run: cargo clippy --all-targets -- -D warnings
+      # Le runner n'a pas de carte graphique : Windows n'y offre qu'OpenGL 1.1, et egui veut
+      # 2.0 ou plus. Mesa (MIT, dessin par le processeur) le remplace, posé à côté des
+      # programmes d'essai ; version et empreinte SHA-256 figées (sécurité, point 9).
+      - name: OpenGL logiciel (Mesa 26.2.6, empreinte vérifiée)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z"
+          Invoke-WebRequest -Uri $url -OutFile mesa.7z
+          $h = (Get-FileHash mesa.7z -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne "b2e00615feaba45942343c265cc8c5f576142ca682c1ac6661922d4b72492877") { throw "empreinte inattendue : $h" }
+          7z x mesa.7z -omesa -y | Out-Null
+          Get-ChildItem mesa/x64 | Select-Object -ExpandProperty Name
+      - name: Compilation des tests
+        run: cargo test --no-run
+      - name: Mesa à côté des programmes d'essai
+        shell: pwsh
+        run: |
+          foreach ($d in "target\debug\deps", "target\debug\examples") {
+            New-Item -ItemType Directory -Force $d | Out-Null
+            foreach ($f in "opengl32.dll", "libgallium_wgl.dll", "libglapi.dll") {
+              Copy-Item "mesa/x64/$f" $d -Force
+            }
+          }
       - name: Tests
         run: cargo test
+      # Les vraies fenêtres, pilotées par des entrées fabriquées (SendInput) : clics, Tab,
+      # flèches, Entrée, Espace, Échap, Alt+F4 (`interface-windows11.md`, point 11). Seulement
+      # ici, jamais sur le PC du propriétaire : sans cette variable, l'essai ne fait rien.
+      - name: Essai des entrées fabriquées (SendInput)
+        env:
+          ESSAI_SENDINPUT: "oui"
+          GALLIUM_DRIVER: llvmpipe
+        run: cargo test --test entrees_fabriquees -- --nocapture
       - name: L'exemple se compile
         run: cargo build --examples
 
