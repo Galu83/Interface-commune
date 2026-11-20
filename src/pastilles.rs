@@ -48,12 +48,80 @@ pub struct Pastille {
 }
 
 /// Une case de l'illustration d'un choix : un écran.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Case {
     pub lettre: Option<char>,
     pub couleur: Option<Rgb>,
     /// Écran en veille : case sombre, lune, bordure en tirets.
     pub veille: bool,
+    /// Où est cet écran sur le bureau : `[x, y, largeur, hauteur]` en pixels, dans le repère du
+    /// bureau (des valeurs quelconques, négatives permises). Quand toutes les cases d'un choix
+    /// ont une place valide (largeur et hauteur > 0), l'illustration est le vrai plan des
+    /// écrans ([`plan_des_cases`]) ; sinon, la rangée de cases égales.
+    pub place: Option<[i32; 4]>,
+}
+
+/// La plus petite hauteur (en points) d'une case du plan qui porte encore sa lettre ou sa
+/// lune ; en dessous, la case n'est que sa couleur.
+const PLAN_CASE_H_MIN: f32 = 12.0;
+/// Le vide entre le bord de la zone et le plan, en haut et en bas.
+const PLAN_MARGE_V: f32 = 4.0;
+
+/// Le plan des écrans : chaque place (`[x, y, largeur, hauteur]` en pixels du bureau, valeurs
+/// quelconques) devient un rectangle dans `zone`. L'ensemble est mis à l'échelle (le plus petit
+/// des deux rapports : les proportions sont gardées) et centré dans `zone` ; chaque case est
+/// réduite de 1 point de chaque côté, pour que deux écrans collés ne se touchent pas.
+/// Une place sans surface (largeur ou hauteur ≤ 0), une liste vide ou une zone sans surface :
+/// une liste vide.
+pub fn plan_des_cases(places: &[[i32; 4]], zone: Rect) -> Vec<Rect> {
+    if places.is_empty()
+        || places.iter().any(|p| p[2] <= 0 || p[3] <= 0)
+        || zone.width() <= 0.0
+        || zone.height() <= 0.0
+    {
+        return Vec::new();
+    }
+    // L'enveloppe de tous les écrans (en f64 : des pixels de bureau, sans dépassement).
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for p in places {
+        let (x, y) = (f64::from(p[0]), f64::from(p[1]));
+        x0 = x0.min(x);
+        y0 = y0.min(y);
+        x1 = x1.max(x + f64::from(p[2]));
+        y1 = y1.max(y + f64::from(p[3]));
+    }
+    let (largeur, hauteur) = (x1 - x0, y1 - y0);
+    let echelle = (f64::from(zone.width()) / largeur).min(f64::from(zone.height()) / hauteur);
+    let decalage_x = f64::from(zone.center().x) - largeur * echelle / 2.0;
+    let decalage_y = f64::from(zone.center().y) - hauteur * echelle / 2.0;
+    places
+        .iter()
+        .map(|p| {
+            let gauche = decalage_x + (f64::from(p[0]) - x0) * echelle;
+            let haut = decalage_y + (f64::from(p[1]) - y0) * echelle;
+            let droite = gauche + f64::from(p[2]) * echelle;
+            let bas = haut + f64::from(p[3]) * echelle;
+            // Réduit de 1 point de chaque côté, sans jamais inverser la case.
+            let (cx, cy) = ((gauche + droite) / 2.0, (haut + bas) / 2.0);
+            let demi_l = ((droite - gauche) / 2.0 - 1.0).max(0.0);
+            let demi_h = ((bas - haut) / 2.0 - 1.0).max(0.0);
+            Rect::from_min_max(
+                pos2((cx - demi_l) as f32, (cy - demi_h) as f32),
+                pos2((cx + demi_l) as f32, (cy + demi_h) as f32),
+            )
+        })
+        .collect()
+}
+
+/// Les places de toutes les cases, si TOUTES sont valides (largeur et hauteur > 0) ; sinon rien.
+fn places_valides(cases: &[Case]) -> Option<Vec<[i32; 4]>> {
+    if cases.is_empty() {
+        return None;
+    }
+    cases
+        .iter()
+        .map(|c| c.place.filter(|p| p[2] > 0 && p[3] > 0))
+        .collect()
 }
 
 /// La lettre lisible sur ce fond : blanche, ou noire si le fond est clair (contraste
@@ -326,8 +394,53 @@ pub fn largeur_choix(
     ILLUSTRE_MARGE + ILLUSTRE_LARGEUR + ILLUSTRE_ESPACE + haut.max(bas) + LIGNE_MARGE_DROITE
 }
 
-fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case) {
-    let arrondi = CornerRadius::same(3);
+/// Comment dessiner une case : la rangée d'écrans égaux (lettre, lune, pied), ou une case du
+/// plan (sans pied, qui toucherait l'écran du dessous ; seulement la couleur si elle est trop
+/// petite pour porter une lettre).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Genre {
+    Rangee,
+    Plan,
+    PlanCouleur,
+}
+
+/// Le genre des cases d'un plan : la couleur seule si la plus petite fait moins de
+/// [`PLAN_CASE_H_MIN`] de haut (une lettre y serait écrasée, et il ne faut pas fausser les
+/// proportions en agrandissant la case).
+fn genre_du_plan(rects: &[Rect]) -> Genre {
+    let plus_petite = rects.iter().map(|r| r.height()).fold(f32::MAX, f32::min);
+    if plus_petite < PLAN_CASE_H_MIN {
+        Genre::PlanCouleur
+    } else {
+        Genre::Plan
+    }
+}
+
+fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
+    let arrondi = CornerRadius::same(if genre == Genre::Rangee { 3 } else { 2 });
+    if genre == Genre::PlanCouleur {
+        // Seulement la couleur : le fond de la case, sans lettre ni lune.
+        if c.veille {
+            ui.painter().rect_filled(rect, arrondi, couleur(FOND_VEILLE));
+            ui.painter().rect_stroke(
+                rect,
+                arrondi,
+                Stroke::new(1.0, couleur(BORD_VEILLE)),
+                StrokeKind::Inside,
+            );
+        } else if let Some(f) = c.couleur {
+            ui.painter().rect_filled(rect, arrondi, couleur(f));
+        } else {
+            ui.painter().rect_filled(rect, arrondi, couleur(p.controle));
+            ui.painter().rect_stroke(
+                rect,
+                arrondi,
+                Stroke::new(1.0, couleur(p.bord_controle)),
+                StrokeKind::Inside,
+            );
+        }
+        return;
+    }
     if c.veille {
         ui.painter().rect_filled(rect, arrondi, couleur(FOND_VEILLE));
         let (a, b, d, e) = (
@@ -363,12 +476,14 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case) {
             );
         }
     }
-    // Le pied de l'écran.
-    let y = rect.bottom() + 3.0;
-    ui.painter().line_segment(
-        [pos2(rect.center().x - 5.0, y), pos2(rect.center().x + 5.0, y)],
-        Stroke::new(2.0, couleur(p.texte_desactive)),
-    );
+    // Le pied de l'écran (pas dans le plan : il tomberait sur l'écran du dessous).
+    if genre == Genre::Rangee {
+        let y = rect.bottom() + 3.0;
+        ui.painter().line_segment(
+            [pos2(rect.center().x - 5.0, y), pos2(rect.center().x + 5.0, y)],
+            Stroke::new(2.0, couleur(p.texte_desactive)),
+        );
+    }
 }
 
 /// Où commence le texte d'un choix illustré, depuis son bord gauche : le même quel que soit
@@ -427,15 +542,33 @@ pub fn dessiner_choix(
     }
     // L'illustration : à gauche, largeur fixe, de 1 à 4 cases.
     let n = illustration.len().min(ILLUSTRE_CASES_MAX);
-    let haut = rect.center().y - (ILLUSTRE_CASE_H + 5.0) / 2.0;
-    for (i, c) in illustration.iter().take(n).enumerate() {
-        let x = rect.left() + ILLUSTRE_MARGE + i as f32 * (ILLUSTRE_CASE_L + ILLUSTRE_CASE_ECART);
-        case(
-            ui,
-            p,
-            Rect::from_min_size(pos2(x, haut), vec2(ILLUSTRE_CASE_L, ILLUSTRE_CASE_H)),
-            c,
+    let cases = &illustration[..n];
+    if let Some(places) = places_valides(cases) {
+        // Le vrai plan des écrans : la largeur d'aujourd'hui, toute la hauteur utile.
+        let zone = Rect::from_min_max(
+            pos2(rect.left() + ILLUSTRE_MARGE, rect.top() + PLAN_MARGE_V),
+            pos2(
+                rect.left() + ILLUSTRE_MARGE + ILLUSTRE_LARGEUR,
+                rect.bottom() - PLAN_MARGE_V,
+            ),
         );
+        let rects = plan_des_cases(&places, zone);
+        let genre = genre_du_plan(&rects);
+        for (c, r) in cases.iter().zip(&rects) {
+            case(ui, p, *r, c, genre);
+        }
+    } else {
+        let haut = rect.center().y - (ILLUSTRE_CASE_H + 5.0) / 2.0;
+        for (i, c) in cases.iter().enumerate() {
+            let x = rect.left() + ILLUSTRE_MARGE + i as f32 * (ILLUSTRE_CASE_L + ILLUSTRE_CASE_ECART);
+            case(
+                ui,
+                p,
+                Rect::from_min_size(pos2(x, haut), vec2(ILLUSTRE_CASE_L, ILLUSTRE_CASE_H)),
+                c,
+                Genre::Rangee,
+            );
+        }
     }
     // Les deux lignes de texte.
     let x0 = rect.left() + texte_x();
@@ -513,8 +646,197 @@ mod essais {
         Case {
             lettre: Some(l),
             couleur: Some(couleurs_pastilles()[0]),
-            veille: false,
+            ..Default::default()
         }
+    }
+
+    fn avec_place(place: Option<[i32; 4]>) -> Case {
+        Case {
+            place,
+            ..case_ecran('A')
+        }
+    }
+
+    fn zone() -> Rect {
+        Rect::from_min_max(pos2(10.0, 4.0), pos2(115.0, 48.0))
+    }
+
+    /// Le cas du propriétaire (valeurs inventées) : un fixe 2560×1440 à gauche, un portable
+    /// 2560×1440 à droite, et sous lui l'écran intégré, plus petit, 1920×1200.
+    fn cas_proprietaire() -> Vec<[i32; 4]> {
+        vec![
+            [0, 0, 2560, 1440],
+            [2560, 0, 2560, 1440],
+            [2560, 1440, 1920, 1200],
+        ]
+    }
+
+    fn proche(a: f32, b: f32) -> bool {
+        (a - b).abs() < 0.01
+    }
+
+    /// Le plan garde les proportions : un seul facteur d'échelle pour la largeur et la hauteur.
+    #[test]
+    fn plan_garde_les_proportions() {
+        let r = plan_des_cases(&cas_proprietaire(), zone());
+        assert_eq!(r.len(), 3);
+        // Les deux grands écrans : même taille, 16/9 (à 2 points de réduction près).
+        assert!(proche(r[0].width(), r[1].width()));
+        assert!(proche(r[0].height(), r[1].height()));
+        assert!(proche((r[0].width() + 2.0) / (r[0].height() + 2.0), 16.0 / 9.0));
+        // L'écran intégré : 1920×1200 = 16/10, plus petit, aligné à gauche de l'écran du dessus.
+        assert!(proche((r[2].width() + 2.0) / (r[2].height() + 2.0), 16.0 / 10.0));
+        assert!(r[2].width() < r[1].width() && r[2].height() < r[1].height());
+        assert!(proche(r[2].left(), r[1].left()));
+        // Il est sous l'écran du dessus, avec 2 points de vide.
+        assert!(proche(r[2].top() - r[1].bottom(), 2.0));
+        // Le portable est collé à droite du fixe : 2 points de vide.
+        assert!(proche(r[1].left() - r[0].right(), 2.0));
+    }
+
+    /// L'ensemble est centré dans la zone, et tient dedans (hauteur limitante ici).
+    #[test]
+    fn plan_centre_dans_la_zone() {
+        let r = plan_des_cases(&cas_proprietaire(), zone());
+        let tout = r.iter().fold(r[0], |a, b| a.union(*b));
+        // Le vide de 1 point de chaque côté est symétrique : le centre est celui de la zone.
+        assert!(proche(tout.center().x, zone().center().x), "{tout:?}");
+        assert!(proche(tout.center().y, zone().center().y), "{tout:?}");
+        assert!(zone().contains_rect(tout));
+        // Ici la hauteur limite : l'ensemble la remplit (au vide de 1 point près).
+        assert!(proche(tout.height() + 2.0, zone().height()), "{tout:?}");
+        assert!(tout.width() + 2.0 < zone().width());
+    }
+
+    /// La largeur peut limiter aussi : deux écrans côte à côte, dans une zone basse et large.
+    #[test]
+    fn plan_limite_par_la_largeur() {
+        let r = plan_des_cases(&[[0, 0, 2000, 500], [2000, 0, 2000, 500]], zone());
+        let tout = r[0].union(r[1]);
+        assert!(proche(tout.width() + 2.0, zone().width()), "{tout:?}");
+        assert!(tout.height() + 2.0 < zone().height());
+        assert!(proche(tout.center().y, zone().center().y));
+    }
+
+    /// Des coordonnées négatives et un décalage quelconque donnent le même plan.
+    #[test]
+    fn plan_independant_de_l_origine() {
+        let a = plan_des_cases(&cas_proprietaire(), zone());
+        let decale: Vec<[i32; 4]> = cas_proprietaire()
+            .iter()
+            .map(|p| [p[0] - 7000, p[1] - 3000, p[2], p[3]])
+            .collect();
+        let b = plan_des_cases(&decale, zone());
+        for (x, y) in a.iter().zip(&b) {
+            assert!(
+                proche(x.left(), y.left()) && proche(x.top(), y.top()),
+                "{x:?} {y:?}"
+            );
+            assert!(proche(x.width(), y.width()) && proche(x.height(), y.height()));
+        }
+    }
+
+    /// Un seul écran remplit la zone en hauteur ; deux écrans collés ne se touchent pas.
+    #[test]
+    fn plan_un_ecran_et_ecrans_colles() {
+        let r = plan_des_cases(&[[-1920, 0, 1920, 1080]], zone());
+        assert_eq!(r.len(), 1);
+        assert!(proche(r[0].center().x, zone().center().x));
+        assert!(proche(r[0].height() + 2.0, zone().height()));
+        let d = plan_des_cases(&[[0, 0, 1920, 1080], [1920, 0, 1920, 1080]], zone());
+        assert!(d[1].left() - d[0].right() >= 2.0 - 0.01);
+        assert!(!d[0].intersects(d[1]));
+    }
+
+    /// Une place sans surface, une liste vide ou une zone vide : rien à dessiner.
+    #[test]
+    fn plan_refuse_le_vide() {
+        assert!(plan_des_cases(&[], zone()).is_empty());
+        assert!(plan_des_cases(&[[0, 0, 0, 100]], zone()).is_empty());
+        assert!(plan_des_cases(&[[0, 0, 100, 100], [100, 0, 100, -5]], zone()).is_empty());
+        assert!(plan_des_cases(&[[0, 0, 100, 100]], Rect::NOTHING).is_empty());
+    }
+
+    /// Le plan ne sert que si TOUTES les cases ont une place valide.
+    #[test]
+    fn plan_ou_rangee() {
+        let ok = [Some([0, 0, 100, 100]), Some([100, 0, 100, 100])];
+        let c: Vec<Case> = ok.iter().map(|p| avec_place(*p)).collect();
+        assert_eq!(places_valides(&c).map(|v| v.len()), Some(2));
+        for faux in [
+            None,
+            Some([0, 0, 0, 100]),
+            Some([0, 0, 100, 0]),
+            Some([0, 0, -1, 5]),
+        ] {
+            let c = vec![avec_place(ok[0]), avec_place(faux)];
+            assert_eq!(places_valides(&c), None, "{faux:?}");
+        }
+        assert_eq!(places_valides(&[]), None);
+    }
+
+    /// La plus petite case fait-elle moins de 12 points ? Alors seulement la couleur.
+    #[test]
+    fn plan_petite_case_en_couleur_seule() {
+        let r = plan_des_cases(&cas_proprietaire(), zone());
+        assert_eq!(
+            genre_du_plan(&r),
+            Genre::Plan,
+            "le cas du propriétaire garde ses lettres"
+        );
+        // Un petit écran à côté d'un très grand : sa case tombe sous 12 points.
+        let r = plan_des_cases(&[[0, 0, 3840, 2160], [3840, 0, 800, 480]], zone());
+        assert!(r[1].height() < PLAN_CASE_H_MIN);
+        assert_eq!(genre_du_plan(&r), Genre::PlanCouleur);
+        // Les proportions ne sont pas faussées : la case garde son rapport 5/3.
+        assert!(proche(
+            (r[1].width() + 2.0) / (r[1].height() + 2.0),
+            800.0 / 480.0
+        ));
+    }
+
+    /// Le plan se dessine dans le volet (3 cases, puis une place manquante : la rangée, puis
+    /// 5 cases : 4 au plus), sans changer la hauteur de la ligne.
+    #[test]
+    fn plan_dans_le_volet() {
+        let p = Palette::de(&ChoixWindows::default());
+        let ctx = egui::Context::default();
+        let cas = |cases: Vec<Case>| {
+            let mut h = 0.0;
+            let mut sortie = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 300.0))),
+                    ..Default::default()
+                },
+                |ui| {
+                    let h0 = ui.cursor().top();
+                    dessiner_choix(ui, &p, "c", "Choix", Some("sous"), &cases, None, true, None);
+                    h = ui.cursor().top() - h0;
+                },
+            );
+            sortie.textures_delta.clear();
+            h
+        };
+        let places = cas_proprietaire();
+        let trois: Vec<Case> = places.iter().map(|q| avec_place(Some(*q))).collect();
+        // La référence : la rangée d'aujourd'hui (sans place).
+        let rangee = cas(vec![case_ecran('A'); 3]);
+        assert!(
+            (ILLUSTRE_LIGNE..=ILLUSTRE_LIGNE + 8.0).contains(&rangee),
+            "{rangee}"
+        );
+        assert_eq!(cas(trois.clone()), rangee);
+        let mut manque = trois.clone();
+        manque[2].place = None;
+        assert_eq!(cas(manque), rangee);
+        let cinq: Vec<Case> = (0..5).map(|i| avec_place(Some([i * 100, 0, 100, 100]))).collect();
+        assert_eq!(cas(cinq), rangee);
+    }
+
+    /// Le texte ne bouge pas, avec ou sans plan : la zone du plan garde la largeur d'aujourd'hui.
+    #[test]
+    fn plan_ne_deplace_pas_le_texte() {
+        assert!(ILLUSTRE_MARGE + ILLUSTRE_LARGEUR <= texte_x());
     }
 
     fn liste() -> Vec<Brique> {

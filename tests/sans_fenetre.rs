@@ -1571,7 +1571,7 @@ fn choix_illustres_alignes() {
     let c = |l| Case {
         lettre: Some(l),
         couleur: Some(interface_commune::apparence::couleurs_pastilles()[0]),
-        veille: false,
+        ..Default::default()
     };
     let choix = |cle: &str, texte: &str, n: usize, actif: bool| Brique::ChoixIllustre {
         cle: cle.into(),

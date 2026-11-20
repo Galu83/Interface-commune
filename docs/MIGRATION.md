@@ -467,6 +467,20 @@ Deux **nouvelles variantes** de `Brique` (aucune brique existante ne change ; un
 `etiquette_active` en accent ; un clic ferme le volet et rend la clé. `Choix` reste inchangé.
 Exemple et captures sans fenêtre : `cargo run --example volet_pastilles -- <dossier>`.
 
+### Le vrai plan des écrans dans un choix illustré (branche `plan-des-ecrans`, pour tous ceux qui utilisent `Case`)
+
+- **`Case` reçoit `place: Option<[i32; 4]>`** : `[x, y, largeur, hauteur]` en pixels du bureau, valeurs
+  quelconques (négatives permises). **À faire dans chaque `Case { … }` existante : ajouter `place: None`
+  ou `..Default::default()`** (`Case` est désormais `Default`, et reste `Copy` et `PartialEq`).
+- Quand **toutes** les cases d'un choix ont une place valide (largeur et hauteur > 0), l'illustration
+  n'est plus une rangée de cases égales : c'est le plan des écrans, à l'échelle, centré dans la même
+  zone qu'avant (même largeur : le texte ne bouge pas ; toute la hauteur de la ligne). Sinon, la
+  rangée d'aujourd'hui. Lettre, couleur et veille ne changent pas ; 4 cases au plus. Dans le plan,
+  pas de pied d'écran, et une case de moins de 12 points de haut n'est que sa couleur.
+- `pastilles::plan_des_cases(places, zone) -> Vec<Rect>` : le calcul pur, public (échelle = le plus
+  petit des deux rapports, proportions gardées, centré, chaque case réduite de 1 point de chaque côté).
+- L'exemple `volet_pastilles` montre un plan de 3 écrans (« Trois écrans »).
+
 ## Les couleurs dans les Paramètres : `couleurs` (branche `couleurs-parametres`, pour tous, en option)
 
 Nouveau module `couleurs`, **rien d'existant ne change** (`nuancier::pastille` garde son

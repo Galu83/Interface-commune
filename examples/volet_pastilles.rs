@@ -1,6 +1,7 @@
 //! Le volet d'un partage de clavier et de souris inventé : une rangée d'ordinateurs en
 //! pastilles et des choix illustrés (une case par écran). Sans aucune fenêtre : des captures
-//! PNG en clair et en sombre, avec 2 puis 4 ordinateurs, dans le dossier donné.
+//! PNG en clair et en sombre, avec 2 puis 4 ordinateurs, dans le dossier donné. Le choix
+//! « Trois écrans » montre le vrai plan des écrans (`Case::place`).
 //!
 //! `cargo run --example volet_pastilles [dossier]` (Windows : il faut les polices Segoe).
 
@@ -65,12 +66,17 @@ impl Logiciel for Partage {
         let case = |i: usize| Case {
             lettre: noms[i].0.chars().next(),
             couleur: Some(couleurs[i]),
-            veille: false,
+            ..Default::default()
         };
         let veille = Case {
-            lettre: None,
-            couleur: None,
             veille: true,
+            ..Default::default()
+        };
+        // Le plan des écrans (valeurs inventées) : le fixe, 2560 × 1440, à gauche ; à droite le
+        // portable, 2560 × 1440 ; sous lui, son écran intégré, plus petit, 1920 × 1200.
+        let sur_le_bureau = |i: usize, place: [i32; 4]| Case {
+            place: Some(place),
+            ..case(i)
         };
         let choix = |cle: &str, texte: &str, sous: &str, rac: &str, actif: bool, cases: Vec<Case>| {
             Brique::ChoixIllustre {
@@ -112,6 +118,18 @@ impl Logiciel for Partage {
                 "Ctrl+Alt+Maj+F3",
                 false,
                 vec![case(0), veille],
+            ),
+            choix(
+                "plan",
+                "Trois écrans",
+                "Fixe à gauche · Portable à droite et dessous",
+                "Ctrl+Alt+Maj+F5",
+                false,
+                vec![
+                    sur_le_bureau(0, [0, 0, 2560, 1440]),
+                    sur_le_bureau(1, [2560, 0, 2560, 1440]),
+                    sur_le_bureau(1, [2560, 1440, 1920, 1200]),
+                ],
             ),
         ];
         if n == 4 {
