@@ -80,6 +80,7 @@ jobs:
       - name: Essai des entrées fabriquées (SendInput)
         env:
           ESSAI_SENDINPUT: "oui"
+          MESA_DOSSIER: ${{ github.workspace }}\mesa\x64
           GALLIUM_DRIVER: llvmpipe
         run: cargo test --test entrees_fabriquees -- --nocapture
       - name: Tests

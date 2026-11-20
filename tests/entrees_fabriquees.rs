@@ -268,17 +268,15 @@ fn echelle(h: HWND) -> f32 {
     if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 }
 }
 
-/// Charge l'OpenGL logiciel (Mesa) posé à côté du programme d'essai par le workflow, avant
-/// tout autre OpenGL : Windows donne alors ce module à toute demande de « opengl32.dll »
-/// (le runner n'a pas de carte graphique, et son OpenGL ne va pas au-delà de 1.1).
+/// Charge l'OpenGL logiciel (Mesa), dont le workflow donne le dossier (`MESA_DOSSIER`), avant
+/// tout autre OpenGL : Windows donne alors ce module à toute demande de « opengl32.dll » (le
+/// runner n'a pas de carte graphique, et son OpenGL ne va pas au-delà de 1.1).
 fn charger_mesa() -> String {
-    use windows::Win32::System::LibraryLoader::LoadLibraryW;
-    let Some(dossier) = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|p| p.to_path_buf()))
-    else {
-        return "dossier du programme introuvable".into();
+    use windows::Win32::System::LibraryLoader::{LOAD_WITH_ALTERED_SEARCH_PATH, LoadLibraryExW};
+    let Some(dossier) = std::env::var_os("MESA_DOSSIER") else {
+        return "MESA_DOSSIER absent : l'OpenGL de Windows servira".into();
     };
+    let dossier = std::path::PathBuf::from(dossier);
     let mut res = Vec::new();
     // D'abord le moteur, puis la façade qui l'appelle.
     for nom in ["libgallium_wgl.dll", "opengl32.dll"] {
@@ -292,7 +290,14 @@ fn charger_mesa() -> String {
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();
-        match unsafe { LoadLibraryW(windows::core::PCWSTR(large.as_ptr())) } {
+        let charge = unsafe {
+            LoadLibraryExW(
+                windows::core::PCWSTR(large.as_ptr()),
+                None,
+                LOAD_WITH_ALTERED_SEARCH_PATH,
+            )
+        };
+        match charge {
             Ok(_) => res.push(format!("{nom} : chargé")),
             Err(e) => res.push(format!("{nom} : refusé ({e})")),
         }
