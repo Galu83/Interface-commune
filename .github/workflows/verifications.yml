@@ -86,6 +86,16 @@ jobs:
           MESA_DOSSIER: ${{ github.workspace }}\mesa\x64
           GALLIUM_DRIVER: llvmpipe
         run: cargo test --test entrees_fabriquees -- --nocapture
+      # Les photos des fenêtres pendant l'essai (valeurs inventées), pour comprendre un échec.
+      # v4.6.2
+      - name: Photos de l'essai
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: photos-de-l-essai
+          path: captures/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Tests
         run: cargo test
       - name: L'exemple se compile

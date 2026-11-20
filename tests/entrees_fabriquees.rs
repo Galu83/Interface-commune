@@ -280,6 +280,62 @@ fn module_charge(nom: &str) -> String {
     String::from_utf16_lossy(&tampon[..long.min(512)])
 }
 
+/// Une photo de la fenêtre (pixels de l'écran) dans `captures/`, pour comprendre un échec :
+/// le workflow la garde avec le rapport. Rien n'est capturé hors de la fenêtre de l'essai.
+fn photographier(h: HWND, nom: &str) {
+    use windows::Win32::Graphics::Gdi::{
+        BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CAPTUREBLT, CreateCompatibleBitmap, CreateCompatibleDC,
+        DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetDIBits, ReleaseDC, SRCCOPY, SelectObject,
+    };
+    let [g, hh, d, b] = rectangle(h);
+    let (l, ha) = (d - g, b - hh);
+    if l <= 0 || ha <= 0 {
+        return;
+    }
+    let mut px = vec![0u8; (l * ha * 4) as usize];
+    unsafe {
+        let ecran = GetDC(None);
+        let mem = CreateCompatibleDC(Some(ecran));
+        let bmp = CreateCompatibleBitmap(ecran, l, ha);
+        let ancien = SelectObject(mem, bmp.into());
+        let _ = BitBlt(mem, 0, 0, l, ha, Some(ecran), g, hh, SRCCOPY | CAPTUREBLT);
+        let mut info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: l,
+                biHeight: -ha,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        GetDIBits(
+            mem,
+            bmp,
+            0,
+            ha as u32,
+            Some(px.as_mut_ptr().cast()),
+            &mut info,
+            DIB_RGB_COLORS,
+        );
+        SelectObject(mem, ancien);
+        let _ = DeleteObject(bmp.into());
+        let _ = DeleteDC(mem);
+        ReleaseDC(None, ecran);
+    }
+    for p in px.chunks_mut(4) {
+        p.swap(0, 2);
+        p[3] = 255;
+    }
+    let dossier = std::path::Path::new("captures");
+    let _ = std::fs::create_dir_all(dossier);
+    if let Some(img) = image::RgbaImage::from_raw(l as u32, ha as u32, px) {
+        let _ = img.save(dossier.join(format!("{nom}.png")));
+    }
+}
+
 // ---- Le déroulement ---------------------------------------------------------------------
 
 struct Essais {
@@ -457,9 +513,12 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
     e.ferme("Échap ferme le petit menu");
 
     // 2. Petit menu : flèche bas, Entrée → l'action du logiciel part, le menu se ferme.
-    e.ouvrir(Surface::Menu);
+    let fen = e.ouvrir(Surface::Menu);
+    photographier(fen, "2a-menu-ouvert");
     touche(VK_DOWN);
+    photographier(fen, "2b-menu-apres-fleche-bas");
     touche(VK_RETURN);
+    photographier(fen, "2c-menu-apres-entree");
     e.attendre("Entrée dans le petit menu : l'action part", 5, |e| {
         e.actions().contains(&"bonjour".to_string())
     });
@@ -471,9 +530,12 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
     e.ferme("Échap ferme le volet");
 
     // 4. Volet : Tab (la roue), Tab (le réglage rapide), Entrée.
-    e.ouvrir(Surface::Volet);
+    let fen = e.ouvrir(Surface::Volet);
+    photographier(fen, "4a-volet-ouvert");
     touche(VK_TAB);
+    photographier(fen, "4b-volet-apres-tab-1");
     touche(VK_TAB);
+    photographier(fen, "4c-volet-apres-tab-2");
     touche(VK_RETURN);
     e.attendre(
         "Tab, Tab, Entrée dans le volet : le réglage rapide part",

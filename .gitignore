@@ -4,3 +4,4 @@ target/
 .claude/phrases-permises-local.txt
 .claude/historique-accepte.txt
 .claude/fichiers-acceptes.txt
+captures/
