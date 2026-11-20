@@ -74,8 +74,6 @@ jobs:
               Copy-Item (Get-ChildItem mesa -Recurse -File -Filter $f | Select-Object -First 1).FullName $d -Force
             }
           }
-      - name: Tests
-        run: cargo test
       # Les vraies fenêtres, pilotées par des entrées fabriquées (SendInput) : clics, Tab,
       # flèches, Entrée, Espace, Échap, Alt+F4 (`interface-windows11.md`, point 11). Seulement
       # ici, jamais sur le PC du propriétaire : sans cette variable, l'essai ne fait rien.
@@ -84,6 +82,8 @@ jobs:
           ESSAI_SENDINPUT: "oui"
           GALLIUM_DRIVER: llvmpipe
         run: cargo test --test entrees_fabriquees -- --nocapture
+      - name: Tests
+        run: cargo test
       - name: L'exemple se compile
         run: cargo build --examples
 

@@ -268,6 +268,18 @@ fn echelle(h: HWND) -> f32 {
     if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 }
 }
 
+/// Où est chargé ce module (diagnostic : quel OpenGL sert ?).
+fn module_charge(nom: &str) -> String {
+    use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
+    let n: Vec<u16> = nom.encode_utf16().chain(std::iter::once(0)).collect();
+    let Ok(m) = (unsafe { GetModuleHandleW(windows::core::PCWSTR(n.as_ptr())) }) else {
+        return "non chargé".into();
+    };
+    let mut tampon = [0u16; 512];
+    let long = unsafe { GetModuleFileNameW(Some(m), &mut tampon) } as usize;
+    String::from_utf16_lossy(&tampon[..long.min(512)])
+}
+
 // ---- Le déroulement ---------------------------------------------------------------------
 
 struct Essais {
@@ -428,6 +440,11 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
     let debut = Instant::now();
     while liens.surface_prete.load(Ordering::Acquire) == 0 {
         if debut.elapsed() > Duration::from_secs(30) || fin.try_recv().is_ok() {
+            e.noter(format!("opengl32 chargé : {}", module_charge("opengl32.dll")));
+            e.noter(format!(
+                "libgallium_wgl chargé : {}",
+                module_charge("libgallium_wgl.dll")
+            ));
             e.echec("la fenêtre principale n'a pas été préparée (OpenGL absent ?)");
         }
         std::thread::sleep(Duration::from_millis(20));
