@@ -170,34 +170,6 @@ fn touche(vk: VIRTUAL_KEY) {
     std::thread::sleep(Duration::from_millis(150));
 }
 
-/// Une touche étendue envoyée par son code de balayage seulement (variante de diagnostic).
-fn touche_balayage(vk: VIRTUAL_KEY) {
-    use windows::Win32::UI::Input::KeyboardAndMouse::KEYEVENTF_SCANCODE;
-    let scan = unsafe { MapVirtualKeyW(u32::from(vk.0), MAPVK_VK_TO_VSC) } as u16;
-    let faire = |relache: bool| {
-        let mut f = KEYEVENTF_SCANCODE | KEYEVENTF_EXTENDEDKEY;
-        if relache {
-            f |= KEYEVENTF_KEYUP;
-        }
-        INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wVk: VIRTUAL_KEY(0),
-                    wScan: scan,
-                    dwFlags: f,
-                    time: 0,
-                    dwExtraInfo: 0,
-                },
-            },
-        }
-    };
-    envoyer(&[faire(false)]);
-    std::thread::sleep(Duration::from_millis(40));
-    envoyer(&[faire(true)]);
-    std::thread::sleep(Duration::from_millis(150));
-}
-
 /// Alt+F4.
 fn alt_f4() {
     envoyer(&[touche_entree(VK_MENU, false)]);
@@ -539,19 +511,6 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
     e.ouvrir(Surface::Menu);
     touche(VK_ESCAPE);
     e.ferme("Échap ferme le petit menu");
-
-    // Diagnostic : ce que fait chaque touche dans le petit menu (photos, sans vérification).
-    let fen = e.ouvrir(Surface::Menu);
-    touche(VK_TAB);
-    photographier(fen, "1b-menu-apres-tab");
-    touche(VK_DOWN);
-    photographier(fen, "1c-menu-apres-tab-puis-bas");
-    touche_balayage(VK_DOWN);
-    photographier(fen, "1d-menu-bas-par-balayage");
-    touche_balayage(VK_DOWN);
-    photographier(fen, "1e-menu-bas-par-balayage-2");
-    touche(VK_ESCAPE);
-    e.ferme("Échap ferme le petit menu (diagnostic)");
 
     // 2. Petit menu : flèche bas, Entrée → l'action du logiciel part, le menu se ferme.
     let fen = e.ouvrir(Surface::Menu);
