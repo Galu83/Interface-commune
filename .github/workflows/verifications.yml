@@ -70,7 +70,7 @@ jobs:
         run: |
           foreach ($d in "target\debug\deps", "target\debug\examples") {
             New-Item -ItemType Directory -Force $d | Out-Null
-            foreach ($f in "opengl32.dll", "libgallium_wgl.dll", "libglapi.dll") {
+            foreach ($f in "opengl32.dll", "libgallium_wgl.dll") {
               Copy-Item (Get-ChildItem mesa -Recurse -File -Filter $f | Select-Object -First 1).FullName $d -Force
             }
           }
