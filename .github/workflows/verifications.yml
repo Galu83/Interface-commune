@@ -97,7 +97,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Tests
-        run: cargo test
+        run: cargo test -- --nocapture
       - name: L'exemple se compile
         run: cargo build --examples
 
