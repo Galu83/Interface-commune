@@ -268,43 +268,6 @@ fn echelle(h: HWND) -> f32 {
     if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 }
 }
 
-/// Charge l'OpenGL logiciel (Mesa), dont le workflow donne le dossier (`MESA_DOSSIER`), avant
-/// tout autre OpenGL : Windows donne alors ce module à toute demande de « opengl32.dll » (le
-/// runner n'a pas de carte graphique, et son OpenGL ne va pas au-delà de 1.1).
-fn charger_mesa() -> String {
-    use windows::Win32::System::LibraryLoader::{LOAD_WITH_ALTERED_SEARCH_PATH, LoadLibraryExW};
-    let Some(dossier) = std::env::var_os("MESA_DOSSIER") else {
-        return "MESA_DOSSIER absent : l'OpenGL de Windows servira".into();
-    };
-    let dossier = std::path::PathBuf::from(dossier);
-    let mut res = Vec::new();
-    // D'abord le moteur, puis la façade qui l'appelle.
-    for nom in ["libgallium_wgl.dll", "opengl32.dll"] {
-        let chemin = dossier.join(nom);
-        if !chemin.exists() {
-            res.push(format!("{nom} : absent de {}", dossier.display()));
-            continue;
-        }
-        let large: Vec<u16> = chemin
-            .to_string_lossy()
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        let charge = unsafe {
-            LoadLibraryExW(
-                windows::core::PCWSTR(large.as_ptr()),
-                None,
-                LOAD_WITH_ALTERED_SEARCH_PATH,
-            )
-        };
-        match charge {
-            Ok(_) => res.push(format!("{nom} : chargé")),
-            Err(e) => res.push(format!("{nom} : refusé ({e})")),
-        }
-    }
-    res.join(" ; ")
-}
-
 /// Où est chargé ce module (diagnostic : quel OpenGL sert ?).
 fn module_charge(nom: &str) -> String {
     use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
@@ -439,7 +402,6 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
         );
         return;
     }
-    eprintln!("Mesa : {}", charger_mesa());
     let liens = Arc::new(Liens::default());
     let (demandes, reception) = canal();
     let logiciel = Arc::new(Essai {

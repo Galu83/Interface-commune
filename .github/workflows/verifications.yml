@@ -52,8 +52,8 @@ jobs:
       - name: Contrôle du code
         run: cargo clippy --all-targets -- -D warnings
       # Le runner n'a pas de carte graphique : Windows n'y offre qu'OpenGL 1.1, et egui veut
-      # 2.0 ou plus. Mesa (MIT, dessin par le processeur) le remplace, posé à côté des
-      # programmes d'essai ; version et empreinte SHA-256 figées (sécurité, point 9).
+      # 2.0 ou plus. Mesa (MIT, dessin par le processeur) le remplace, déclaré comme pilote
+      # du runner ; version et empreinte SHA-256 figées (sécurité, point 9).
       - name: OpenGL logiciel (Mesa 26.2.6, empreinte vérifiée)
         shell: pwsh
         run: |
@@ -62,18 +62,21 @@ jobs:
           $h = (Get-FileHash mesa.7z -Algorithm SHA256).Hash.ToLower()
           if ($h -ne "da0f71d9181b672c1918f3c342f11118c687f6059a46b16502845160733cc388") { throw "empreinte inattendue : $h" }
           7z x mesa.7z -omesa -y | Out-Null
-          Get-Content mesa/modules/reggl.cmd, mesa/modules/mklink.cmd
       - name: Compilation des tests
         run: cargo test --no-run
-      - name: Mesa à côté des programmes d'essai
+      # Comme le fait « systemwidedeploy.cmd » de Mesa : le moteur dans System32, déclaré à
+      # Windows comme pilote OpenGL (clé MSOGL). Seulement sur ce runner jetable.
+      - name: Mesa, pilote OpenGL du runner
         shell: pwsh
         run: |
-          foreach ($d in "target\debug\deps", "target\debug\examples") {
-            New-Item -ItemType Directory -Force $d | Out-Null
-            foreach ($f in "opengl32.dll", "libgallium_wgl.dll") {
-              Copy-Item (Get-ChildItem mesa -Recurse -File -Filter $f | Select-Object -First 1).FullName $d -Force
-            }
-          }
+          Copy-Item mesa/x64/libgallium_wgl.dll "$env:windir\System32\" -Force
+          $cle = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\OpenGLDrivers\MSOGL"
+          New-Item -Path $cle -Force | Out-Null
+          Set-ItemProperty -Path $cle -Name DLL -Value "libgallium_wgl.dll" -Type String
+          Set-ItemProperty -Path $cle -Name DriverVersion -Value 1 -Type DWord
+          Set-ItemProperty -Path $cle -Name Flags -Value 1 -Type DWord
+          Set-ItemProperty -Path $cle -Name Version -Value 2 -Type DWord
+          Get-ItemProperty -Path $cle
       # Les vraies fenêtres, pilotées par des entrées fabriquées (SendInput) : clics, Tab,
       # flèches, Entrée, Espace, Échap, Alt+F4 (`interface-windows11.md`, point 11). Seulement
       # ici, jamais sur le PC du propriétaire : sans cette variable, l'essai ne fait rien.
