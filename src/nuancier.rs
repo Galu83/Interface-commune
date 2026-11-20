@@ -27,9 +27,16 @@ fn code(c: Rgb) -> String {
 /// Une couleur ronde de 32 points, cliquable. `choisie` : un anneau de la couleur du texte
 /// autour. `nom` : ce que dit un lecteur d'écran (le code de la couleur s'y ajoute).
 pub fn pastille(ui: &mut Ui, p: &Palette, c: Rgb, nom: &str, choisie: bool) -> Response {
-    let (rect, r) = ui.allocate_exact_size(vec2(ZONE, ZONE), Sense::click());
-    if ui.is_rect_visible(rect) {
-        let centre = rect.center();
+    let (_, r) = ui.allocate_exact_size(vec2(ZONE, ZONE), Sense::click());
+    dessiner_pastille(ui, p, &r, c, nom, choisie);
+    r
+}
+
+/// Dessine la pastille ronde dans la zone de `r` (déjà posée, avec sa propre clé : le choix
+/// d'une couleur au clavier en a besoin, [`crate::couleurs`]).
+pub fn dessiner_pastille(ui: &Ui, p: &Palette, r: &Response, c: Rgb, nom: &str, choisie: bool) {
+    if ui.is_rect_visible(r.rect) {
+        let centre = r.rect.center();
         let rayon = if r.hovered() { RAYON + 1.0 } else { RAYON };
         if choisie {
             ui.painter()
@@ -39,11 +46,10 @@ pub fn pastille(ui: &mut Ui, p: &Palette, c: Rgb, nom: &str, choisie: bool) -> R
         // Un fin contour : une couleur proche du fond (blanc sur clair, noir sur sombre) se voit.
         ui.painter()
             .circle_stroke(centre, rayon, Stroke::new(1.0, couleur(p.bord_controle)));
-        focus(ui, p, &r, 16);
+        focus(ui, p, r, 16);
     }
     let libelle = format!("{nom} {}", code(c));
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &libelle));
-    r
 }
 
 /// La grille : une ligne de pastilles par ligne de `couleurs`. Rend la couleur cliquée à cette

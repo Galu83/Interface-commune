@@ -15,6 +15,7 @@
 | `src/menu.rs` | l'ordre du petit menu |
 | `src/parametres/` | les Paramètres : modèle (pages, Annuler, « Conserver ces modifications ? »), dessin, fenêtre |
 | `src/nuancier.rs` | le nuancier : pastille de couleur, grille, bouton qui ouvre la grille (choisir une couleur sans taper de code) |
+| `src/couleurs.rs` | les couleurs dans les Paramètres, aux couleurs du volet : `pastille_de_carte` (la pastille d'un appareil dans une carte), `choisir_couleur` (rangée de pastilles rondes : flèches, Entrée ou Espace, contour de focus), `carte_couleur` (la carte, avec « Annuler » en option), `palette()` = `apparence::couleurs_pastilles()` |
 | `src/seuils.rs` | la barre à seuils : une barre de 0 à 100 coupée en zones colorées, dont on règle les limites en glissant les poignées (ou au clavier) |
 | `src/dessin.rs`, `icones.rs` | cartes, interrupteurs, bandeau, boutons, champ de raccourci ; les icônes communes |
 | `src/place.rs`, `clics.rs`, `systeme.rs` | placement près de la barre des tâches, clics de l'icône, appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme) |
@@ -25,6 +26,7 @@
 | `docs/MIGRATION.md`, `ETAT.md` | ce que chaque projet change ; où en est la bibliothèque |
 | `examples/demo.rs` | un logiciel d'exemple |
 | `examples/conserver.rs` | « Conserver ces modifications ? » : un réglage à confirmer, deux captures sans fenêtre |
+| `examples/couleurs.rs` | la pastille et le choix de couleur dans une carte, « Annuler » compris : quatre captures sans fenêtre (clair, sombre, avant et après un choix) |
 | `examples/mesure_ouverture.rs` | mesure l'ouverture du volet et du petit menu, image par image, fenêtre voilée (rien à l'écran) |
 
 Tests : `cargo test -q` ; avant un envoi : `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.

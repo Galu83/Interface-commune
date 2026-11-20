@@ -121,7 +121,15 @@ pub fn titre_section(ui: &mut Ui, p: &Palette, t: &str) {
 }
 
 /// Le carré coloré d'une pastille ou d'une case : un fond, sa lettre ; absent : hachuré.
-fn carre(ui: &Ui, p: &Palette, rect: Rect, lettre: Option<char>, fond: Rgb, absent: bool, taille: f32) {
+pub(crate) fn carre(
+    ui: &Ui,
+    p: &Palette,
+    rect: Rect,
+    lettre: Option<char>,
+    fond: Rgb,
+    absent: bool,
+    taille: f32,
+) {
     let arrondi = CornerRadius::same(4);
     let peintre = ui.painter();
     if absent {

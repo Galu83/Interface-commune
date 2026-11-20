@@ -467,6 +467,23 @@ Deux **nouvelles variantes** de `Brique` (aucune brique existante ne change ; un
 `etiquette_active` en accent ; un clic ferme le volet et rend la clé. `Choix` reste inchangé.
 Exemple et captures sans fenêtre : `cargo run --example volet_pastilles -- <dossier>`.
 
+## Les couleurs dans les Paramètres : `couleurs` (branche `couleurs-parametres`, pour tous, en option)
+
+Nouveau module `couleurs`, **rien d'existant ne change** (`nuancier::pastille` garde son
+comportement ; elle partage seulement son dessin avec `nuancier::dessiner_pastille`). Les couleurs
+sont celles du volet : `couleurs::palette()` = `apparence::couleurs_pastilles()`, aucune autre liste.
+- `couleurs::pastille_de_carte(ui, palette, &Pastille)` : la pastille d'un appareil (carré, lettre,
+  hachuré si absent), à poser dans le contrôle d'une `dessin::carte`.
+- `couleurs::choisir_couleur(ui, palette, &couleurs, choisie, nom) -> Option<usize>` : une rangée de
+  pastilles rondes, comme l'accent de Windows 11 : contour sur la choisie, flèches gauche/droite pour
+  passer de l'une à l'autre, Entrée ou Espace pour choisir, contour de focus. Rend le rang choisi.
+- `couleurs::carte_couleur(ui, page, glyphe, texte, explication, &couleurs, choisie, annuler)` : la
+  carte avec la rangée. `annuler: Some((cle, titre))` : le choix part aussi au logiciel par
+  `Reglages::changer(cle, Valeur::Nombre(rang))` et la bulle « Annuler » remet l'ancien rang ;
+  `None` : rien n'est signalé, tout reste au logiciel. À toi d'enregistrer le rang (et de colorer
+  le volet avec `palette()[rang]`).
+Exemple et captures sans fenêtre : `cargo run --example couleurs -- <dossier>`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

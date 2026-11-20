@@ -30,6 +30,7 @@ pub mod autres_fenetres;
 pub mod briques;
 pub mod capture;
 pub mod clics;
+pub mod couleurs;
 pub mod dessin;
 pub mod fenetres;
 pub mod icones;
