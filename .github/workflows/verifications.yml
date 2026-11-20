@@ -62,7 +62,7 @@ jobs:
           $h = (Get-FileHash mesa.7z -Algorithm SHA256).Hash.ToLower()
           if ($h -ne "da0f71d9181b672c1918f3c342f11118c687f6059a46b16502845160733cc388") { throw "empreinte inattendue : $h" }
           7z x mesa.7z -omesa -y | Out-Null
-          Get-ChildItem mesa -Recurse -File | ForEach-Object { $_.FullName }
+          Get-Content mesa/modules/reggl.cmd, mesa/modules/mklink.cmd
       - name: Compilation des tests
         run: cargo test --no-run
       - name: Mesa à côté des programmes d'essai
