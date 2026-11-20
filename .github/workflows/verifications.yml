@@ -31,6 +31,9 @@ jobs:
     # tout son code se compile et où les polices de Windows sont là pour les tests.
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # Mesa dessine par le processeur (llvmpipe), pas par le pilote d3d12 de Windows.
+      GALLIUM_DRIVER: llvmpipe
     defaults:
       run:
         working-directory: .
@@ -97,7 +100,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Tests
-        run: cargo test -- --nocapture
+        run: cargo test
       - name: L'exemple se compile
         run: cargo build --examples
 
