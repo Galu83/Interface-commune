@@ -188,6 +188,10 @@ pub struct Communs {
     /// « Effacer le journal » (action `journal.effacer`, après confirmation) est montré.
     pub journal_effacable: bool,
     pub mise_a_jour: EtatMiseAJour,
+    /// Quand le logiciel a cherché une mise à jour pour la dernière fois, écrit par lui dans
+    /// la langue de l'utilisateur (« 20 nov. 2026, 14:05 ») ; `None` : pas encore cherché, rien
+    /// n'est montré. Sous le titre de la page « Mise à jour », en gris, avec la version.
+    pub derniere_recherche: Option<String>,
     /// Le dossier des installateurs, tel qu'il s'affiche (raccourci, sans le profil).
     pub dossier_installateurs: String,
     /// Le dossier des installateurs ne se choisit pas (le bouton « Choisir… » est caché).

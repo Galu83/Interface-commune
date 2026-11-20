@@ -85,8 +85,12 @@ pub struct Textes {
     pub maj_pas_cherche: &'static str,
     pub maj_a_jour: &'static str,
     pub maj_recherche: &'static str,
-    /// « Version {} prête » (le numéro).
+    /// « Version {} disponible » (le numéro).
     pub maj_prete: &'static str,
+    /// Le titre quand la recherche a échoué (la raison est en dessous, en gris).
+    pub maj_erreur: &'static str,
+    /// « Dernière recherche : {} » (la date, déjà écrite par le logiciel).
+    pub derniere_recherche: &'static str,
     /// « Version actuelle : {} ».
     pub version_actuelle: &'static str,
     pub installer_maintenant: &'static str,
@@ -167,9 +171,11 @@ pub const FRANCAIS: Textes = Textes {
     non: "Non",
     oui_retablir: "Oui, rétablir",
     maj_pas_cherche: "Pas encore cherché",
-    maj_a_jour: "Le logiciel est à jour",
+    maj_a_jour: "Vous êtes à jour",
     maj_recherche: "Recherche en cours…",
-    maj_prete: "Version {} prête",
+    maj_prete: "Version {} disponible",
+    maj_erreur: "La recherche a échoué",
+    derniere_recherche: "Dernière recherche : {}",
     version_actuelle: "Version actuelle : {}",
     installer_maintenant: "Installer maintenant",
     nouveautes: "Nouveautés",
@@ -243,7 +249,9 @@ pub const ANGLAIS: Textes = Textes {
     maj_pas_cherche: "Not checked yet",
     maj_a_jour: "You're up to date",
     maj_recherche: "Checking…",
-    maj_prete: "Version {} is ready",
+    maj_prete: "Version {} is available",
+    maj_erreur: "The check failed",
+    derniere_recherche: "Last checked: {}",
     version_actuelle: "Current version: {}",
     installer_maintenant: "Install now",
     nouveautes: "What's new",
@@ -370,6 +378,8 @@ mod tests {
                 t.maj_a_jour,
                 t.maj_recherche,
                 t.maj_prete,
+                t.maj_erreur,
+                t.derniere_recherche,
                 t.version_actuelle,
                 t.installer_maintenant,
                 t.nouveautes,

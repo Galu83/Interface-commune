@@ -1098,17 +1098,62 @@ impl Parametres {
     }
 }
 
+/// La couleur d'une icône d'état de la mise à jour, avant de choisir dans la palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TonMiseAJour {
+    Neutre,
+    Bon,
+    Occupe,
+    Accent,
+    Probleme,
+}
+
+/// Ce que dit la page « Mise à jour » d'un état, à la façon de Windows Update : une seule
+/// icône (coche = à jour, flèche = mise à jour disponible, triangle = problème), sa couleur
+/// et le titre.
+pub fn presentation_mise_a_jour(e: &EtatMiseAJour, t: &Textes) -> (char, TonMiseAJour, String) {
+    use TonMiseAJour::*;
+    match e {
+        EtatMiseAJour::Inconnu => (icones::MISE_A_JOUR, Neutre, t.maj_pas_cherche.into()),
+        EtatMiseAJour::AJour => (icones::COCHE, Bon, t.maj_a_jour.into()),
+        EtatMiseAJour::Recherche => (icones::MISE_A_JOUR, Occupe, t.maj_recherche.into()),
+        EtatMiseAJour::Prete(v) => (icones::INSTALLER, Accent, remplir(t.maj_prete, &[v])),
+        EtatMiseAJour::Erreur(_) => (icones::ATTENTION, Probleme, t.maj_erreur.into()),
+        EtatMiseAJour::Coupee => (icones::A_PROPOS, Neutre, t.maj_coupee.into()),
+        EtatMiseAJour::Information(e) => (icones::A_PROPOS, Neutre, e.clone()),
+    }
+}
+
+/// La ligne grise sous le titre : la raison d'une erreur, la version installée, puis la
+/// dernière recherche, séparées par « · ».
+pub fn ligne_grise_mise_a_jour(
+    e: &EtatMiseAJour,
+    version: &str,
+    derniere: Option<&str>,
+    t: &Textes,
+) -> String {
+    let mut morceaux: Vec<String> = Vec::new();
+    if let EtatMiseAJour::Erreur(raison) = e {
+        morceaux.push(raison.clone());
+    }
+    morceaux.push(remplir(t.version_actuelle, &[version]));
+    if let Some(d) = derniere {
+        morceaux.push(remplir(t.derniere_recherche, &[d]));
+    }
+    morceaux.join(" · ")
+}
+
 /// Le texte de l'état de la mise à jour, et sa couleur.
 pub fn texte_mise_a_jour(e: &EtatMiseAJour, p: &Palette, t: &Textes) -> (char, crate::Rgb, String) {
-    match e {
-        EtatMiseAJour::Inconnu => (icones::MISE_A_JOUR, p.texte_secondaire, t.maj_pas_cherche.into()),
-        EtatMiseAJour::AJour => (icones::COCHE, p.vert, t.maj_a_jour.into()),
-        EtatMiseAJour::Recherche => (icones::MISE_A_JOUR, p.orange, t.maj_recherche.into()),
-        EtatMiseAJour::Prete(v) => (icones::INSTALLER, p.accent, remplir(t.maj_prete, &[v])),
-        EtatMiseAJour::Erreur(e) => (icones::PROBLEME, p.rouge, e.clone()),
-        EtatMiseAJour::Coupee => (icones::A_PROPOS, p.texte_secondaire, t.maj_coupee.into()),
-        EtatMiseAJour::Information(e) => (icones::A_PROPOS, p.texte_secondaire, e.clone()),
-    }
+    let (glyphe, ton, texte) = presentation_mise_a_jour(e, t);
+    let c = match ton {
+        TonMiseAJour::Neutre => p.texte_secondaire,
+        TonMiseAJour::Bon => p.vert,
+        TonMiseAJour::Occupe => p.orange,
+        TonMiseAJour::Accent => p.accent,
+        TonMiseAJour::Probleme => p.rouge,
+    };
+    (glyphe, c, texte)
 }
 
 fn page_mise_a_jour(
@@ -1119,43 +1164,65 @@ fn page_mise_a_jour(
     c: &Communs,
     mut changer: impl FnMut(&str, &str, Valeur, Valeur),
 ) {
-    let (g, couleur_etat, texte) = texte_mise_a_jour(&c.mise_a_jour, p, t);
+    let (g, couleur_etat, titre) = texte_mise_a_jour(&c.mise_a_jour, p, t);
+    let gris = ligne_grise_mise_a_jour(
+        &c.mise_a_jour,
+        &l.identite().version,
+        c.derniere_recherche.as_deref(),
+        t,
+    );
     dessin::cadre_carte(p).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                dessin::etat(ui, couleur_etat, g, &texte);
-                ui.label(
-                    RichText::new(remplir(t.version_actuelle, &[&l.identite().version]))
-                        .size(TAILLE_PETIT)
-                        .color(couleur(p.texte_secondaire)),
-                );
-            });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if let EtatMiseAJour::Prete(_) = c.mise_a_jour {
-                    if bouton(
-                        ui,
-                        p,
-                        Some(icones::INSTALLER),
-                        t.installer_maintenant,
-                        Genre::Accent,
-                    )
-                    .clicked()
-                    {
-                        l.action(cles::INSTALLER);
-                    }
-                } else if c.recherches != Some(false)
-                    && bouton(
-                        ui,
-                        p,
-                        Some(icones::MISE_A_JOUR),
-                        t.rechercher_mise_a_jour,
-                        Genre::Normal,
-                    )
-                    .clicked()
+        // Le bouton d'abord (à droite) : le titre et la ligne grise prennent la place qui reste
+        // et passent à la ligne, sans jamais passer sous le bouton.
+        // Une hauteur fixe : une disposition de droite à gauche prendrait toute celle de la page.
+        let taille = egui::vec2(ui.available_width(), 56.0);
+        ui.allocate_ui_with_layout(taille, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if let EtatMiseAJour::Prete(_) = c.mise_a_jour {
+                if bouton(
+                    ui,
+                    p,
+                    Some(icones::INSTALLER),
+                    t.installer_maintenant,
+                    Genre::Accent,
+                )
+                .clicked()
                 {
-                    l.rechercher_mise_a_jour();
+                    l.action(cles::INSTALLER);
                 }
+            } else if c.recherches != Some(false)
+                && bouton(
+                    ui,
+                    p,
+                    Some(icones::MISE_A_JOUR),
+                    t.rechercher_mise_a_jour,
+                    Genre::Accent,
+                )
+                .clicked()
+            {
+                l.rechercher_mise_a_jour();
+            }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(40.0, 44.0), egui::Sense::hover());
+                dessin::icone(ui, r.center(), g, 30.0, couleur_etat);
+                ui.vertical(|ui| {
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(dessin::insecables(&titre))
+                                .font(semibold(18.0))
+                                .color(couleur(p.texte)),
+                        )
+                        .wrap(),
+                    );
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(gris)
+                                .size(TAILLE_PETIT)
+                                .color(couleur(p.texte_secondaire)),
+                        )
+                        .wrap(),
+                    );
+                });
             });
         });
     });
@@ -1215,4 +1282,63 @@ fn page_mise_a_jour(
             }
         },
     );
+}
+
+#[cfg(test)]
+mod essais_mise_a_jour {
+    use super::*;
+    use crate::textes::{ANGLAIS, FRANCAIS};
+
+    #[test]
+    fn une_seule_icone_selon_l_etat() {
+        let icone = |e: EtatMiseAJour| presentation_mise_a_jour(&e, &FRANCAIS).0;
+        assert_eq!(icone(EtatMiseAJour::AJour), icones::COCHE);
+        assert_eq!(icone(EtatMiseAJour::Prete("2.0.0".into())), icones::INSTALLER);
+        assert_eq!(icone(EtatMiseAJour::Erreur("x".into())), icones::ATTENTION);
+    }
+
+    #[test]
+    fn le_titre_dit_l_etat_dans_les_deux_langues() {
+        let titre = |e: EtatMiseAJour, t: &Textes| presentation_mise_a_jour(&e, t).2;
+        assert_eq!(titre(EtatMiseAJour::AJour, &FRANCAIS), "Vous êtes à jour");
+        assert_eq!(titre(EtatMiseAJour::AJour, &ANGLAIS), "You're up to date");
+        assert_eq!(
+            titre(EtatMiseAJour::Prete("2.1.0".into()), &FRANCAIS),
+            "Version 2.1.0 disponible"
+        );
+        assert_eq!(
+            titre(EtatMiseAJour::Prete("2.1.0".into()), &ANGLAIS),
+            "Version 2.1.0 is available"
+        );
+        assert_eq!(
+            titre(EtatMiseAJour::Erreur("Réseau coupé.".into()), &FRANCAIS),
+            "La recherche a échoué"
+        );
+    }
+
+    #[test]
+    fn les_couleurs_suivent_l_etat() {
+        let ton = |e: EtatMiseAJour| presentation_mise_a_jour(&e, &FRANCAIS).1;
+        assert_eq!(ton(EtatMiseAJour::AJour), TonMiseAJour::Bon);
+        assert_eq!(ton(EtatMiseAJour::Prete("2.0.0".into())), TonMiseAJour::Accent);
+        assert_eq!(ton(EtatMiseAJour::Erreur("x".into())), TonMiseAJour::Probleme);
+    }
+
+    #[test]
+    fn la_ligne_grise_donne_la_version_et_la_derniere_recherche() {
+        let a_jour = EtatMiseAJour::AJour;
+        assert_eq!(
+            ligne_grise_mise_a_jour(&a_jour, "1.0.0", Some("20 nov. 2026, 14:05"), &FRANCAIS),
+            "Version actuelle : 1.0.0 · Dernière recherche : 20 nov. 2026, 14:05"
+        );
+        assert_eq!(
+            ligne_grise_mise_a_jour(&a_jour, "1.0.0", None, &ANGLAIS),
+            "Current version: 1.0.0"
+        );
+        let erreur = EtatMiseAJour::Erreur("Réseau coupé.".into());
+        assert_eq!(
+            ligne_grise_mise_a_jour(&erreur, "1.0.0", None, &FRANCAIS),
+            "Réseau coupé. · Version actuelle : 1.0.0"
+        );
+    }
 }

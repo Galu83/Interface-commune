@@ -523,6 +523,24 @@ focus ; Entrée et Espace l'ouvrent et la ferment ; pour les lecteurs d'écran :
 
 Exemple et captures sans fenêtre (repliée, ouverte) : `cargo run --example section_repliable -- <dossier>`.
 
+## La page « Mise à jour » à la façon de Windows Update
+
+- **Une seule icône selon l'état** (coche verte = à jour, flèche = version disponible, triangle rouge
+  = la recherche a échoué), un titre qui le dit (« Vous êtes à jour » / « Version x.y.z disponible »,
+  « You're up to date » / « Version x.y.z is available »), une ligne grise dessous (la raison d'une
+  erreur, la version installée, la dernière recherche) et **un seul bouton principal** (bleu :
+  « Installer maintenant » ou « Rechercher une mise à jour »).
+- **Nouveau champ `Communs::derniere_recherche: Option<String>`** : la date de la dernière recherche,
+  écrite par le logiciel dans la langue de l'utilisateur. `None` : rien n'est montré. Comme `Communs`
+  se remplit avec `..Default::default()`, rien ne casse ; à renseigner pour avoir la ligne complète.
+- **Nouveaux champs de `Textes`** (`maj_erreur`, `derniere_recherche`) : seul un logiciel qui écrit
+  son propre `Textes` en entier doit les ajouter. Les textes `maj_a_jour` et `maj_prete` changent
+  (« Vous êtes à jour », « Version {} disponible »).
+- Nouveau : `parametres::presentation_mise_a_jour` (état → icône, ton, titre) et
+  `parametres::ligne_grise_mise_a_jour`, testés ; `texte_mise_a_jour` garde sa signature.
+
+Exemple et captures sans fenêtre : `cargo run --example mise_a_jour -- <dossier>`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.
