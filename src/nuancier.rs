@@ -132,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn the_grid_is_made_of_32_point_cells() {
+    fn la_grille_est_faite_de_cases_de_32_points() {
         let ctx = Context::default();
         let (choix, taille) = image(&ctx, vec![], None);
         assert_eq!(choix, None);
@@ -140,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn a_click_gives_the_colour_under_the_pointer() {
+    fn un_clic_donne_la_couleur_sous_le_pointeur() {
         let ctx = Context::default();
         let _ = image(&ctx, vec![], None);
         // Le centre de la deuxième pastille de la première ligne : le vert.
@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn the_button_opens_the_grid_and_a_click_inside_closes_it() {
+    fn le_bouton_ouvre_la_grille_et_un_clic_dedans_la_ferme() {
         let ctx = Context::default();
         let bouton = pos2(ZONE / 2.0, ZONE / 2.0);
         let evenement = |pos, pressed| Event::PointerButton {
@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn screen_readers_get_a_name_with_the_code() {
+    fn les_lecteurs_d_ecran_recoivent_un_nom_avec_le_code() {
         assert_eq!(code(Rgb(1, 2, 255)), "#0102FF");
     }
 }
