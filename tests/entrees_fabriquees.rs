@@ -120,8 +120,10 @@ impl Reglages for Essai {
         }
     }
     fn changer(&self, cle: &str, valeur: Valeur) {
-        if let (cles::DEMARRAGE, Valeur::Booleen(b)) = (cle, valeur) {
-            self.demarrage.store(b, Ordering::Relaxed);
+        if let Valeur::Booleen(b) = valeur {
+            if cle == cles::DEMARRAGE {
+                self.demarrage.store(b, Ordering::Relaxed);
+            }
             self.changements.lock().unwrap().push(format!("{cle}={b}"));
         }
     }
@@ -537,12 +539,21 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
     touche(VK_TAB);
     photographier(fen, "4c-volet-apres-tab-2");
     touche(VK_RETURN);
+    photographier(fen, "4d-volet-apres-entree");
     e.attendre(
-        "Tab, Tab, Entrée dans le volet : le réglage rapide part",
+        "Tab, Tab, Entrée dans le volet : le réglage rapide change",
         5,
-        |e| e.actions().contains(&"essai".to_string()),
+        |e| {
+            e.logiciel
+                .changements
+                .lock()
+                .unwrap()
+                .contains(&"essai=true".to_string())
+        },
     );
-    e.ferme("le volet se ferme après son choix");
+    // Le volet reste ouvert après un interrupteur : Échap le ferme.
+    touche(VK_ESCAPE);
+    e.ferme("Échap ferme le volet après le réglage");
 
     // 5. Volet : clic sur la roue dentée → les Paramètres s'ouvrent.
     let fen = e.ouvrir(Surface::Volet);
@@ -586,7 +597,12 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
         touche(VK_TAB);
         touche(VK_SPACE);
         std::thread::sleep(Duration::from_millis(200));
-        if !e.logiciel.changements.lock().unwrap().is_empty() {
+        if e.logiciel
+            .changements
+            .lock()
+            .unwrap()
+            .contains(&format!("{}=true", cles::DEMARRAGE))
+        {
             break;
         }
     }
