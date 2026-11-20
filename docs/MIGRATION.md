@@ -498,6 +498,31 @@ sont celles du volet : `couleurs::palette()` = `apparence::couleurs_pastilles()`
   le volet avec `palette()[rang]`).
 Exemple et captures sans fenêtre : `cargo run --example couleurs -- <dossier>`.
 
+## Les sections repliables dans les Paramètres (branche `section-repliable`, pour tous, en option)
+
+Rien d'existant ne change. Dans une page, `Contexte` sait dessiner une section repliable, comme
+l'« Expander » des Paramètres de Windows 11 :
+```ignore
+page.section_repliable(ui, "Réglages avancés", "Pour les cas rares.", &["Délai de veille"],
+    |ui, page| { /* les cartes de la section ; `page` signale les changements */ });
+```
+(`section_repliable_avec_icone` ajoute une icône à gauche du titre.) L'en-tête est une carte : titre,
+explication, chevron « ∨ » à droite qui tourne de 180° en 83 ms (rien si Windows a coupé les effets
+d'animation). **Repliée à chaque ouverture des Paramètres** ; l'état est gardé par page et par titre :
+deux sections d'une même page ne doivent pas porter le même titre. Au clavier, l'en-tête prend le
+focus ; Entrée et Espace l'ouvrent et la ferment ; pour les lecteurs d'écran : un bouton « ouvert » ou
+« fermé ». Le contenu reçoit `page` en second argument (la page ne pourrait pas servir deux fois).
+- **La recherche** : quand on arrive sur la page en la choisissant dans « Rechercher un paramètre »,
+  `page.recherche()` rend ce qui était tapé (vide sinon, et oublié dès qu'on change de page à la
+  main). Si tous les mots tapés sont dans le titre ou dans les `mots` de la section
+  (`modele::section_trouvee`, accents et majuscules sans importance), elle s'ouvre une fois ; on peut la
+  refermer. `Parametres::aller_a_par_recherche(cle, tape)` fait la même chose depuis le code (captures).
+- **À faire dans chaque logiciel** : mettre aussi le titre et les `mots` de la section dans
+  `Page::avec_mots` de la page ; sinon la recherche ne trouve pas la page.
+- `dessin::carte_chevron` reste pour ouvrir une **sous-page**.
+
+Exemple et captures sans fenêtre (repliée, ouverte) : `cargo run --example section_repliable -- <dossier>`.
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

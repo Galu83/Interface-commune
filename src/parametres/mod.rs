@@ -66,9 +66,99 @@ pub struct Contexte<'a> {
     a_confirmer: Vec<(String, String, Valeur, Valeur)>,
     groupes_a_confirmer: Vec<(String, Vec<Changement>)>,
     brouillon_a_confirmer: Option<String>,
+    /// La clé de la page qui se dessine (une section repliable se retient par page).
+    page: String,
+    /// Le numéro de cette ouverture des Paramètres : les sections repartent repliées.
+    session: u64,
+    /// Ce qui était tapé dans « Rechercher un paramètre » quand on est arrivé sur cette page.
+    recherche: String,
 }
 
 impl Contexte<'_> {
+    /// Ce qui était tapé dans « Rechercher un paramètre » quand on est arrivé sur cette page
+    /// en la choisissant dans les résultats ; vide si on y est venu autrement. Oublié dès
+    /// qu'on change de page à la main.
+    pub fn recherche(&self) -> &str {
+        &self.recherche
+    }
+
+    /// Une section repliable, comme l'« Expander » de Windows 11 : une carte (`titre`,
+    /// `explication`) qui, cliquée, montre ce que dessine `contenu` (la page `Contexte` lui est
+    /// rendue pour signaler un changement). Repliée à chaque ouverture des Paramètres ; l'état
+    /// est gardé par page et par titre. Quand on arrive par « Rechercher un paramètre » et que
+    /// les mots tapés sont dans le titre ou dans `mots`, elle s'ouvre (une fois ; on peut la
+    /// refermer). Mettre aussi ces `mots` dans [`Page::avec_mots`], sinon la recherche ne
+    /// trouve pas la page. Pour une sous-page, voir `dessin::carte_chevron`.
+    pub fn section_repliable(
+        &mut self,
+        ui: &mut egui::Ui,
+        titre: &str,
+        explication: &str,
+        mots: &[&str],
+        contenu: impl FnOnce(&mut egui::Ui, &mut Contexte<'_>),
+    ) {
+        self.section(ui, None, titre, explication, mots, contenu);
+    }
+
+    /// Comme [`Contexte::section_repliable`], avec une icône (`glyphe`) à gauche du titre.
+    pub fn section_repliable_avec_icone(
+        &mut self,
+        ui: &mut egui::Ui,
+        glyphe: char,
+        titre: &str,
+        explication: &str,
+        mots: &[&str],
+        contenu: impl FnOnce(&mut egui::Ui, &mut Contexte<'_>),
+    ) {
+        self.section(ui, Some(glyphe), titre, explication, mots, contenu);
+    }
+
+    fn section(
+        &mut self,
+        ui: &mut egui::Ui,
+        glyphe: Option<char>,
+        titre: &str,
+        explication: &str,
+        mots: &[&str],
+        contenu: impl FnOnce(&mut egui::Ui, &mut Contexte<'_>),
+    ) {
+        let id = egui::Id::unique(("section_repliable", self.session, &self.page, titre));
+        let id_recherche = id.with("recherche");
+        let ctx = ui.ctx().clone();
+        let mut ouvert = ctx.memory(|m| m.data.get_temp::<bool>(id)).unwrap_or(false);
+        // La recherche ouvre la section une seule fois par texte tapé : après, la main
+        // de l'utilisateur l'emporte.
+        let deja = ctx.memory(|m| m.data.get_temp::<String>(id_recherche));
+        if deja.as_deref() != Some(self.recherche.as_str()) {
+            ctx.memory_mut(|m| m.data.insert_temp(id_recherche, self.recherche.clone()));
+            if modele::section_trouvee(&self.recherche, titre, mots) {
+                ouvert = true;
+            }
+        }
+        // Rotation du chevron : la durée et la courbe de Windows ; aucune animation si
+        // Windows les a coupées.
+        let duree = if effets_d_animation() {
+            crate::theme::FERMETURE_FONDU_MS as f32 / 1000.0
+        } else {
+            0.0
+        };
+        let part = ctx.animate_bool_with_time_and_easing(
+            id.with("rotation"),
+            ouvert,
+            duree,
+            crate::theme::ralenti_a_l_arrivee,
+        );
+        let r = dessin::entete_section(ui, self.palette, id, glyphe, titre, explication, part, ouvert);
+        if r.clicked() {
+            ouvert = !ouvert;
+        }
+        ctx.memory_mut(|m| m.data.insert_temp(id, ouvert));
+        if ouvert {
+            ui.add_space(4.0);
+            contenu(ui, self);
+        }
+    }
+
     /// Le brouillon entier du logiciel ([`Reglages::instantane`]) vient d'être modifié par
     /// l'utilisateur : la bulle « Annuler » (titre `titre`) le remet, d'un coup, tel qu'il
     /// était au début de cette image ([`Reglages::remettre`]). À appeler quand le contenu d'une
@@ -128,6 +218,18 @@ impl Contexte<'_> {
     }
 }
 
+/// « Effets d'animation » de Windows ; hors Windows, toujours oui.
+fn effets_d_animation() -> bool {
+    #[cfg(windows)]
+    {
+        crate::systeme::effets_d_animation()
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
 /// Le logo dessiné, gardé entre deux images (une texture par taille et par thème).
 struct Logo {
     pixels: u32,
@@ -157,7 +259,14 @@ pub struct Parametres {
     /// Les textes avec lesquels la navigation a été faite (une autre langue la refait).
     textes: Textes,
     logo: Option<Logo>,
+    /// Le numéro de cette ouverture (les sections repliables repartent repliées).
+    session: u64,
+    /// Ce qui était tapé dans la recherche quand la page montrée a été choisie.
+    recherche_page: String,
 }
+
+/// Compte les ouvertures des Paramètres, pour que chacune reparte avec des sections repliées.
+static OUVERTURES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl Parametres {
     pub fn new(l: &dyn Reglages, page: Option<&str>) -> Parametres {
@@ -178,6 +287,8 @@ impl Parametres {
             confirmer_effacer: false,
             textes,
             logo: None,
+            session: OUVERTURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            recherche_page: String::new(),
         }
     }
 
@@ -186,7 +297,17 @@ impl Parametres {
         if let Some(i) = self.pages.iter().position(|p| p.cle == cle) {
             self.page = i;
             self.sous_page = None;
+            self.recherche_page.clear();
         }
+    }
+
+    /// Va à la page de cette clé comme si l'utilisateur avait tapé `tape` dans « Rechercher un
+    /// paramètre » puis choisi cette page dans les résultats : les sections repliables qui
+    /// contiennent ces mots s'ouvrent ([`Contexte::recherche`]).
+    pub fn aller_a_par_recherche(&mut self, cle: &str, tape: &str) {
+        self.aller_a(cle);
+        self.recherche = tape.into();
+        self.recherche_page = tape.trim().to_string();
     }
 
     /// La clé de la page montrée.
@@ -519,6 +640,7 @@ impl Parametres {
             if r.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                 self.page = i;
                 self.sous_page = None;
+                self.recherche_page = self.recherche.trim().to_string();
                 self.confirmer_retablir = false;
                 self.confirmer_effacer = false;
             }
@@ -610,6 +732,9 @@ impl Parametres {
             a_confirmer: Vec::new(),
             groupes_a_confirmer: Vec::new(),
             brouillon_a_confirmer: None,
+            page: self.cle().to_string(),
+            session: self.session,
+            recherche: self.recherche_page.clone(),
         };
         dessin(l, ui, &mut c);
         for (cle, titre, avant, apres) in c.changements {

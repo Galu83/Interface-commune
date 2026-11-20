@@ -162,6 +162,19 @@ pub fn chercher(pages: &[Page], tape: &str) -> Vec<usize> {
         .collect()
 }
 
+/// Les mots tapés dans « Rechercher un paramètre » se trouvent-ils dans le titre ou dans les
+/// `mots` d'une section repliable ? Tous les mots tapés doivent s'y trouver (accents et
+/// majuscules sans importance, [`simplifier`]). Rien de tapé : non.
+pub fn section_trouvee(tape: &str, titre: &str, mots: &[&str]) -> bool {
+    let tape = simplifier(tape);
+    let mut tapes = tape.split_whitespace().peekable();
+    if tapes.peek().is_none() {
+        return false;
+    }
+    let texte = simplifier(&format!("{titre} {}", mots.join(" ")));
+    tapes.all(|m| texte.contains(m))
+}
+
 /// La valeur d'un réglage, telle que la bulle « Annuler » la rend au logiciel.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Valeur {
@@ -847,5 +860,20 @@ mod tests {
         );
         assert_eq!(r.valeurs, vec![("mode".to_string(), Valeur::Booleen(false))]);
         assert!(c.revenir().est_vide());
+    }
+
+    /// La recherche ouvre une section : accents, plusieurs mots, rien de tapé.
+    #[test]
+    fn section_ouverte_par_la_recherche() {
+        let mots = ["Luminosité", "Contraste"];
+        assert!(section_trouvee("ecran", "Écrans", &mots));
+        assert!(section_trouvee("LUMINOSITE", "Écrans", &mots));
+        assert!(section_trouvee("contraste ecrans", "Écrans", &mots));
+        assert!(section_trouvee("  contr ", "Écrans", &mots));
+        assert!(!section_trouvee("contraste volume", "Écrans", &mots));
+        assert!(!section_trouvee("", "Écrans", &mots));
+        assert!(!section_trouvee("   ", "Écrans", &mots));
+        assert!(!section_trouvee("son", "Écrans", &[]));
+        assert!(section_trouvee("avancé", "Réglages avancés", &[]));
     }
 }

@@ -434,6 +434,67 @@ pub fn carte_chevron(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str, explic
     r.clicked()
 }
 
+/// L'en-tête d'une section repliable, à la façon de l'« Expander » de Windows 11 : une carte
+/// (icône facultative, titre, explication) dont toute la surface se clique, et un chevron vers le bas
+/// à droite qui tourne de 180° à l'ouverture. `part` : 0 (replié) à 1 (ouvert), pour la
+/// rotation ; `ouvert` : l'état voulu (annoncé aux lecteurs d'écran). Le clavier : l'en-tête
+/// prend le focus, Entrée et Espace comptent comme un clic. `id` : l'identité de la section.
+#[allow(clippy::too_many_arguments)]
+pub fn entete_section(
+    ui: &mut Ui,
+    p: &Palette,
+    id: egui::Id,
+    glyphe: Option<char>,
+    texte: &str,
+    explication: &str,
+    part: f32,
+    ouvert: bool,
+) -> Response {
+    let r = cadre_carte(p).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            ui.set_min_height(48.0);
+            if let Some(g) = glyphe {
+                let (r, _) = ui.allocate_exact_size(Vec2::new(28.0, 32.0), Sense::hover());
+                icone(ui, r.center(), g, 20.0, p.texte);
+                ui.add_space(8.0);
+            }
+            ui.vertical(|ui| {
+                ui.add_space(4.0);
+                ui.label(texte);
+                if !explication.is_empty() {
+                    ui.label(
+                        egui::RichText::new(explication)
+                            .size(crate::theme::TAILLE_PETIT)
+                            .color(couleur(p.texte_secondaire)),
+                    );
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (r, _) = ui.allocate_exact_size(vec2(24.0, 32.0), Sense::hover());
+                chevron_qui_tourne(ui, r.center(), part, p.texte_secondaire);
+            });
+        });
+    });
+    let r = ui.interact(r.response.rect, id.with("entete"), Sense::click());
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, texte));
+    ui.ctx().accesskit_node_builder(r.id, |n| n.set_expanded(ouvert));
+    focus(ui, p, &r, crate::theme::ARRONDI_CARTE);
+    r.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Un chevron vers le bas de 12 points centré en `centre`, tourné de `part` demi-tour (0 : vers le
+/// bas ; 1 : vers le haut).
+fn chevron_qui_tourne(ui: &Ui, centre: egui::Pos2, part: f32, c: Rgb) {
+    let angle = part.clamp(0.0, 1.0) * std::f32::consts::PI;
+    let (s, co) = angle.sin_cos();
+    let point = |x: f32, y: f32| centre + vec2(x * co - y * s, x * s + y * co);
+    ui.painter().add(egui::Shape::line(
+        vec![point(-5.0, -2.5), point(0.0, 2.5), point(5.0, -2.5)],
+        Stroke::new(1.5, couleur(c)),
+    ));
+}
+
 fn carte_avec(
     ui: &mut Ui,
     p: &Palette,
