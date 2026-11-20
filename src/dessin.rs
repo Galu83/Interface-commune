@@ -377,7 +377,7 @@ pub fn carte(
     explication: &str,
     controle: impl FnOnce(&mut Ui),
 ) {
-    carte_avec(ui, p, glyphe, texte, explication, 200.0, controle);
+    carte_avec(ui, p, glyphe, texte, explication, 200.0, Some(controle));
 }
 
 /// Une carte dont les contrôles prennent `place` points (plusieurs boutons).
@@ -390,12 +390,12 @@ pub fn carte_large(
     place: f32,
     controle: impl FnOnce(&mut Ui),
 ) {
-    carte_avec(ui, p, glyphe, texte, explication, place, controle);
+    carte_avec(ui, p, glyphe, texte, explication, place, Some(controle));
 }
 
 /// Une carte d'information, sans contrôle : le texte prend toute la largeur.
 pub fn carte_info(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str, explication: &str) {
-    carte_avec(ui, p, glyphe, texte, explication, 0.0, |_| {});
+    carte_avec(ui, p, glyphe, texte, explication, 0.0, None::<fn(&mut Ui)>);
 }
 
 /// Une carte qui ouvre une sous-page : toute la carte se clique, un chevron « › » à droite.
@@ -502,7 +502,7 @@ fn carte_avec(
     texte: &str,
     explication: &str,
     place_controle: f32,
-    controle: impl FnOnce(&mut Ui),
+    controle: Option<impl FnOnce(&mut Ui)>,
 ) {
     cadre_carte(p).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -527,7 +527,10 @@ fn carte_avec(
                     );
                 }
             });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), controle);
+            // Sans contrôle, pas de bloc vide : il ajouterait un espacement (8 pt) après le texte.
+            if let Some(controle) = controle {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), controle);
+            }
         });
     });
 }
