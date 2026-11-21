@@ -16,6 +16,13 @@
 //! le signale à [`crate::autres_fenetres::affichage_change`] : les fenêtres pas encore créées
 //! attendent alors 1 s.
 //!
+//! Si une icône existe déjà quand la zone l'ajoute (Explorateur redémarré, reste d'une
+//! instance arrêtée brutalement), elle est modifiée à la place : l'ajout ne se perd pas.
+//!
+//! Quand la session Windows se ferme (déconnexion, arrêt), le logiciel n'a que quelques secondes
+//! pour enregistrer : [`Zone::sur_fin_de_session`] lui donne la main **pendant** le message
+//! (voir [`FinDeSession`]).
+//!
 //! Un clic dit **quelle icône** et **où elle est** ([`Evenement`]). Le menu gris de Windows
 //! ([`Zone::menu_windows`]), avec cases cochées et sous-menus, sert de secours quand les
 //! fenêtres modernes ne peuvent pas s'ouvrir.
@@ -63,8 +70,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DestroyMenu, DestroyWindow, GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON, HMENU, ICONINFO,
     MENU_ITEM_FLAGS, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterClassW,
     RegisterWindowMessageW, SetForegroundWindow, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, TrackPopupMenu, WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_NULL, WNDCLASSW,
-    WS_OVERLAPPED,
+    TPM_RIGHTBUTTON, TrackPopupMenu, WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL,
+    WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{GUID, HSTRING, PCWSTR};
 
@@ -179,6 +186,53 @@ pub struct Evenement {
     pub rect: Rect,
 }
 
+/// La fin de la session Windows (`WM_ENDSESSION` avec `wparam` vrai) : déconnexion, arrêt ou
+/// redémarrage de l'ordinateur. **Windows ne laisse que quelques secondes** (selon le réglage
+/// du système), puis arrête le programme sans prévenir, parfois dès que la procédure de la
+/// fenêtre cachée a rendu la main : le logiciel doit enregistrer ce qui ne l'est pas encore
+/// *pendant* le message.
+///
+/// Deux façons de la lire :
+/// - **synchrone, à privilégier** : [`Zone::sur_fin_de_session`] donne une fonction appelée par
+///   la procédure de la fenêtre cachée, sur le fil de la zone ; Windows attend son retour
+///   (le programme peut être arrêté dès qu'elle rend la main) ;
+/// - **après coup** : [`Zone::fin_de_session`], à lire après `DispatchMessageW`. Trop tard pour
+///   enregistrer si la session se ferme vraiment : à garder pour un simple signal (arrêter une
+///   boucle, ne plus rien proposer à l'utilisateur).
+///
+/// Un logiciel qui utilise `horloge::Horloge` reçoit le même message dans son récepteur
+/// (`horloge::Recepteur`, appelé de façon synchrone) : [`FinDeSession::de`] le décode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FinDeSession {
+    /// `ENDSESSION_LOGOFF` : l'utilisateur ferme sa session (et non un arrêt de l'ordinateur).
+    pub deconnexion: bool,
+    /// `ENDSESSION_CRITICAL` : la session se ferme tout de suite, quoi que fasse le logiciel
+    /// (pas d'attente, pas de boîte de dialogue).
+    pub critique: bool,
+    /// `ENDSESSION_CLOSEAPP` : Windows ferme les programmes pour une mise à jour (le gestionnaire
+    /// de redémarrage) ; la session, elle, continue.
+    pub application: bool,
+}
+
+impl FinDeSession {
+    /// Le message décodé : `Some` pour `WM_ENDSESSION` avec `wparam` vrai (la session se ferme
+    /// pour de bon), `None` sinon (autre message, ou fermeture annulée : `wparam` faux).
+    pub fn de(message: u32, wparam: usize, lparam: isize) -> Option<FinDeSession> {
+        const ENDSESSION_CLOSEAPP: u32 = 0x0000_0001;
+        const ENDSESSION_CRITICAL: u32 = 0x4000_0000;
+        const ENDSESSION_LOGOFF: u32 = 0x8000_0000;
+        if message != WM_ENDSESSION || wparam == 0 {
+            return None;
+        }
+        let options = lparam as u32;
+        Some(FinDeSession {
+            deconnexion: options & ENDSESSION_LOGOFF != 0,
+            critique: options & ENDSESSION_CRITICAL != 0,
+            application: options & ENDSESSION_CLOSEAPP != 0,
+        })
+    }
+}
+
 /// Le GUID stable d'une icône : tiré de `graine` (propre au logiciel), du chemin du programme
 /// (Windows refuse un GUID déjà pris par un autre chemin) et de l'identifiant de l'icône. Un
 /// GUID de version 4 ordinaire.
@@ -205,6 +259,27 @@ pub fn raccourcir(texte: &str, max: usize) -> String {
         texte.to_string()
     } else {
         texte.chars().take(max.saturating_sub(1)).collect::<String>() + "…"
+    }
+}
+
+/// Ajoute une icône à la zone, même si elle y est déjà. `ajout` : `NIM_ADD` ; `modif` :
+/// `NIM_MODIFY` avec les mêmes données ; `version` : `NIM_SETVERSION` (version 4).
+///
+/// `NIM_ADD` échoue quand l'icône existe déjà : l'Explorateur redémarré (« TaskbarCreated »)
+/// qui l'a gardée, ou une icône restée d'une instance précédente arrêtée brutalement. On la
+/// modifie alors à la place (image, info-bulle, message de rappel), puis on redemande la
+/// version 4, que Windows peut avoir perdue. Vrai si l'ajout ou la modification a réussi ;
+/// faux si Windows refuse les deux (la version n'est alors pas redemandée).
+pub(crate) fn ajouter_avec_repli(
+    ajout: impl FnOnce() -> bool,
+    modif: impl FnOnce() -> bool,
+    version: impl FnOnce(),
+) -> bool {
+    if ajout() || modif() {
+        version();
+        true
+    } else {
+        false
     }
 }
 
@@ -358,6 +433,9 @@ struct Posee {
     dans_la_barre: bool,
 }
 
+/// Ce que le logiciel fait de la fin de session ([`Zone::sur_fin_de_session`]).
+type SurFinDeSession = Box<dyn FnMut(&FinDeSession)>;
+
 /// Ce que partagent la zone et la procédure de sa fenêtre (même fil).
 #[derive(Default)]
 struct Partage {
@@ -367,6 +445,10 @@ struct Partage {
     taskbar_created: u32,
     /// L'Explorateur a redémarré : toutes les icônes sont à remettre.
     a_remettre: bool,
+    /// La session se ferme (lu par [`Zone::fin_de_session`]).
+    fin_de_session: Option<FinDeSession>,
+    /// Ce que le logiciel fait tout de suite de la fin de session ([`Zone::sur_fin_de_session`]).
+    sur_fin_de_session: Option<SurFinDeSession>,
 }
 
 /// Plusieurs icônes près de l'horloge, sur le fil qui l'a créée (voir le module).
@@ -528,17 +610,21 @@ impl Zone {
         ok
     }
 
-    /// `NIM_ADD` puis la version 4 (gestes complets, point du geste dans `wparam`).
+    /// `NIM_ADD` puis la version 4 (gestes complets, point du geste dans `wparam`) ; si
+    /// l'icône existe déjà, `NIM_MODIFY` à la place (voir [`ajouter_avec_repli`]).
     fn ajouter(&self, d: &mut NOTIFYICONDATAW, message: u32) -> bool {
         d.uFlags |= NIF_MESSAGE;
         d.uCallbackMessage = message;
         d.Anonymous.uVersion = NOTIFYICON_VERSION_4;
-        // SAFETY: `d` est local, complet et de la taille annoncée.
-        unsafe {
-            let ok = Shell_NotifyIconW(NIM_ADD, d).as_bool();
-            let _ = Shell_NotifyIconW(NIM_SETVERSION, d);
-            ok
-        }
+        let d: &NOTIFYICONDATAW = d;
+        ajouter_avec_repli(
+            // SAFETY (les trois appels) : `d` est local, complet et de la taille annoncée.
+            || unsafe { Shell_NotifyIconW(NIM_ADD, d) }.as_bool(),
+            || unsafe { Shell_NotifyIconW(NIM_MODIFY, d) }.as_bool(),
+            || {
+                let _ = unsafe { Shell_NotifyIconW(NIM_SETVERSION, d) };
+            },
+        )
     }
 
     fn message_libre(&self) -> Option<u32> {
@@ -599,6 +685,29 @@ impl Zone {
             Ok(mut p) => p.evenements.drain(..).collect(),
             Err(_) => Vec::new(),
         }
+    }
+
+    /// Ce que le logiciel fait **tout de suite** quand la session Windows se ferme
+    /// ([`FinDeSession`]) : `f` est appelée par la procédure de la fenêtre cachée, sur ce fil,
+    /// pendant `WM_ENDSESSION`, et Windows attend son retour. C'est là qu'il faut enregistrer
+    /// ce qui ne l'est pas encore (rapidement : l'arrêt n'attend que quelques secondes), sans
+    /// rien ouvrir ni attendre l'utilisateur. Remplace la fonction précédente, s'il y en avait
+    /// une.
+    ///
+    /// `f` s'exécute pendant `DispatchMessageW` : elle ne touche pas à la zone (qui est
+    /// empruntée par la boucle du logiciel) ; elle appelle ce que le logiciel partage déjà
+    /// avec sa boucle (un `Rc<RefCell<…>>`, un fichier à écrire…).
+    pub fn sur_fin_de_session(&mut self, f: impl FnMut(&FinDeSession) + 'static) {
+        if let Ok(mut p) = self.partage.try_borrow_mut() {
+            p.sur_fin_de_session = Some(Box::new(f));
+        }
+    }
+
+    /// La fin de session reçue depuis le dernier appel, s'il y en a eu une (`None` ensuite).
+    /// À lire après `DispatchMessageW`, comme [`Zone::evenements`] : c'est un simple signal,
+    /// **trop tardif pour enregistrer** (voir [`FinDeSession`] et [`Zone::sur_fin_de_session`]).
+    pub fn fin_de_session(&mut self) -> Option<FinDeSession> {
+        self.partage.try_borrow_mut().ok()?.fin_de_session.take()
     }
 
     /// L'Explorateur a redémarré : chaque icône est remise, avec son image et son info-bulle.
@@ -736,6 +845,28 @@ impl Drop for Zone {
     }
 }
 
+/// Note la fin de session, puis appelle la fonction du logiciel ([`Zone::sur_fin_de_session`]).
+/// La fonction est sortie de l'état partagé pendant l'appel : si elle appelle la zone, rien
+/// n'est emprunté deux fois ; elle est remise après, sauf si elle en a posé une autre.
+fn signaler_fin_de_session(partage: Option<&RefCell<Partage>>, fin: FinDeSession) {
+    let Some(partage) = partage else { return };
+    let mut f = {
+        let Ok(mut p) = partage.try_borrow_mut() else {
+            return;
+        };
+        p.fin_de_session = Some(fin);
+        p.sur_fin_de_session.take()
+    };
+    if let Some(f) = f.as_mut() {
+        f(&fin);
+    }
+    if let Ok(mut p) = partage.try_borrow_mut()
+        && p.sur_fin_de_session.is_none()
+    {
+        p.sur_fin_de_session = f;
+    }
+}
+
 extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     if msg == WM_DISPLAYCHANGE {
         // Windows refait l'affichage (écran retiré, rendu, autre résolution) : les fenêtres pas
@@ -746,6 +877,13 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
     // SAFETY: la valeur rangée est 0 ou l'adresse du `Partage` de la zone, valable jusqu'à
     // ce que `Drop` la remette à 0 ; les messages arrivent sur ce même fil.
     let partage = unsafe { GetWindowLongPtrW(h, GWLP_USERDATA) } as *const RefCell<Partage>;
+    if let Some(fin) = FinDeSession::de(msg, wp.0, lp.0) {
+        // La session se ferme : le logiciel enregistre maintenant, avant que Windows ne
+        // reprenne la main. Zéro : message traité.
+        // SAFETY: voir ci-dessus.
+        signaler_fin_de_session(unsafe { partage.as_ref() }, fin);
+        return LRESULT(0);
+    }
     // SAFETY: voir ci-dessus.
     if let Some(p) = unsafe { partage.as_ref() }
         && let Ok(mut p) = p.try_borrow_mut()
@@ -1080,6 +1218,107 @@ mod essais {
     fn image_depuis_rvba() {
         let i = Image::depuis_rvba(1, vec![1, 2, 3, 4]);
         assert_eq!(i.bgra, [3, 2, 1, 4]);
+    }
+
+    /// L'ajout d'une icône : `NIM_ADD` seul s'il réussit ; sinon `NIM_MODIFY` (icône déjà là) ;
+    /// la version 4 est redemandée après l'un ou l'autre, jamais si les deux échouent.
+    #[test]
+    fn ajout_avec_repli_sur_la_modification() {
+        use std::cell::Cell;
+        let essai = |ajout: bool, modif: bool| {
+            let (a, m, v) = (Cell::new(0), Cell::new(0), Cell::new(0));
+            let ok = ajouter_avec_repli(
+                || {
+                    a.set(a.get() + 1);
+                    ajout
+                },
+                || {
+                    m.set(m.get() + 1);
+                    modif
+                },
+                || v.set(v.get() + 1),
+            );
+            (ok, a.get(), m.get(), v.get())
+        };
+        // Ajout réussi : pas de modification.
+        assert_eq!(essai(true, false), (true, 1, 0, 1));
+        // L'icône existe déjà : la modification la remet, puis la version 4.
+        assert_eq!(essai(false, true), (true, 1, 1, 1));
+        // Windows refuse tout : faux, et pas de version à redemander.
+        assert_eq!(essai(false, false), (false, 1, 1, 0));
+    }
+
+    /// `WM_ENDSESSION` n'est une fin de session que si `wparam` est vrai ; les options de
+    /// `lparam` sont décodées, tout autre message est ignoré.
+    #[test]
+    fn fin_de_session_decodee() {
+        const WM_QUERYENDSESSION: u32 = 0x0011;
+        assert_eq!(
+            FinDeSession::de(WM_ENDSESSION, 1, 0),
+            Some(FinDeSession::default())
+        );
+        // Fermeture annulée par un autre logiciel : rien à enregistrer.
+        assert_eq!(FinDeSession::de(WM_ENDSESSION, 0, 0), None);
+        assert_eq!(FinDeSession::de(WM_QUERYENDSESSION, 1, 0), None);
+        assert_eq!(FinDeSession::de(WM_DISPLAYCHANGE, 1, 0), None);
+        let deconnexion = FinDeSession::de(WM_ENDSESSION, 1, 0x8000_0000_u32 as isize).unwrap();
+        assert_eq!(
+            deconnexion,
+            FinDeSession {
+                deconnexion: true,
+                ..Default::default()
+            }
+        );
+        let tout = FinDeSession::de(WM_ENDSESSION, 1, 0xC000_0001_u32 as isize).unwrap();
+        assert!(tout.deconnexion && tout.critique && tout.application);
+        // Les bits hauts d'un `lparam` de 64 bits ne comptent pas.
+        let large = (1isize << 40) | 0x4000_0000;
+        let c = FinDeSession::de(WM_ENDSESSION, 1, large).unwrap();
+        assert!(c.critique && !c.deconnexion && !c.application);
+    }
+
+    /// La fenêtre cachée, pour de vrai : `WM_ENDSESSION` (envoyé, comme Windows le fait) appelle
+    /// la fonction du logiciel **avant le retour** du message, avec les options ; il reste lisible
+    /// ensuite par `fin_de_session` ; une fermeture annulée (`wparam` faux) n'appelle rien ; la
+    /// fonction est gardée d'un message à l'autre ; une fonction qui appelle la zone ne bloque rien.
+    #[test]
+    fn fin_de_session_recue_par_la_fenetre_cachee() {
+        use std::rc::Rc;
+        use windows::Win32::UI::WindowsAndMessaging::SendMessageW;
+        let mut z = Zone::creer("EssaiZoneFin", "Essai").unwrap();
+        assert_eq!(z.fin_de_session(), None);
+        let vus: Rc<RefCell<Vec<FinDeSession>>> = Rc::default();
+        let notes = vus.clone();
+        z.sur_fin_de_session(move |f| notes.borrow_mut().push(*f));
+        let fenetre = z.fenetre;
+        let envoyer = |wp: usize, lp: isize| {
+            // SAFETY: fenêtre de ce fil, message sans pointeur ; la procédure rend la main avant
+            // le retour de `SendMessageW`.
+            unsafe { SendMessageW(fenetre, WM_ENDSESSION, Some(WPARAM(wp)), Some(LPARAM(lp))) }
+        };
+        // Annulée : rien.
+        assert_eq!(envoyer(0, 0).0, 0);
+        assert!(vus.borrow().is_empty());
+        assert_eq!(z.fin_de_session(), None);
+        // Déconnexion : la fonction a déjà tout vu au retour du message.
+        assert_eq!(envoyer(1, 0x8000_0000_u32 as isize).0, 0, "message traité");
+        assert_eq!(
+            *vus.borrow(),
+            [FinDeSession {
+                deconnexion: true,
+                ..Default::default()
+            }]
+        );
+        assert_eq!(z.fin_de_session().map(|f| f.deconnexion), Some(true));
+        assert_eq!(z.fin_de_session(), None, "lue une seule fois");
+        // La fonction est gardée : un arrêt, ensuite.
+        envoyer(1, 0);
+        assert_eq!(vus.borrow().len(), 2);
+        // Sans fonction du logiciel : le signal reste lisible, sans erreur.
+        let mut z2 = Zone::creer("EssaiZoneFin2", "Essai").unwrap();
+        // SAFETY: comme ci-dessus, pour la seconde fenêtre.
+        unsafe { SendMessageW(z2.fenetre, WM_ENDSESSION, Some(WPARAM(1)), Some(LPARAM(0))) };
+        assert!(z2.fin_de_session().is_some());
     }
 
     /// La fenêtre cachée, pour de vrai, sans rien montrer : aucune icône n'est donnée à

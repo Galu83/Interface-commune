@@ -312,6 +312,11 @@ pub struct MessageWindows {
 /// `None` : Windows fait le traitement par défaut. Il voit aussi, sans pouvoir les arrêter,
 /// `WM_QUERYENDSESSION`, `WM_ENDSESSION`, `WM_SETTINGCHANGE` et `WM_DISPLAYCHANGE`. Il ne voit jamais les
 /// messages propres à la bibliothèque.
+///
+/// **Fin de session** : le récepteur est appelé de façon synchrone, avant que la bibliothèque
+/// ferme ses fenêtres. C'est là qu'enregistrer, sans attendre : Windows ne laisse que quelques
+/// secondes. `crate::zone::FinDeSession::de(message, wparam, lparam)` décode `WM_ENDSESSION`
+/// (`Some` seulement si la session se ferme vraiment).
 pub type Recepteur = Box<dyn FnMut(&MessageWindows) -> Option<isize>>;
 
 /// Ce que le logiciel fait des arguments d'un second lancement ([`Reveil::Arguments`]), sur le
@@ -794,12 +799,17 @@ impl Principal {
         d.hIcon = self.icone.unwrap_or_default();
         copier(&mut d.szTip, &self.infobulle);
         d.Anonymous.uVersion = NOTIFYICON_VERSION_4;
-        // SAFETY: `d` est local, complet et de la taille annoncée.
         crate::sonde::etape("Shell_NotifyIcon (ajout de l'icône)");
-        unsafe {
-            let _ = Shell_NotifyIconW(NIM_ADD, &d);
-            let _ = Shell_NotifyIconW(NIM_SETVERSION, &d);
-        }
+        // Icône déjà là (Explorateur redémarré, reste d'une instance précédente) : modifiée à
+        // la place, comme dans `zone`.
+        crate::zone::ajouter_avec_repli(
+            // SAFETY (les trois appels) : `d` est local, complet et de la taille annoncée.
+            || unsafe { Shell_NotifyIconW(NIM_ADD, &d) }.as_bool(),
+            || unsafe { Shell_NotifyIconW(NIM_MODIFY, &d) }.as_bool(),
+            || {
+                let _ = unsafe { Shell_NotifyIconW(NIM_SETVERSION, &d) };
+            },
+        );
     }
 
     fn modifier_icone(&self) {
