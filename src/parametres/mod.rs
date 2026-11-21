@@ -258,6 +258,9 @@ pub struct Parametres {
     pub confirmer_effacer: bool,
     /// Les textes avec lesquels la navigation a été faite (une autre langue la refait).
     textes: Textes,
+    /// L'Accueil et les clés des pages propres avec lesquels la navigation a été faite :
+    /// des pages qui changent (arrivées après l'ouverture) la refont.
+    faite_avec: (bool, Vec<String>),
     logo: Option<Logo>,
     /// Le numéro de cette ouverture (les sections repliables repartent repliées).
     session: u64,
@@ -271,7 +274,10 @@ static OUVERTURES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::
 impl Parametres {
     pub fn new(l: &dyn Reglages, page: Option<&str>) -> Parametres {
         let textes = l.textes().clone();
-        let pages = modele::navigation(&textes, l.accueil(), &l.pages());
+        let accueil = l.accueil();
+        let propres = l.pages();
+        let faite_avec = (accueil, propres.iter().map(|p| p.cle.clone()).collect());
+        let pages = modele::navigation(&textes, accueil, &propres);
         let page = modele::rang_de_page(&pages, page);
         Parametres {
             pages,
@@ -286,6 +292,7 @@ impl Parametres {
             confirmer_retablir: false,
             confirmer_effacer: false,
             textes,
+            faite_avec,
             logo: None,
             session: OUVERTURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             recherche_page: String::new(),
@@ -432,15 +439,36 @@ impl Parametres {
         remplir(l.textes().parametres_de, &[&l.identite().nom])
     }
 
-    /// La langue a changé : la navigation est refaite, sur la même page.
-    fn suivre_la_langue(&mut self, l: &dyn Reglages) {
-        if *l.textes() == self.textes {
+    /// La langue, l'Accueil ou les pages propres ont changé (des pages envoyées après
+    /// l'ouverture, par exemple) : la navigation est refaite. La page montrée reste si elle
+    /// existe encore, sinon Général. Appelé à chaque image par [`Parametres::dessiner`] ; la
+    /// comparaison ne porte que sur les clés.
+    pub fn suivre(&mut self, l: &dyn Reglages) {
+        let accueil = l.accueil();
+        let propres = l.pages();
+        let langue = *l.textes() != self.textes;
+        let memes_pages = self.faite_avec.0 == accueil
+            && self.faite_avec.1.len() == propres.len()
+            && self.faite_avec.1.iter().zip(&propres).all(|(a, p)| *a == p.cle);
+        if !langue && memes_pages {
             return;
         }
         let cle = self.cle().to_string();
-        self.textes = l.textes().clone();
-        self.pages = modele::navigation(&self.textes, l.accueil(), &l.pages());
-        self.page = modele::rang_de_page(&self.pages, Some(&cle));
+        if langue {
+            self.textes = l.textes().clone();
+        }
+        if !memes_pages {
+            self.faite_avec = (accueil, propres.iter().map(|p| p.cle.clone()).collect());
+        }
+        self.pages = modele::navigation(&self.textes, accueil, &propres);
+        match self.pages.iter().position(|p| p.cle == cle) {
+            Some(i) => self.page = i,
+            None => {
+                self.page = modele::rang_de_page(&self.pages, Some(modele::GENERAL));
+                self.sous_page = None;
+                self.recherche_page.clear();
+            }
+        }
     }
 
     /// La largeur de la navigation (points) : ce qu'il faut à l'en-tête et aux noms des
@@ -473,7 +501,7 @@ impl Parametres {
 
     /// Toute la fenêtre : navigation et page.
     pub fn dessiner(&mut self, ui: &mut egui::Ui, p: &Palette, l: &dyn Reglages) {
-        self.suivre_la_langue(l);
+        self.suivre(l);
         self.tic(l);
         let largeur = self.largeur_navigation(ui, l);
         let [g, d, h, b] = MARGE_NAVIGATION;

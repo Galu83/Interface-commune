@@ -577,6 +577,18 @@ Exemple et captures sans fenêtre (repliée, ouverte) : `cargo run --example sec
 
 Exemple et captures sans fenêtre : `cargo run --example mise_a_jour -- <dossier>`.
 
+## Les pages envoyées après l'ouverture des Paramètres (branche `parametres-pages-tardives`, pour tous)
+
+- **La navigation suit les pages** : à chaque image, si `Reglages::accueil()` ou les clés de
+  `Reglages::pages()` ont changé (des pages arrivées après l'ouverture, d'un autre processus par
+  exemple), la liste des pages est refaite. La page montrée reste si elle existe encore, sinon
+  Général. Seules les clés sont comparées : un titre changé sous la même clé ne refait rien.
+- `pages()` est donc appelé à chaque image des Paramètres : il doit rester bon marché (pas de
+  lecture de disque).
+- Nouveau, public : `Parametres::suivre(&reglages)` (déjà appelé par `Parametres::dessiner`).
+  Rien à changer dans les logiciels ; Vocalis peut retirer son contournement (pages envoyées
+  d'avance).
+
 ## Pour tous
 
 - `deny.toml` : `allow-git` pour ce dépôt seul.

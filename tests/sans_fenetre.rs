@@ -1622,3 +1622,79 @@ fn choix_illustres_alignes() {
         x(attendu);
     }
 }
+
+/// Un logiciel dont les pages arrivent après l'ouverture des Paramètres (cas d'une interface
+/// qui reçoit sa description d'un autre processus).
+struct Tardif {
+    identite: Identite,
+    accueil: AtomicBool,
+    pages: Mutex<Vec<Page>>,
+}
+
+impl Reglages for Tardif {
+    fn identite(&self) -> &Identite {
+        &self.identite
+    }
+
+    fn action(&self, _: &str) {}
+
+    fn rechercher_mise_a_jour(&self) {}
+
+    fn accueil(&self) -> bool {
+        self.accueil.load(Ordering::Relaxed)
+    }
+
+    fn pages(&self) -> Vec<Page> {
+        self.pages.lock().expect("verrou").clone()
+    }
+
+    fn communs(&self) -> Communs {
+        Communs::default()
+    }
+
+    fn changer(&self, _: &str, _: Valeur) {}
+}
+
+/// Des pages qui arrivent après l'ouverture apparaissent dans la navigation à l'image
+/// suivante ; la page choisie est gardée ; une page qui disparaît ramène à Général.
+#[test]
+fn pages_arrivees_apres_l_ouverture() {
+    let l = Tardif {
+        identite: identite(),
+        accueil: AtomicBool::new(false),
+        pages: Mutex::new(Vec::new()),
+    };
+    let cles = |s: &Parametres| s.pages.iter().map(|p| p.cle.clone()).collect::<Vec<_>>();
+    let mut s = Parametres::new(&l, None);
+    assert_eq!(cles(&s), ["general", "mise_a_jour", "a_propos"]);
+    s.aller_a("a_propos");
+
+    // Les pages arrivent : la navigation les montre, « À propos » reste choisie.
+    l.accueil.store(true, Ordering::Relaxed);
+    *l.pages.lock().expect("verrou") = vec![
+        Page::new("voix", "Voix", '\u{E720}'),
+        Page::new("lecture", "Lecture", '\u{E7BE}'),
+    ];
+    image_parametres(&mut s, &l);
+    assert_eq!(
+        cles(&s),
+        ["accueil", "voix", "lecture", "general", "mise_a_jour", "a_propos"]
+    );
+    assert_eq!(s.cle(), "a_propos");
+
+    // Une page propre choisie reste choisie quand une autre s'ajoute devant elle.
+    s.aller_a("lecture");
+    l.pages
+        .lock()
+        .expect("verrou")
+        .insert(0, Page::new("dictee", "Dictée", '\u{E720}'));
+    s.suivre(&l);
+    assert_eq!(s.cle(), "lecture");
+    assert_eq!(s.pages.len(), 7);
+
+    // La page montrée disparaît : retour à Général.
+    l.pages.lock().expect("verrou").retain(|p| p.cle != "lecture");
+    s.suivre(&l);
+    assert_eq!(s.cle(), "general");
+    assert!(!cles(&s).contains(&"lecture".to_string()));
+}
