@@ -58,9 +58,13 @@ pub const ECLAIR: char = '\u{E945}';
 /// Un écran en veille : la lune d'un choix illustré du volet.
 pub const LUNE: char = '\u{E708}';
 
+/// « Ouvrir <logiciel> », en tête du petit menu (fenêtre principale).
+pub const OUVRIR: char = '\u{E8A7}';
+
 /// Toutes les icônes communes, pour le contrôle des polices.
-pub const TOUTES: [char; 24] = [
+pub const TOUTES: [char; 25] = [
     REGLAGES,
+    OUVRIR,
     MISE_A_JOUR,
     A_PROPOS,
     QUITTER,

@@ -73,7 +73,9 @@ fn version(l: &dyn Logiciel) -> String {
 }
 
 fn lignes_du_menu(l: &dyn Logiciel) -> Vec<Option<menu::Ligne>> {
-    menu::lignes(l.textes(), &l.actions_menu(), &l.lignes_en_plus())
+    // « Ouvrir <logiciel> » en tête, seulement s'il a une fenêtre principale.
+    let nom = l.fenetre_principale().map(|_| l.identite().nom.as_str());
+    menu::lignes_avec(l.textes(), nom, &l.actions_menu(), &l.lignes_en_plus())
 }
 
 /// Les briques de la surface à cette image : la liste, puis le pied fixe (aucune pour le
@@ -107,7 +109,12 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique],
                 .iter()
                 .flatten()
                 .map(|li| {
-                    dessin::largeur_ligne(mesure(&li.texte, egui::FontId::proportional(TAILLE_TEXTE)), None)
+                    let police = if li.quoi == Choix::Ouvrir {
+                        semibold(TAILLE_TEXTE)
+                    } else {
+                        egui::FontId::proportional(TAILLE_TEXTE)
+                    };
+                    dessin::largeur_ligne(mesure(&li.texte, police), None)
                 })
                 .fold(0.0, f32::max),
         ),
@@ -395,7 +402,12 @@ pub fn dessiner_menu(ui: &mut egui::Ui, p: &Palette, l: &dyn Logiciel) -> Option
         match li {
             None => separateur(ui, p),
             Some(li) => {
-                if ligne_menu(ui, p, li.icone, &li.texte).clicked() {
+                let r = if li.quoi == Choix::Ouvrir {
+                    dessin::ligne_menu_grasse(ui, p, li.icone, &li.texte)
+                } else {
+                    ligne_menu(ui, p, li.icone, &li.texte)
+                };
+                if r.clicked() {
                     choisi = Some(Choisi::Menu(li.quoi));
                 }
             }

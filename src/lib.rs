@@ -339,6 +339,15 @@ pub trait Reglages: Send + Sync + 'static {
     fn retenir_place(&self, _place: place::Place) {}
 }
 
+/// La fenêtre principale d'un logiciel ([`Logiciel::fenetre_principale`]) et ses réglages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FenetrePrincipale {
+    /// Le clic gauche sur l'icône (et Entrée ou Espace) ouvre la fenêtre principale au lieu
+    /// du volet. Le volet reste alors sans geste : à ne choisir que pour un logiciel dont la
+    /// fenêtre principale est tout l'usage.
+    pub clic_gauche: bool,
+}
+
 /// Ce qu'un logiciel donne à l'interface commune entière : les Paramètres ([`Reglages`]),
 /// plus l'icône près de l'horloge (une seule, `horloge::Horloge`, ou plusieurs,
 /// `zone::FenetresCommunes`), le volet et le petit menu. Mêmes règles d'appel que
@@ -409,6 +418,24 @@ pub trait Logiciel: Reglages {
     fn lignes_en_plus(&self) -> Vec<menu::Action> {
         vec![menu::Action::ouvrir_le_journal(self.textes())]
     }
+
+    /// La **fenêtre principale** du logiciel, s'il en a une à lui (règles : interface
+    /// Windows 11, point 10, « double-clic = ouvrir le logiciel »). Avec elle :
+    /// - le double-clic sur l'icône l'ouvre (sans elle : les Paramètres) ;
+    /// - le petit menu commence par « Ouvrir <logiciel> », en gras ;
+    /// - relancer le logiciel déjà ouvert l'ouvre (sans elle : les Paramètres) ;
+    /// - avec [`FenetrePrincipale::clic_gauche`], le clic gauche l'ouvre aussi, au lieu du
+    ///   volet.
+    ///
+    /// `None` par défaut : rien ne change.
+    fn fenetre_principale(&self) -> Option<FenetrePrincipale> {
+        None
+    }
+
+    /// Ouvre la fenêtre principale (ou la met devant si elle l'est déjà). Appelée seulement
+    /// si [`Logiciel::fenetre_principale`] en déclare une, depuis le fil de l'icône : elle
+    /// **ne doit pas attendre** (le logiciel reçoit l'ordre et rend la main).
+    fn ouvrir_fenetre_principale(&self) {}
 
     /// « Quitter » : le logiciel se ferme (il appelle [`fenetres::Liens::tout_fermer`]).
     fn quitter(&self);

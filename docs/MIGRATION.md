@@ -118,6 +118,54 @@ de travail par projet, sur sa branche.
 - **Licences** : copier `docs/LICENCES.md` (avis MIT d'egui et des crates sans fichier de
   licence) dans l'avis de licence livré avec le logiciel.
 
+## Fenêtre principale, roue dentée, interrupteur écrit (branche `claude/ic-double-clic`)
+
+Rien ne change pour un logiciel qui n'en veut pas : tout est facultatif.
+
+- **Fenêtre principale.** Un logiciel qui en a une écrit, dans `impl Logiciel` :
+  `fenetre_principale()` → `Some(FenetrePrincipale::default())` et
+  `ouvrir_fenetre_principale()` (il l'ouvre ou la met devant). Alors :
+  - le double-clic sur l'icône l'ouvre (sans elle : les Paramètres, comme avant) ;
+  - le petit menu commence par « Ouvrir <logiciel> » en gras (icône E8A7,
+    `menu::Choix::Ouvrir`, `menu::lignes_avec`) ; `menu::lignes` ne change pas ;
+  - relancer le logiciel déjà ouvert (`Reveil::Parametres`, le défaut) l'ouvre aussi ;
+  - pour un logiciel à plusieurs icônes (`zone`), `Aiguilleur::avec_logiciel` fait de même.
+  Le calcul est dans `clics::suite(geste, principale)`.
+- **`clic_gauche: true`** : le clic gauche (et Entrée ou Espace) ouvre la fenêtre principale
+  au lieu du volet. Pour un logiciel dont la fenêtre est tout l'usage, comme Chat PDC :
+
+  ```rust
+  impl Logiciel for ChatPdc {
+      fn fenetre_principale(&self) -> Option<FenetrePrincipale> {
+          Some(FenetrePrincipale { clic_gauche: true })
+      }
+      fn ouvrir_fenetre_principale(&self) {
+          // poste.fenetres().ouvrir("principale", Ouverture::new("Chat PDC", [900.0, 640.0]), Fenetre { .. });
+      }
+      // …
+  }
+  ```
+- **La roue dentée des Paramètres** (E713), en haut à droite d'une fenêtre, avec l'info-bulle
+  « Paramètres » et le raccourci Ctrl+virgule (`dessin::RACCOURCI_PARAMETRES`) :
+
+  ```rust
+  ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+      if dessin::roue_parametres(ui, palette, textes) {
+          poste.ouvrir_parametres(None);
+      }
+  });
+  ```
+- **Interrupteur écrit** (audit KVMSoft, C6) : `dessin::interrupteur_ecrit(ui, p, t, &mut actif)`
+  écrit « Activé » ou « Désactivé » à gauche de l'interrupteur, à place fixe, et le texte se
+  clique aussi. `dessin::interrupteur` (sans texte) ne change pas. **KVMSoft** : remplacer ses
+  appels à `interrupteur(` dans les cartes par `interrupteur_ecrit(`.
+- **Taille des cartes** (audit KVMSoft, C2) : les explications des cartes passent en 14 px
+  (`theme::TAILLE_EXPLICATION`), toujours en gris ; les précisions et légendes restent en
+  12 px (`theme::TAILLE_PETIT`).
+- **Redite retirée** (audit KVMSoft) : quand les recherches de mise à jour sont actives, la
+  carte n'écrit plus « Dans le dossier « Installateurs », trouvé tout seul. » (déjà dit par la
+  carte du dossier). `Textes::recherches_automatique` et `recherches_dossier` restent, inutilisés.
+
 ## Les manques de KVMSoft, couverts (branche `manques-kvmsoft`)
 
 Tout est facultatif et a une valeur par défaut qui ne change rien. KVMSoft peut retirer ses

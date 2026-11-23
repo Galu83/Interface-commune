@@ -34,6 +34,12 @@
 - **Fait sur `kvmsoft-sonde`** : la sonde des fils (`src/sonde.rs`, `docs/MIGRATION.md`) pour
   trouver une icône muette. **Pas vérifié** : un vrai blocage de l'icône ou du volet (la logique
   est essayée avec des fils simulés ; les points d'appel ne l'ont pas été en fenêtres réelles).
+- **Fait sur `claude/ic-double-clic`** (23 nov.) : fenêtre principale facultative
+  (double-clic, « Ouvrir <logiciel> » en gras en tête du petit menu, relance, `clic_gauche`),
+  roue dentée des Paramètres avec Ctrl+virgule, interrupteur écrit, explications des cartes en
+  14 px, redite du dossier retirée (`docs/MIGRATION.md`). **Pas vérifié** : en vraies fenêtres
+  (la relance entre deux vrais processus, le gras du menu à l'écran) ; les essais couvrent le
+  calcul des gestes, le menu, l'aiguillage d'une icône, la roue et l'interrupteur sans fenêtre.
 - **Pas vérifié** : l'affichage dans de vraies fenêtres (interdit pendant les essais
   automatiques). À essayer à la main avec l'exemple (`cargo run --example demo`, petit menu :
   « Ouvrir une fenêtre », « Fenêtre simple », « Fenêtre de lecture », Paramètres).

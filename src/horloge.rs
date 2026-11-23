@@ -2,7 +2,7 @@
 //! une fenêtre cachée reçoit les gestes sur l'icône, les notifications cliquées, les
 //! changements de thème et le redémarrage de l'Explorateur ; elle envoie au fil des fenêtres
 //! le volet, le petit menu ou les Paramètres. Une seule instance par session : relancer le
-//! logiciel ouvre ses Paramètres.
+//! logiciel l'ouvre (sa fenêtre principale s'il en a une, sinon ses Paramètres).
 //!
 //! Utilisation, sur le fil principal du logiciel :
 //!
@@ -11,7 +11,7 @@
 //! use interface_commune::horloge::{Horloge, instance_unique};
 //! let _verrou = match instance_unique("MonLogiciel") {
 //!     Ok(v) => v,
-//!     Err(_) => return Ok(()), // déjà lancé : ses Paramètres s'ouvrent
+//!     Err(_) => return Ok(()), // déjà lancé : il s'ouvre
 //! };
 //! let horloge = Horloge::new("MonLogiciel");
 //! let poste = horloge.poste(); // à garder : notifications, info-bulle, quitter
@@ -47,14 +47,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW, HICON,
     KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
     RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetForegroundWindow,
-    SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_DISPLAYCHANGE,
-    WM_ENDSESSION, WM_NULL, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    SetMenuDefaultItem, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+    TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY,
+    WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW,
+    WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
 use crate::Logiciel;
-use crate::clics::{Clics, Geste, evenement};
+use crate::clics::{Clics, Suite, evenement, suite};
 use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, Ouvreur, Reception};
 use crate::menu::{self, Choix};
 use crate::place::Rect;
@@ -130,7 +131,8 @@ impl Drop for Unique {
 /// que le dire à l'instance en cours (et s'arrête).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Reveil {
-    /// Ouvre les Paramètres de l'instance en cours (le comportement de [`instance_unique`]).
+    /// Ouvre l'instance en cours (le comportement de [`instance_unique`]) : sa fenêtre
+    /// principale s'il en a une (`Logiciel::fenetre_principale`), sinon ses Paramètres.
     #[default]
     Parametres,
     /// Rien du tout : un démarrage automatique en double, par exemple.
@@ -908,13 +910,33 @@ impl Principal {
             crate::clics::Evenement::Relache => "relâché",
         });
         let clic = Instant::now();
-        match self.clics.recevoir(e, clic, temps_double_clic()) {
-            Geste::Rien => {}
-            Geste::Volet => self.ouvrir(Surface::Volet, None, clic),
-            Geste::Menu => self.ouvrir(Surface::Menu, Some(ancre), clic),
+        let g = self.clics.recevoir(e, clic, temps_double_clic());
+        match suite(g, self.logiciel.fenetre_principale()) {
+            Suite::Rien => {}
+            Suite::Volet => self.ouvrir(Surface::Volet, None, clic),
+            Suite::Menu => self.ouvrir(Surface::Menu, Some(ancre), clic),
             // Double-clic : le volet ouvert par le premier clic lit la demande des
             // Paramètres, se cache, puis laisse la place.
-            Geste::Parametres => self.ouvrir_parametres(None),
+            Suite::Parametres => self.ouvrir_parametres(None),
+            Suite::FenetrePrincipale => self.ouvrir_fenetre_principale(),
+        }
+    }
+
+    /// La fenêtre principale du logiciel : le volet ou le petit menu ouvert par le premier
+    /// clic d'un double-clic se ferme, pour lui laisser la place.
+    fn ouvrir_fenetre_principale(&self) {
+        if matches!(self.liens().ouvert(), fenetres::Ouvert::Surface(_)) {
+            self.liens().fermer_la_fenetre();
+        }
+        self.logiciel.ouvrir_fenetre_principale();
+    }
+
+    /// Ouvre le logiciel : sa fenêtre principale s'il en a une, sinon ses Paramètres.
+    fn ouvrir_le_logiciel(&self) {
+        if self.logiciel.fenetre_principale().is_some() {
+            self.ouvrir_fenetre_principale();
+        } else {
+            self.ouvrir_parametres(None);
         }
     }
 
@@ -998,7 +1020,8 @@ impl Principal {
     /// même ordre.
     fn menu_de_secours(&mut self, x: i32, y: i32) {
         let l = &self.logiciel;
-        let lignes = menu::lignes(l.textes(), &l.actions_menu(), &l.lignes_en_plus());
+        let nom = l.fenetre_principale().map(|_| l.identite().nom.clone());
+        let lignes = menu::lignes_avec(l.textes(), nom.as_deref(), &l.actions_menu(), &l.lignes_en_plus());
         // SAFETY: menu créé, rempli de chaînes vivantes pendant chaque appel, affiché puis
         // détruit ici ; la fenêtre est celle de ce fil.
         let choix = unsafe {
@@ -1010,6 +1033,10 @@ impl Principal {
                     }
                     Some(l) => {
                         let _ = AppendMenuW(m, MF_STRING, i + 1, &HSTRING::from(l.texte.as_str()));
+                        if l.quoi == Choix::Ouvrir {
+                            // « Ouvrir <logiciel> » en gras : la ligne par défaut du menu.
+                            let _ = SetMenuDefaultItem(m, (i + 1) as u32, 0);
+                        }
                     }
                 }
             }
@@ -1033,6 +1060,7 @@ impl Principal {
         };
         match &l.quoi {
             Choix::Action(cle) => self.logiciel.action(cle),
+            Choix::Ouvrir => self.ouvrir_fenetre_principale(),
             Choix::Parametres => self.ouvrir_parametres(None),
             Choix::RechercherMiseAJour => {
                 self.logiciel.rechercher_mise_a_jour();
@@ -1116,8 +1144,9 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
                 true
             }
             WM_OUVRIR_PARAMETRES => {
-                // Relancé alors qu'il tourne déjà : ses Paramètres.
-                p.ouvrir_parametres(None);
+                // Relancé alors qu'il tourne déjà : sa fenêtre principale, sinon ses
+                // Paramètres.
+                p.ouvrir_le_logiciel();
                 true
             }
             WM_COPYDATA => {

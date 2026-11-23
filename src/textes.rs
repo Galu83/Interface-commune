@@ -23,6 +23,9 @@ pub struct Textes {
     pub rechercher_mise_a_jour: &'static str,
     pub quitter: &'static str,
     pub ouvrir_le_journal: &'static str,
+    /// La première ligne du petit menu, en gras, quand le logiciel a une fenêtre principale :
+    /// « Ouvrir {} » (le nom du logiciel).
+    pub ouvrir_le_logiciel: &'static str,
     /// « Version {} » (le numéro).
     pub version: &'static str,
 
@@ -112,7 +115,9 @@ pub struct Textes {
     pub voir_licences: &'static str,
     pub chercher_mises_a_jour: &'static str,
     pub recherches_coupees: &'static str,
+    /// N'est plus affiché (redite de la carte du dossier) ; gardé pour la compatibilité.
     pub recherches_automatique: &'static str,
+    /// N'est plus affiché (redite de la carte du dossier) ; gardé pour la compatibilité.
     pub recherches_dossier: &'static str,
     pub automatique: &'static str,
     pub maj_coupee: &'static str,
@@ -129,6 +134,7 @@ pub const FRANCAIS: Textes = Textes {
     rechercher_mise_a_jour: "Rechercher une mise à jour",
     quitter: "Quitter",
     ouvrir_le_journal: "Ouvrir le journal",
+    ouvrir_le_logiciel: "Ouvrir {}",
     version: "Version {}",
     accueil: "Accueil",
     general: "Général",
@@ -205,6 +211,7 @@ pub const ANGLAIS: Textes = Textes {
     rechercher_mise_a_jour: "Check for updates",
     quitter: "Quit",
     ouvrir_le_journal: "Open the log",
+    ouvrir_le_logiciel: "Open {}",
     version: "Version {}",
     accueil: "Home",
     general: "General",
@@ -333,6 +340,7 @@ mod tests {
                 t.rechercher_mise_a_jour,
                 t.quitter,
                 t.ouvrir_le_journal,
+                t.ouvrir_le_logiciel,
                 t.version,
                 t.accueil,
                 t.general,

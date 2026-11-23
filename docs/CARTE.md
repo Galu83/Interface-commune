@@ -25,7 +25,7 @@
 | `tests/` | volet, menu et Paramètres sans fenêtre ; polices ; avis de licence à jour |
 | `docs/LICENCES.md` | avis MIT des crates publiées sans fichier de licence (egui…) |
 | `docs/MIGRATION.md`, `ETAT.md` | ce que chaque projet change ; où en est la bibliothèque |
-| `examples/demo.rs` | un logiciel d'exemple |
+| `examples/demo.rs` | un logiciel d'exemple, avec une fenêtre principale (double-clic, « Ouvrir Exemple » en gras, roue dentée, interrupteur écrit) |
 | `examples/conserver.rs` | « Conserver ces modifications ? » : un réglage à confirmer, deux captures sans fenêtre |
 | `examples/couleurs.rs` | la pastille et le choix de couleur dans une carte, « Annuler » compris : quatre captures sans fenêtre (clair, sombre, avant et après un choix) |
 | `examples/menu_choix.rs` | le menu flottant de choix et les logos des pastilles : cinq captures sans fenêtre (clair, sombre, 150 %, menu au-dessus) |

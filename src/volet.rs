@@ -83,6 +83,11 @@ pub fn faire(choisi: Option<Choisi>, logiciel: &Arc<dyn Logiciel>) -> Option<Dem
             None
         }
         Choisi::Parametres | Choisi::Menu(Choix::Parametres) => Some(Demande::Parametres(None)),
+        Choisi::Menu(Choix::Ouvrir) => {
+            // La fenêtre principale est au logiciel : il l'ouvre sans attendre.
+            logiciel.ouvrir_fenetre_principale();
+            None
+        }
         Choisi::Menu(Choix::RechercherMiseAJour) => {
             // La recherche part sur son propre fil ; sa réponse s'affiche dans les
             // Paramètres, page « Mise à jour ».

@@ -80,7 +80,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use crate::Logiciel;
-use crate::clics::{self, Geste};
+use crate::clics::{self, Suite};
 use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, envoyer_le_clic};
 use crate::horloge::{Niveau, Secours};
 use crate::place::Rect;
@@ -947,6 +947,9 @@ pub struct Aiguilleur {
     liens: Arc<Liens>,
     demandes: Demandes,
     clics: BTreeMap<String, clics::Clics>,
+    /// Le logiciel, pour sa fenêtre principale (`Logiciel::fenetre_principale`) ; sans lui,
+    /// le double-clic ouvre les Paramètres et le clic gauche le volet.
+    logiciel: Option<Arc<dyn Logiciel>>,
 }
 
 impl Aiguilleur {
@@ -955,7 +958,15 @@ impl Aiguilleur {
             liens,
             demandes,
             clics: BTreeMap::new(),
+            logiciel: None,
         }
+    }
+
+    /// Avec le logiciel : sa fenêtre principale, s'il en a une, s'ouvre au double-clic (et au
+    /// clic gauche avec `FenetrePrincipale::clic_gauche`).
+    pub fn avec_logiciel(mut self, logiciel: Arc<dyn Logiciel>) -> Aiguilleur {
+        self.logiciel = Some(logiciel);
+        self
     }
 
     /// Le geste `e`, reçu à `maintenant` ; `double` : le temps d'un double-clic de Windows.
@@ -971,16 +982,28 @@ impl Aiguilleur {
             self.clics.clear();
         }
         let suivi = self.clics.entry(e.icone.clone()).or_default();
-        let (surface, ancre) = match suivi.recevoir(g, maintenant, double) {
-            Geste::Rien => return SuiteDuGeste::Rien,
-            Geste::Parametres => {
+        let g = suivi.recevoir(g, maintenant, double);
+        let principale = self.logiciel.as_ref().and_then(|l| l.fenetre_principale());
+        let (surface, ancre) = match clics::suite(g, principale) {
+            Suite::Rien => return SuiteDuGeste::Rien,
+            Suite::Parametres => {
                 // Double-clic : le volet ouvert par le premier clic lit la demande des
                 // Paramètres, se cache, puis leur laisse la place.
                 self.liens.montrer_page(&self.demandes, None);
                 return SuiteDuGeste::Rien;
             }
-            Geste::Volet => (Surface::Volet, None),
-            Geste::Menu => (Surface::Menu, Some(e.ancre)),
+            Suite::FenetrePrincipale => {
+                // Le volet ou le petit menu ouvert par le premier clic lui laisse la place.
+                if matches!(self.liens.ouvert(), fenetres::Ouvert::Surface(_)) {
+                    self.liens.fermer_la_fenetre();
+                }
+                if let Some(l) = &self.logiciel {
+                    l.ouvrir_fenetre_principale();
+                }
+                return SuiteDuGeste::Rien;
+            }
+            Suite::Volet => (Surface::Volet, None),
+            Suite::Menu => (Surface::Menu, Some(e.ancre)),
         };
         match envoyer_le_clic(&self.liens, &self.demandes, surface, e.rect, ancre, maintenant) {
             Aiguillage::Rien => SuiteDuGeste::Rien,
@@ -1054,7 +1077,7 @@ impl FenetresCommunes {
         let fil =
             crate::horloge::lancer_le_fil_des_fenetres(logiciel.clone(), liens.clone(), reception, secours)?;
         Ok(FenetresCommunes {
-            aiguilleur: Aiguilleur::new(liens.clone(), demandes.clone()),
+            aiguilleur: Aiguilleur::new(liens.clone(), demandes.clone()).avec_logiciel(logiciel.clone()),
             liens,
             demandes,
             logiciel,
@@ -1084,6 +1107,16 @@ impl FenetresCommunes {
     /// ouverts, ils passent devant et changent de page.
     pub fn ouvrir_parametres(&self, page: Option<String>) {
         self.liens.montrer_page(&self.demandes, page);
+    }
+
+    /// Ouvre le logiciel (un second lancement, par exemple) : sa fenêtre principale s'il en a
+    /// une (`Logiciel::fenetre_principale`), sinon ses Paramètres.
+    pub fn ouvrir_le_logiciel(&self) {
+        if self.logiciel.fenetre_principale().is_some() {
+            self.logiciel.ouvrir_fenetre_principale();
+        } else {
+            self.ouvrir_parametres(None);
+        }
     }
 
     /// L'état du logiciel a changé : le volet et les Paramètres ouverts se redessinent.
@@ -1473,5 +1506,112 @@ mod essais {
             SuiteDuGeste::Secours { .. }
         ));
         assert!(liens.egui_impossible.load(Ordering::Acquire));
+    }
+
+    /// Un logiciel d'essai, avec ou sans fenêtre principale ; il compte ses ouvertures.
+    struct AvecFenetre {
+        identite: crate::Identite,
+        principale: Option<crate::FenetrePrincipale>,
+        ouvertures: std::sync::atomic::AtomicUsize,
+    }
+
+    impl crate::Reglages for AvecFenetre {
+        fn identite(&self) -> &crate::Identite {
+            &self.identite
+        }
+        fn action(&self, _: &str) {}
+        fn rechercher_mise_a_jour(&self) {}
+        fn communs(&self) -> crate::Communs {
+            crate::Communs::default()
+        }
+        fn changer(&self, _: &str, _: crate::Valeur) {}
+    }
+
+    impl Logiciel for AvecFenetre {
+        fn etat(&self) -> crate::Etat {
+            crate::Etat {
+                genre: crate::GenreEtat::Pret,
+                titre: "Exemple".into(),
+                ligne: "Prêt".into(),
+                detail: None,
+            }
+        }
+        fn quitter(&self) {}
+        fn noter(&self, _: String) {}
+        fn fenetre_principale(&self) -> Option<crate::FenetrePrincipale> {
+            self.principale
+        }
+        fn ouvrir_fenetre_principale(&self) {
+            self.ouvertures.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+
+    fn avec_fenetre(principale: Option<crate::FenetrePrincipale>) -> Arc<AvecFenetre> {
+        Arc::new(AvecFenetre {
+            identite: crate::Identite {
+                nom: "Exemple".into(),
+                version: "0.0.0".into(),
+                licence: "MIT".into(),
+                description: "Essai.".into(),
+                icone: |t, _| vec![255; (t * t * 4) as usize],
+                logo: None,
+            },
+            principale,
+            ouvertures: Default::default(),
+        })
+    }
+
+    /// Avec une fenêtre principale : le double-clic l'ouvre (le volet du premier clic se
+    /// ferme), pas les Paramètres ; le clic gauche ouvre le volet. Avec `clic_gauche` : le
+    /// clic gauche l'ouvre aussi. Sans : rien ne change (les Paramètres au double-clic).
+    #[test]
+    fn double_clic_la_fenetre_principale() {
+        use crate::fenetres::Ouvert;
+        let t0 = Instant::now();
+        let t = |ms: u64| t0 + Duration::from_millis(ms);
+        let double = Duration::from_millis(500);
+        let geste = |message: Message| Evenement {
+            icone: "principale".into(),
+            message,
+            ancre: [1500, 1050],
+            rect: [1490, 1040, 1514, 1072],
+        };
+        let double_clic = |a: &mut Aiguilleur, debut: u64| {
+            a.recevoir(&geste(Message::DoubleClic(Bouton::Gauche)), t(debut), double);
+            a.recevoir(&geste(Message::Relache(Bouton::Gauche)), t(debut + 50), double);
+            a.recevoir(&geste(Message::Selection), t(debut + 60), double);
+        };
+
+        // Fenêtre principale, clic gauche : le volet ; double-clic : la fenêtre principale.
+        let l = avec_fenetre(Some(crate::FenetrePrincipale::default()));
+        let (demandes, reception) = fenetres::canal();
+        let liens = Arc::new(Liens::default());
+        let mut a = Aiguilleur::new(liens.clone(), demandes).avec_logiciel(l.clone());
+        a.recevoir(&geste(Message::Selection), t(0), double);
+        assert!(matches!(reception.prendre(), Ok(Some(Demande::Volet { .. }))));
+        liens.mettre(Ouvert::Surface(Surface::Volet));
+        double_clic(&mut a, 150);
+        assert_eq!(l.ouvertures.load(Ordering::Acquire), 1);
+        assert!(liens.fermer.load(Ordering::Acquire));
+        assert_eq!(reception.prendre(), Ok(None));
+
+        // `clic_gauche` : le clic gauche ouvre la fenêtre principale, sans volet.
+        let l = avec_fenetre(Some(crate::FenetrePrincipale { clic_gauche: true }));
+        let (demandes, reception) = fenetres::canal();
+        let mut a = Aiguilleur::new(Arc::new(Liens::default()), demandes).avec_logiciel(l.clone());
+        a.recevoir(&geste(Message::Selection), t(0), double);
+        assert_eq!(l.ouvertures.load(Ordering::Acquire), 1);
+        assert_eq!(reception.prendre(), Ok(None));
+        // Le clic droit garde le petit menu.
+        a.recevoir(&geste(Message::MenuContextuel), t(2_000), double);
+        assert!(matches!(reception.prendre(), Ok(Some(Demande::Menu { .. }))));
+
+        // Sans fenêtre principale : le double-clic ouvre les Paramètres, comme avant.
+        let l = avec_fenetre(None);
+        let (demandes, reception) = fenetres::canal();
+        let mut a = Aiguilleur::new(Arc::new(Liens::default()), demandes).avec_logiciel(l.clone());
+        double_clic(&mut a, 0);
+        assert_eq!(l.ouvertures.load(Ordering::Acquire), 0);
+        assert_eq!(reception.prendre(), Ok(Some(Demande::Parametres(None))));
     }
 }

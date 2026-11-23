@@ -1266,11 +1266,7 @@ fn page_mise_a_jour(
     titre_section(ui, t.reglages);
     if let Some(actif) = c.recherches {
         let mut v = actif;
-        let explication = match (actif, c.dossier_automatique) {
-            (false, _) => t.recherches_coupees,
-            (true, Some(true)) => t.recherches_automatique,
-            _ => t.recherches_dossier,
-        };
+        let explication = explication_recherches(t, actif);
         carte(
             ui,
             p,
@@ -1312,10 +1308,32 @@ fn page_mise_a_jour(
     );
 }
 
+/// L'explication de la carte « Rechercher les mises à jour » : rien quand elles sont actives,
+/// car la carte « Dossier des installateurs » suit et dit déjà où (audit KVMSoft : pas de
+/// redite) ; « Coupé… » quand elles sont coupées (la carte du dossier n'est alors pas affichée).
+fn explication_recherches(t: &Textes, actif: bool) -> &'static str {
+    if actif { "" } else { t.recherches_coupees }
+}
+
 #[cfg(test)]
 mod essais_mise_a_jour {
     use super::*;
     use crate::textes::{ANGLAIS, FRANCAIS};
+
+    /// Recherches actives : pas de redite du dossier, que la carte du dossier montre juste
+    /// en dessous ; coupées : « Coupé… ».
+    #[test]
+    fn pas_de_redite_du_dossier() {
+        assert_eq!(explication_recherches(&FRANCAIS, true), "");
+        assert_eq!(
+            explication_recherches(&FRANCAIS, false),
+            FRANCAIS.recherches_coupees
+        );
+        assert_eq!(
+            explication_recherches(&ANGLAIS, false),
+            ANGLAIS.recherches_coupees
+        );
+    }
 
     #[test]
     fn une_seule_icone_selon_l_etat() {

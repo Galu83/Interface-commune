@@ -1,7 +1,8 @@
 //! Le petit menu de l'icône (clic droit), en calcul pur (règles : interface Windows 11,
 //! point 10) : toujours dans cet ordre, avec ces mots ([`crate::textes`]) et ces icônes dans
 //! tous les logiciels :
-//! les une ou deux actions propres au logiciel, un trait, puis « Paramètres » (E713),
+//! « Ouvrir <logiciel> » en gras (E8A7), seulement s'il a une fenêtre principale
+//! (`Logiciel::fenetre_principale`), puis les une ou deux actions propres au logiciel, un trait, puis « Paramètres » (E713),
 //! « Rechercher une mise à jour » (E895), les lignes communes de plus (« Ouvrir le
 //! journal »…), et « Quitter » en dernier.
 
@@ -22,6 +23,8 @@ pub enum Choix {
     /// Une action propre au logiciel, ou une ligne commune de plus : sa clé, rendue au
     /// logiciel (`Logiciel::action`).
     Action(String),
+    /// « Ouvrir <logiciel> » : la fenêtre principale. En gras, toujours la première ligne.
+    Ouvrir,
     Parametres,
     RechercherMiseAJour,
     Quitter,
@@ -60,6 +63,18 @@ pub const LIGNES_EN_PLUS_MAX: usize = 2;
 /// (seulement entre les actions propres et les lignes communes). Au-delà de deux, les
 /// actions propres et les lignes de plus sont ignorées.
 pub fn lignes(t: &Textes, propres: &[Action], en_plus: &[Action]) -> Vec<Option<Ligne>> {
+    lignes_avec(t, None, propres, en_plus)
+}
+
+/// Les lignes du petit menu, comme [`lignes`] ; avec `ouvrir` (le nom du logiciel, quand il a
+/// une fenêtre principale), « Ouvrir <logiciel> » vient en première ligne, avant les actions
+/// propres, et le trait suit ce premier groupe.
+pub fn lignes_avec(
+    t: &Textes,
+    ouvrir: Option<&str>,
+    propres: &[Action],
+    en_plus: &[Action],
+) -> Vec<Option<Ligne>> {
     let ligne = |a: &Action| {
         Some(Ligne {
             icone: a.icone,
@@ -67,7 +82,16 @@ pub fn lignes(t: &Textes, propres: &[Action], en_plus: &[Action]) -> Vec<Option<
             quoi: Choix::Action(a.cle.clone()),
         })
     };
-    let mut l: Vec<Option<Ligne>> = propres.iter().take(ACTIONS_PROPRES_MAX).map(ligne).collect();
+    let mut l: Vec<Option<Ligne>> = ouvrir
+        .map(|nom| Ligne {
+            icone: icones::OUVRIR,
+            texte: crate::textes::remplir(t.ouvrir_le_logiciel, &[nom]),
+            quoi: Choix::Ouvrir,
+        })
+        .into_iter()
+        .map(Some)
+        .collect();
+    l.extend(propres.iter().take(ACTIONS_PROPRES_MAX).map(ligne));
     if !l.is_empty() {
         l.push(None);
     }
@@ -140,5 +164,38 @@ mod tests {
             textes(&lignes(en, &[], &[Action::ouvrir_le_journal(en)])),
             ["Settings", "Check for updates", "Open the log", "Quit"]
         );
+    }
+
+    /// Avec une fenêtre principale : « Ouvrir <logiciel> » en première ligne (E8A7), avant
+    /// les actions propres, puis le trait ; sans action propre, le trait suit « Ouvrir ».
+    /// Sans fenêtre principale, le menu ne change pas.
+    #[test]
+    fn ouvrir_le_logiciel_en_tete() {
+        let fr = &crate::textes::FRANCAIS;
+        let propres = [Action::new("relire", '\u{E72C}', "Relire")];
+        let l = lignes_avec(fr, Some("Exemple"), &propres, &[]);
+        assert_eq!(
+            textes(&l),
+            [
+                "Ouvrir Exemple",
+                "Relire",
+                "—",
+                "Paramètres",
+                "Rechercher une mise à jour",
+                "Quitter"
+            ]
+        );
+        let premiere = l[0].clone().unwrap();
+        assert_eq!(premiere.quoi, Choix::Ouvrir);
+        assert_eq!(premiere.icone, '\u{E8A7}');
+        assert_eq!(
+            textes(&lignes_avec(fr, Some("Exemple"), &[], &[]))[..2],
+            ["Ouvrir Exemple", "—"]
+        );
+        assert_eq!(
+            textes(&lignes_avec(&crate::textes::ANGLAIS, Some("Exemple"), &[], &[]))[0],
+            "Open Exemple"
+        );
+        assert_eq!(lignes_avec(fr, None, &propres, &[]), lignes(fr, &propres, &[]));
     }
 }

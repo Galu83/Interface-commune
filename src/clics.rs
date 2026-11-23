@@ -1,7 +1,9 @@
 //! Les gestes sur l'icône près de l'horloge, en calcul pur (règles : interface Windows 11,
 //! point 10) : clic gauche, le volet ; clic droit, touche menu ou Maj+F10, le petit menu ;
-//! double-clic, les Paramètres ; Entrée ou Espace, le volet ; le clic du milieu ne fait
-//! rien ; chaque action part au relâchement du bouton.
+//! double-clic, ouvrir le logiciel (sa fenêtre principale s'il en a une, sinon les
+//! Paramètres) ; Entrée ou Espace, le volet ; le clic du milieu ne fait rien ; chaque action
+//! part au relâchement du bouton. Avec `FenetrePrincipale::clic_gauche`, le clic gauche (et
+//! Entrée ou Espace) ouvre la fenêtre principale au lieu du volet ([`suite`]).
 
 use std::time::{Duration, Instant};
 
@@ -20,17 +22,42 @@ pub enum Evenement {
     Relache,
 }
 
-/// Ce que le logiciel en fait.
+/// Le geste reconnu, avant de savoir ce que le logiciel a ([`suite`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Geste {
     Rien,
     Volet,
     Menu,
+    /// Double-clic : ouvrir le logiciel.
+    Ouvrir,
+}
+
+/// Ce que le logiciel fait du geste, selon qu'il a une fenêtre principale ou non.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Suite {
+    Rien,
+    Volet,
+    Menu,
     Parametres,
+    FenetrePrincipale,
+}
+
+/// Ce que fait le geste `g` : le double-clic ouvre la fenêtre principale s'il y en a une,
+/// sinon les Paramètres ; le clic gauche ouvre le volet, ou la fenêtre principale avec
+/// `clic_gauche`.
+pub fn suite(g: Geste, principale: Option<crate::FenetrePrincipale>) -> Suite {
+    match g {
+        Geste::Rien => Suite::Rien,
+        Geste::Menu => Suite::Menu,
+        Geste::Ouvrir if principale.is_some() => Suite::FenetrePrincipale,
+        Geste::Ouvrir => Suite::Parametres,
+        Geste::Volet if principale.is_some_and(|p| p.clic_gauche) => Suite::FenetrePrincipale,
+        Geste::Volet => Suite::Volet,
+    }
 }
 
 /// Le comportement de l'icône, en calcul pur (testé) : clic gauche, le volet ; clic droit,
-/// le petit menu ; double-clic, les Paramètres, au relâchement du deuxième clic ; Entrée ou
+/// le petit menu ; double-clic, ouvrir le logiciel, au relâchement du deuxième clic ; Entrée ou
 /// Espace, le volet. Le clic du milieu n'arrive jamais ici : il ne fait rien.
 #[derive(Debug, Default)]
 pub struct Clics {
@@ -58,7 +85,7 @@ impl Clics {
             Evenement::Relache | Evenement::Selection if self.double_en_attente => {
                 self.double_en_attente = false;
                 self.double_fait = Some(maintenant);
-                Geste::Parametres
+                Geste::Ouvrir
             }
             Evenement::Relache => Geste::Rien,
             Evenement::Selection if recent(self.double_fait, double) => Geste::Rien,
@@ -131,7 +158,7 @@ mod tests {
         assert_eq!(evenement(0x0208), None);
     }
 
-    /// Double-clic : les Paramètres, au relâchement du deuxième clic ; le `NIN_SELECT` qui
+    /// Double-clic : ouvrir le logiciel, au relâchement du deuxième clic ; le `NIN_SELECT` qui
     /// suit ne rouvre pas le volet. Que Windows envoie ou non `WM_LBUTTONUP` d'abord.
     #[test]
     fn double_clic_les_parametres() {
@@ -143,13 +170,32 @@ mod tests {
             assert_eq!(c.recevoir(Evenement::Selection, t, d), Geste::Volet);
             assert_eq!(c.recevoir(Evenement::DoubleClic, ms(150), d), Geste::Rien);
             if avec_relache {
-                assert_eq!(c.recevoir(Evenement::Relache, ms(200), d), Geste::Parametres);
+                assert_eq!(c.recevoir(Evenement::Relache, ms(200), d), Geste::Ouvrir);
                 assert_eq!(c.recevoir(Evenement::Selection, ms(201), d), Geste::Rien);
             } else {
-                assert_eq!(c.recevoir(Evenement::Selection, ms(201), d), Geste::Parametres);
+                assert_eq!(c.recevoir(Evenement::Selection, ms(201), d), Geste::Ouvrir);
             }
             // Plus tard, un clic simple ouvre de nouveau le volet.
             assert_eq!(c.recevoir(Evenement::Selection, ms(2_000), d), Geste::Volet);
         }
+    }
+
+    /// Sans fenêtre principale, rien ne change : double-clic, les Paramètres ; clic gauche,
+    /// le volet. Avec : le double-clic l'ouvre ; avec `clic_gauche`, le clic gauche aussi.
+    #[test]
+    fn suite_selon_la_fenetre_principale() {
+        use crate::FenetrePrincipale;
+        assert_eq!(suite(Geste::Ouvrir, None), Suite::Parametres);
+        assert_eq!(suite(Geste::Volet, None), Suite::Volet);
+        assert_eq!(suite(Geste::Menu, None), Suite::Menu);
+        assert_eq!(suite(Geste::Rien, None), Suite::Rien);
+        let p = Some(FenetrePrincipale::default());
+        assert_eq!(suite(Geste::Ouvrir, p), Suite::FenetrePrincipale);
+        assert_eq!(suite(Geste::Volet, p), Suite::Volet);
+        assert_eq!(suite(Geste::Menu, p), Suite::Menu);
+        let g = Some(FenetrePrincipale { clic_gauche: true });
+        assert_eq!(suite(Geste::Volet, g), Suite::FenetrePrincipale);
+        assert_eq!(suite(Geste::Ouvrir, g), Suite::FenetrePrincipale);
+        assert_eq!(suite(Geste::Menu, g), Suite::Menu);
     }
 }

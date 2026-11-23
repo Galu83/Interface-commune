@@ -3,6 +3,11 @@
 //! vérifications, jamais lancé par les tests (il ouvre une icône et des fenêtres).
 //!
 //! `cargo run --example demo` (Windows) ; `--parametres <page>` ouvre les Paramètres.
+//!
+//! L'exemple a une fenêtre principale (`Logiciel::fenetre_principale`) : le double-clic sur
+//! l'icône l'ouvre, le petit menu commence par « Ouvrir Exemple » en gras, et relancer
+//! l'exemple déjà ouvert l'ouvre aussi. Elle montre la roue dentée des Paramètres en haut à
+//! droite (Ctrl+virgule) et un interrupteur avec « Activé » ou « Désactivé » écrit à gauche.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -16,11 +21,12 @@ mod demo {
     use interface_commune::briques::Brique;
     use interface_commune::horloge::{Horloge, Poste, Reveil, instance_unique_avec};
     use interface_commune::parametres::Contexte;
+    use interface_commune::textes;
     use interface_commune::theme::couverture;
     use interface_commune::toutes_faites::{self, Bouton, Champ, Lecture, ReponseLecture, Simple, Ton};
     use interface_commune::{
-        Communs, Etat, EtatMiseAJour, GenreEtat, Identite, Logiciel, Page, Reglages, Valeur, dessin, menu,
-        parametres,
+        Communs, Etat, EtatMiseAJour, FenetrePrincipale, GenreEtat, Identite, Logiciel, Page, Reglages,
+        Valeur, dessin, menu, parametres,
     };
 
     /// L'icône de l'exemple : un carré arrondi, de la couleur du texte de la barre des tâches.
@@ -56,6 +62,35 @@ mod demo {
                 });
             if fermer {
                 cadre.fermer();
+            }
+        }
+    }
+
+    /// La fenêtre principale : la roue dentée en haut à droite (ou Ctrl+virgule) ouvre les
+    /// Paramètres ; un interrupteur écrit « Activé » ou « Désactivé » à sa gauche.
+    struct Principale {
+        poste: Poste,
+        actif: bool,
+    }
+
+    impl Contenu for Principale {
+        fn dessiner(&mut self, ui: &mut egui::Ui, cadre: &mut Cadre<'_>) {
+            let p = cadre.palette;
+            let t = &textes::FRANCAIS;
+            let mut parametres = false;
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(couleur(p.fond)).inner_margin(16))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("La fenêtre principale de l'exemple.");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            parametres = dessin::roue_parametres(ui, p, t);
+                        });
+                    });
+                    dessin::interrupteur_ecrit(ui, p, t, &mut self.actif);
+                });
+            if parametres {
+                self.poste.ouvrir_parametres(None);
             }
         }
     }
@@ -105,6 +140,24 @@ mod demo {
                 menu::Action::new("simple", '\u{E8A5}', "Fenêtre simple"),
                 menu::Action::new("lecture", '\u{E8D6}', "Fenêtre de lecture"),
             ]
+        }
+
+        fn fenetre_principale(&self) -> Option<FenetrePrincipale> {
+            Some(FenetrePrincipale::default())
+        }
+
+        fn ouvrir_fenetre_principale(&self) {
+            let Ok(p) = self.poste.lock() else { return };
+            let Some(p) = p.as_ref() else { return };
+            let principale = Principale {
+                poste: p.clone(),
+                actif: false,
+            };
+            p.fenetres().ouvrir(
+                "principale",
+                Ouverture::new("Exemple", [420.0, 200.0]),
+                principale,
+            );
         }
 
         fn quitter(&self) {
@@ -239,7 +292,7 @@ mod demo {
     pub fn principal() {
         let args: Vec<String> = std::env::args().collect();
         // Un second lancement transmet ses arguments (`--parametres a_propos`) à l'instance en
-        // cours, qui ouvre la page ; sans argument, il ouvre simplement les Paramètres.
+        // cours, qui ouvre la page ; sans argument, il ouvre la fenêtre principale.
         let reveil = match args.get(1..) {
             Some(a) if !a.is_empty() => Reveil::Arguments(a.to_vec()),
             _ => Reveil::Parametres,
