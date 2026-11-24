@@ -1,0 +1,5 @@
+SegUIVar.ttf 1851000 16ec6be86fe43199
+segoeui.ttf 960076 a9a832fd5b0e1cce
+seguisb.ttf 974760 42748fca712a68d8
+SegoeIcons.ttf 472516 0cea64ff500d9896
+segmdl2.ttf 283820 c3f358447e161590
