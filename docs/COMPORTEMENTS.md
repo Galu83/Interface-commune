@@ -55,8 +55,8 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 |---|---|---|
 | C-15 | Une deuxième copie lancée ne s'ouvre pas : elle passe ses arguments à la première et s'arrête sans rien afficher. | auto : `horloge::second_lancement_sans_rien_dire`, `horloge::arguments_du_second_lancement` |
 | C-16 | Les données reçues de la deuxième copie sont lues avec prudence (taille, texte valide). | auto : `horloge::copie_de_donnees_lue_avec_prudence` |
-| C-17 | La première copie montre ses Paramètres (ou la page demandée) quand la deuxième arrive. | essai manquant (seule la transmission est testée) |
-| C-18 | La copie unique vaut par session Windows (verrou `Local\…`) : deux utilisateurs connectés en même temps ont chacun la leur. | essai manquant |
+| C-17 | La première copie montre ses Paramètres (ou la page demandée) quand la deuxième arrive. | auto (en partie) : `tests/comportements::c17_la_premiere_copie_montre_ses_parametres` (verrou pris, demande « Paramètres » et page voulue) ; le message reçu par la copie déjà lancée demande une vraie icône : GitHub |
+| C-18 | La copie unique vaut par session Windows (verrou `Local\…`) : deux utilisateurs connectés en même temps ont chacun la leur. | auto : `tests/comportements::c18_une_seule_copie_par_session` (nom exact `Local\<nom>-une-seule`, absent de `Global\`) |
 
 ## 3. Les notifications
 
@@ -73,7 +73,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-22 | Le volet est préparé au repos ; deux ouvertures ne le reconstruisent pas (une seule fenêtre, cachée puis montrée). | auto : `fenetres::deux_ouvertures_ne_reconstruisent_pas_le_volet` |
 | C-23 | En-tête du volet : nom du logiciel en gros, version petite et grise à droite, roue dentée des Paramètres à l'extrême droite ; puis l'état en couleur ; puis les briques. Ni « Quitter » ni ligne du bas. | auto : `tests/sans_fenetre::volet_et_petit_menu_sans_fenetre`, captures de `tests/sans_fenetre::captures_pour_la_documentation` (images non comparées) |
 | C-24 | Un titre long ne chevauche jamais la roue dentée. | auto : `tests/sans_fenetre::titre_long_ne_chevauche_pas_la_roue` |
-| C-25 | Rien n'est coupé : la largeur suit les textes, jusqu'à une largeur maximale ; au-delà, les phrases passent à la ligne. | auto (en partie) : `tests/sans_fenetre::volet_borne_grandit_avec_son_contenu` ; essai manquant pour le passage à la ligne |
+| C-25 | Rien n'est coupé : la largeur suit les textes, jusqu'à une largeur maximale ; au-delà, les phrases passent à la ligne. | auto : `tests/sans_fenetre::volet_borne_grandit_avec_son_contenu`, `tests/comportements::c25_un_long_texte_passe_a_la_ligne` |
 | C-26 | Volet de hauteur bornée : l'en-tête et l'état restent en place, les briques défilent, le pied reste fixe et la barre de défilement est visible. | auto : `tests/sans_fenetre::volet_borne_pied_fixe_et_barre_visible`, `tests/sans_fenetre::volet_borne_et_briques_avec_contexte` |
 | C-27 | Le volet se place contre l'icône, du côté de la barre des tâches (bas, haut, gauche, droite, barre masquée), toujours en entier sur l'écran. | auto : `place::barre_en_bas`, `place::les_autres_cotes`, `place::barre_masquee`, `place::contre_l_icone`, `place::contre_l_icone_toujours_dans_la_zone`, `place::placement_du_volet` |
 | C-28 | Un clic hors du volet le ferme ; un clic dedans ne le ferme pas. | auto : `fenetres::clic_dedans_ou_dehors`, `fenetres::appuis_de_souris` |
@@ -110,12 +110,12 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-47 | Le volet, le petit menu, les Paramètres et les fenêtres du logiciel sont dessinés par une seule boucle ; on peut les ouvrir depuis n'importe quel fil. | auto : `fenetres::suite_des_demandes`, `fenetres::parametres_ouverts_dans_la_boucle`, `autres_fenetres::plusieurs_fenetres_et_croix` |
+| C-47 | Le volet, le petit menu, les Paramètres et les fenêtres du logiciel sont dessinés par une seule boucle ; on peut les ouvrir depuis n'importe quel fil. | auto : `fenetres::suite_des_demandes`, `fenetres::parametres_ouverts_dans_la_boucle`, `autres_fenetres::plusieurs_fenetres_et_croix` ; dans la boucle du logiciel (façon 2, vue du dehors) : `compatibilite::powerpeek::les_parametres_s_ouvrent_dans_la_boucle_sans_fenetre` |
 | C-48 | Un clic sur l'icône pendant que les Paramètres sont ouverts fait ce qu'il doit (volet devant, puis retour). | auto : `fenetres::clic_avec_les_parametres_ouverts`, `fenetres::surface_devant_les_parametres_puis_retour` |
 | C-49 | La fenêtre principale perdue (fermée par Windows, plantage d'egui) est refaite, et le clic qui l'a révélé ouvre quand même. | auto : `fenetres::fenetre_perdue_recreee_et_le_clic_ouvre_quand_meme` |
-| C-50 | Après 3 pertes en 60 s, la bibliothèque arrête de refaire la fenêtre et passe au menu de secours ; elle réessaie au clic suivant. | auto : `fenetres::pertes_en_rafale_menu_de_secours_puis_recreee_au_clic_suivant`, `fenetres::supervision_rafale_puis_reprise_au_clic_suivant`, `fenetres::supervision_reprise_apres_rafale`, `fenetres::supervision_pertes_espacees_toujours_recreees`, `fenetres::supervision_echec_premier_tour_ou_passager` |
+| C-50 | Après 3 pertes en 60 s, la bibliothèque arrête de refaire la fenêtre et passe au menu de secours ; elle réessaie au clic suivant. | auto : `fenetres::pertes_en_rafale_menu_de_secours_puis_recreee_au_clic_suivant`, `fenetres::supervision_rafale_puis_reprise_au_clic_suivant`, `fenetres::supervision_reprise_apres_rafale`, `fenetres::supervision_pertes_espacees_toujours_recreees`, `fenetres::supervision_echec_premier_tour_ou_passager` ; vue du dehors, avec une horloge inventée : `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
 | C-51 | Si le fil des fenêtres s'arrête, le petit menu passe au menu de secours. | auto : `fenetres::fil_des_fenetres_arrete_menu_de_secours` |
-| C-52 | Quitter arrête la boucle proprement ; rien n'est préparé après « Quitter ». | auto : `fenetres::supervision_quitter`, `fenetres::rien_n_est_prepare_apres_quitter` |
+| C-52 | Quitter arrête la boucle proprement ; rien n'est préparé après « Quitter ». | auto : `fenetres::supervision_quitter`, `fenetres::rien_n_est_prepare_apres_quitter`, `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
 | C-53 | Une fenêtre perdue par une panique est refaite sur le même fil. | auto, GitHub : `tests/recreation_apres_panique` |
 | C-54 | Les Paramètres s'ouvrent au premier essai, juste après le démarrage. | auto, GitHub : `tests/premiere_creation` |
 | C-55 | Des fenêtres ouvertes et fermées sans pause ne bloquent jamais la boucle. | auto, GitHub : `tests/fenetres_en_rafale` |
@@ -151,9 +151,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-75 | Journal détaillé, et « Effacer » avec confirmation. | auto : `tests/sans_fenetre::journal_detaille_et_effacer_avec_confirmation` |
 | C-76 | Page Mise à jour : recherches, dossier automatique ; une seule icône selon l'état ; titre et couleurs selon l'état, dans les deux langues ; ligne grise avec la version et la dernière recherche ; pas de redite du dossier. | auto : `tests/sans_fenetre::mise_a_jour_recherches_et_dossier_automatique`, `parametres::*` (5 tests du fichier) |
 | C-77 | Page À propos : licences, crédits, groupe. | auto : `tests/sans_fenetre::a_propos_licences_credits_et_groupe` |
-| C-78 | Bandeau « Redémarrer maintenant » quand un réglage le demande. | essai manquant |
-| C-79 | Taille et place de la fenêtre retenues d'une ouverture à l'autre, toujours en entier sur un écran ; retenues aussi 1 s après un déplacement ; jamais celles d'une fenêtre réduite ou agrandie. | auto (calcul) : `place::place_des_parametres`, `place::place_retenue_*` (3 tests), `place::trop_grand_rapetisse`, `place::toujours_dans_la_zone`, `place::valeurs_absurdes` ; essai manquant pour l'enregistrement par la fenêtre (`parametres/fenetre`) |
-| C-80 | La colonne de navigation s'élargit pour un long nom de page. | essai manquant |
+| C-78 | Bandeau « Redémarrer maintenant » quand un réglage le demande. | auto : `tests/comportements::c78_bandeau_redemarrer` ; dessin : images de référence (`tests/references`) |
+| C-79 | Taille et place de la fenêtre retenues d'une ouverture à l'autre, toujours en entier sur un écran ; retenues aussi 1 s après un déplacement ; jamais celles d'une fenêtre réduite ou agrandie. | auto : `place::place_des_parametres`, `place::place_retenue_*` (3 tests), `place::trop_grand_rapetisse`, `place::toujours_dans_la_zone`, `place::valeurs_absurdes`, `tests/comportements::c79_place_des_parametres` (ouverture et fermeture) ; le suivi 1 s après un déplacement demande une vraie fenêtre : GitHub |
+| C-80 | La colonne de navigation s'élargit pour un long nom de page. | auto : `tests/comportements::c80_la_navigation_s_elargit` |
 | C-81 | Les choix illustrés (images sous les choix) sont alignés. | auto : `tests/sans_fenetre::choix_illustres_alignes` |
 | C-82 | Les Paramètres s'utilisent seuls, sans l'icône ni le volet (trait `Reglages`), y compris en anglais. | auto : `tests/sans_fenetre::parametres_seuls_en_anglais` ; Chat PDC s'en sert |
 | C-83 | La carte d'information reste dans la largeur donnée et n'est pas plus haute qu'il faut. | auto : `tests/carte_info::*` |
@@ -173,15 +173,15 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto (palette) : `theme::la_palette_de_windows_est_suivie` ; essai manquant pour la relecture en direct (`apparence`) |
+| C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto : `theme::la_palette_de_windows_est_suivie`, `tests/comportements::c90_le_theme_de_windows_est_relu` |
 | C-91 | Les contrastes des couleurs du thème sont suffisants. | auto : `theme::contrastes_suffisants` |
-| C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `verification::*` ; essai manquant pour le repli Windows 10 |
+| C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `verification::*`, `tests/polices_windows10::c92_repli_des_polices_de_windows_10` |
 | C-93 | Chaque icône commune existe dans les deux polices d'icônes ; un glyphe absent redonne la lettre. | auto : `tests/polices::chaque_icone_existe`, `verification::glyphe_absent_redonne_la_lettre` |
 | C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `tests/palette_pastilles::*` (4 tests) |
 | C-95 | Le choix de couleur (carte) : même palette que les pastilles, clic, clavier, colonnes selon la place, « Annuler » remet l'ancienne. | auto : `tests/couleurs::*` (10 tests) |
 | C-96 | Le nuancier : cases de 32 points, un clic donne la couleur, nom lu par les lecteurs d'écran. | auto : `nuancier::*` (4 tests) |
 | C-97 | Tout ce qu'écrit la bibliothèque existe en français et en anglais, rempli dans l'ordre ; la langue change en direct. | auto : `textes::deux_langues_completes`, `textes::remplir_dans_l_ordre`, `tests/sans_fenetre::la_langue_change_en_direct` |
-| C-98 | Les nombres ont une espace insécable avant leur unité. | auto : `seuils::les_nombres_ont_une_espace_insecable` ; essai manquant ailleurs que dans les seuils |
+| C-98 | Les nombres ont une espace insécable avant leur unité. | auto (avec écarts connus) : `seuils::les_nombres_ont_une_espace_insecable`, `tests/comportements::c98_espace_insecable_avant_l_unite` ; **écarts connus**, à corriger par la refonte : `conserver_retour` (« {} s », français et anglais) et le pourcentage des appareils du volet (`briques`, « {} % ») |
 
 ## 12. Les contrôles communs
 
@@ -192,7 +192,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-101 | Le champ de raccourci saisit une combinaison et l'écrit lisiblement. | auto : `dessin::saisie_d_un_raccourci`, `touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
 | C-102 | Le menu de choix : flèches qui font le tour, lignes grisées sautées, Début/Fin, Entrée, Échap, clic à côté qui ferme ; ouvert sous la case ou au-dessus selon la place, jamais hors de la fenêtre ; largeur bornée ; nom pour le lecteur d'écran. | auto : `menu_choix::*` (19 tests) |
 | C-103 | La barre des seuils : poignées glissées ou au clavier, limites entre leurs voisines, rien ne bouge sans focus. | auto : `seuils::*` (10 tests) |
-| C-104 | La mise au point (focus) visible au clavier sur chaque contrôle. | essai manquant |
+| C-104 | La mise au point (focus) visible au clavier sur chaque contrôle. | auto : `tests/comportements::c104_le_focus_se_voit` (bouton, bouton accent, bouton icône, interrupteur, ligne de menu ; clair et sombre) |
 
 ## 13. Captures, sonde et journal
 
@@ -203,37 +203,40 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-107 | La sonde écrit une ligne quand un fil est bloqué, puis une ligne de reprise ; un fil qui avance n'écrit rien ; la veille du PC n'est pas un blocage. | auto : `sonde::*` (16 tests) |
 | C-108 | Une création de fenêtre longue donne une ligne au journal. | auto : `sonde::creation_longue_donne_une_ligne`, `sonde::le_chien_ecrit_la_creation_qui_dure` |
 | C-109 | Le lieu d'une panique est noté sans le chemin du PC. | auto : `sonde::lieu_de_panique_sans_le_chemin_du_pc` |
-| C-110 | Le journal du logiciel est branché sur celui de la bibliothèque (`brancher_le_journal`). | essai manquant |
+| C-110 | Le journal du logiciel est branché sur celui de la bibliothèque (`brancher_le_journal`). | auto : `tests/comportements::c110_le_journal_est_branche` |
 
 ## 14. Le système
 
 | N° | Comportement | Essai |
 |---|---|---|
 | C-111 | Un disque réseau ou redirigé n'est jamais pris pour un disque local ; la réponse est rapide. | auto : `systeme::chemins_reseau_reconnus`, `systeme::redirection_jamais_locale`, `systeme::disque_local_repond_vite` |
-| C-112 | L'écran autour d'un point, la position de la souris, les effets d'animation de Windows. | auto (en partie) : `place::ecran_d_un_rectangle`, `place::ecran_a_gauche_en_4k` ; essai manquant pour les appels à Windows |
-| C-113 | Le réglage d'échelle (DPI) du processus est posé au démarrage. | essai manquant |
+| C-112 | L'écran autour d'un point, la position de la souris, les effets d'animation de Windows. | auto : `place::ecran_d_un_rectangle`, `place::ecran_a_gauche_en_4k`, `tests/comportements::c112_ce_que_la_bibliotheque_lit_dans_windows` |
+| C-113 | Le réglage d'échelle (DPI) du processus est posé au démarrage. | auto : `tests/comportements::c113_reglage_d_echelle_par_ecran` |
 
 ## 15. Promesses de l'API
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-114 | Un logiciel compile en changeant seulement le `rev` de la bibliothèque dans son `Cargo.toml` (tant qu'aucun changement n'est annoncé dans `MIGRATION.md`). | essai manquant (aucun essai de compatibilité par logiciel) |
-| C-115 | Le rendu ne change pas sans être annoncé : volet, petit menu, Paramètres gardent leurs mesures (`mesures`). | essai manquant (pas d'images de référence comparées) |
+| C-114 | Un logiciel compile en changeant seulement le `rev` de la bibliothèque dans son `Cargo.toml` (tant qu'aucun changement n'est annoncé dans `MIGRATION.md`). | auto : `tests/compatibilite` (un module par logiciel : ses imports, ses méthodes de traits, ses signatures) |
+| C-115 | Le rendu ne change pas sans être annoncé : volet, petit menu, Paramètres gardent leurs mesures (`mesures`). | auto : `tests/references` (32 images comparées, à 6 près par couleur et 1 pixel sur 5 000 ; sautées si les polices du PC diffèrent de celles des références) |
 | C-116 | Les licences des dépendances sont à jour dans l'avis MIT. | auto : `tests/licences::avis_mit_a_jour` |
 
 ## Bilan
 
 - **116 comportements** relevés.
-- **95 vérifiés par un test automatique** qui tourne sur le PC (C-64 en partie à la main).
+- **110 vérifiés par un test automatique** qui tourne sur le PC (C-64 en partie à la main ;
+  C-17 et C-79 en partie, le reste sur GitHub).
 - **4 vérifiés seulement sur GitHub** (vraies fenêtres ou faux clics).
 - **2 vérifiés seulement à la main** (C-06, C-84).
-- **15 sans essai** : 9 sans aucun (C-17, C-18, C-78, C-80, C-104, C-110, C-113, C-114,
-  C-115), 6 en partie (C-25, C-79, C-90, C-92, C-98, C-112). Les plus graves pour une
-  refonte :
-  - **C-114** (l'API ne bouge pas) et **C-115** (le rendu ne bouge pas). Ce sont justement les
-    deux promesses faites à PowerPeek et KVMSoft. Aucun test ne les garde aujourd'hui.
-  - **C-90** (le thème suivi en direct), **C-79** (la place enregistrée par la fenêtre) et
-    **C-113** (le DPI). Ce code parle à Windows, et il n'a aucun test interne.
+- **0 sans essai.** Les 15 qui n'en avaient pas (C-17, C-18, C-25, C-78, C-79, C-80, C-90,
+  C-92, C-98, C-104, C-110, C-112, C-113, C-114, C-115) ont reçu leurs essais le 25 nov. 2026
+  (filets de la refonte, `tests/comportements.rs`, `tests/polices_windows10.rs`,
+  `tests/compatibilite.rs`, `tests/references.rs`).
+- **Écarts connus** (un essai les liste, la refonte les corrige) : C-98, une espace normale
+  avant « s » dans `conserver_retour` (français et anglais) et avant « % » dans le
+  pourcentage des appareils du volet.
 
-Avant toute refonte, il faut d'abord combler C-114 et C-115 (voir `ANALYSE.md`, étape 0 du
-plan).
+Les deux promesses faites à PowerPeek et KVMSoft sont gardées : **C-114** (l'API ne bouge pas,
+`tests/compatibilite`) et **C-115** (le rendu ne bouge pas, `tests/references`). Une image de
+référence ne se refait que sur décision écrite : `REFERENCES=refaire cargo test --test
+references`, puis regarder chaque image changée avant de la committer.
