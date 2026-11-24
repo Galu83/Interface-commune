@@ -45,5 +45,11 @@
   « Ouvrir une fenêtre », « Fenêtre simple », « Fenêtre de lecture », Paramètres).
 - **En attente** : les vérifications GitHub ne démarrent pas (limite de dépense des Actions du
   compte atteinte) ; à relancer quand c'est réglé.
+- **Refonte à part (A, choisie par le propriétaire le 24 nov.)**, sur la branche `refonte` :
+  la conception est dans `docs/ORGANIGRAMME.md` (version 2, 25 nov. : deux crates, API gardée) ;
+  l'ordre des blocs, les dates, la migration et les conditions de bascule sont dans
+  `docs/PLAN-REFONTE.md` (fin estimée vers le 5 février 2027). Les filets de l'ancienne
+  bibliothèque sont sur la branche `claude/filets-interface` (a115e5f) : à fusionner dans `main`,
+  puis `main` dans `refonte`, avant le premier bloc. Aucun nouveau code écrit ; aucun sous-agent.
 - **Prochaine étape** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).
