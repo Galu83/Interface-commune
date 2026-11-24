@@ -577,36 +577,48 @@ compatibilité) ; l'intérieur est réécrit.
 | `cles` | (dans 446) | A | `ic-coeur` | chemin gardé |
 | `textes` | 422 | B | `ic-coeur` | chemin gardé ; deux textes corrigés (C-98) |
 | `touches` | 301 | B (lisible), F (touches d'egui) | `ic-coeur` + `src/dessin/touches.rs` | chemin gardé |
-| `theme` (dont `Surface`, `ChoixWindows`) | 414 | C | `ic-coeur` | chemin gardé ; `HAUTEUR_LIGNE` retirée (aucun logiciel) |
+| `theme` (dont `Surface`, `ChoixWindows`, `ARRONDI_*`, `TAILLE_*`) | 414 | C | `ic-coeur` | chemin gardé ; `ARRONDI_*` (`u8`) et `TAILLE_*` (`f32`) gardés avec leur type et leur valeur (KVMSoft les reprend dans ses dessins) ; `HAUTEUR_LIGNE` retirée (aucun logiciel) |
 | `mesures` | 100 | C | `ic-coeur` | chemin gardé |
-| `couleurs` | 179 | C (valeurs), F (choix de couleur) | `ic-coeur` + `src/dessin/` | chemin gardé (`palette`) |
+| `couleurs` | 179 | C (valeurs), F (choix de couleur) | `ic-coeur` + `src/dessin/` | chemin gardé (`palette`) ; **les rangs 0 à 9 sont un format** : KVMSoft envoie à un autre PC le rang de la couleur d'un appareil, donc ni l'ordre ni la valeur des dix couleurs ne changent (essai `les_rangs_des_couleurs_restent`) ; une couleur de plus va derrière |
 | `icones` | 91 | C | `ic-coeur` | chemin gardé (`INSTALLER`…) |
 | `apparence` (`Apparence`, `couleur`, `choix_windows`) | 156 | C (relire à 2 s), F (`couleur`), L (lecture) | `ic-coeur` + `src/dessin/` + `src/bords/` | chemin gardé |
 | `clics` | 201 | D | `ic-coeur` | chemin gardé |
 | `menu` (`Action`, `lignes`) | 201 | A (`Action`), D (ordre) | `ic-coeur` | chemin gardé |
 | `place` (`Place`, `PlacementVolet`) | 789 | D | `ic-coeur` | chemin gardé |
 | `parametres::modele` | 879 | E | `ic-coeur` | chemin gardé |
-| `parametres` (`Parametres`, `Contexte`, `TAILLE`) | 1 390 | H (+ E : présentation de la mise à jour) | `src/dessin/parametres/`, un fichier par page | chemin gardé |
-| `parametres::fenetre` (`fenetre`, `ouvrir_dans_boucle`) | 340 | J | `src/bords/fenetres/parametres.rs`, repris à ce chemin | chemin gardé |
+| `parametres` (`Parametres`, `Parametres::dessiner`, `Parametres::titre_fenetre`, `Contexte`, `TAILLE`) | 1 390 | H (+ E : présentation de la mise à jour) | `src/dessin/parametres/`, un fichier par page | chemin gardé |
+| `parametres::fenetre` (`ouvrir_dans_boucle`, `PageVoulue`, `ouverture`, `choisir_dossier`, `icone_fenetre`) | 340 | J | `src/bords/fenetres/parametres.rs`, repris à ce chemin | chemin gardé |
 | `dessin` (`focus`, `icone`, `bouton_icone`, `interrupteur_ecrit`, `insecables`, `Genre`…) | 859 | F | `src/dessin/controles/` | chemin gardé |
 | `briques` (`Brique`, `Case`, `Pastille`…) | 780 | F | `src/dessin/briques/` | chemin gardé ; `pourcent` corrigé (C-98) |
-| `pastilles` (`couleur_lettre`, `plan_des_cases`) | 1 005 | F (dessin), D (plan) | `src/dessin/pastilles/` + `ic-coeur` | chemin et signatures gardés (enveloppe) |
+| `pastilles` (`marque`, `Marque`, `couleur_lettre`, `plan_des_cases`) | 1 005 | F (dessin), D (plan) | `src/dessin/pastilles/` + `ic-coeur` | chemin et signatures gardés (enveloppe) |
 | `menu_choix` (`MenuChoix`, `placer`) | 922 | F (dessin), D (place, touches) | `src/dessin/menu_choix/` + `ic-coeur` | chemin et signatures gardés (enveloppe) |
-| `seuils` (`ReponseSeuils`) | 526 | F | `src/dessin/seuils.rs` | chemin gardé |
+| `seuils` (`barre_seuils`, `Options`, `ReponseSeuils`, `Zone`) | 526 | F | `src/dessin/seuils.rs` | chemin gardé |
 | `nuancier` (`bouton_nuancier`) | 227 | F | `src/dessin/nuancier.rs` | chemin gardé |
 | `surface` (`dessiner_borne`) | 417 | G | `src/dessin/surface.rs` | chemin gardé |
 | `volet` (dessin, fenêtre, veilleur) | 1 268 | G (dessin), J (fenêtre), D (veille, C-34) | `src/dessin/volet/` + `src/bords/fenetres/volet.rs` | chemin gardé |
-| `toutes_faites` | 1 299 | H | `src/dessin/toutes_faites/simple.rs`, `lecture.rs`, `prete.rs` | chemin gardé |
-| `capture` | 494 | I | `src/dessin/capture.rs` | chemin gardé |
-| `fenetres` (`envoyer_le_clic`, `Demande`, `superviser_les_fenetres`) | 1 629 | J (+ D : décision du clic, des pertes) | `src/bords/fenetres/` + `ic-coeur` | chemin gardé |
-| `autres_fenetres` (`Ouverture`, `AutresFenetres`, `Contenu`, `Cadre`) | 1 500 | J | `src/bords/fenetres/autres.rs` | chemin gardé |
-| `horloge` (`Horloge`, `Reveil`, `Poste`, `Niveau`, `MessageWindows`, `reglage_dpi`, `instance_unique_avec`) | 1 508 | M, K, N, L, A (`Reveil`, `Niveau`) | `src/bords/icone/`, `poste.rs`, `unique.rs` | chemin gardé (`Horloge` façade sur `Zone`) |
-| `zone` (`Zone`, `FenetresCommunes`, `Aiguilleur`, `guid_stable`, `FinDeSession`) | 1 617 | M (+ D : l'aiguilleur unique) | `src/bords/icone/` + `ic-coeur` | chemin gardé ; GUID de l'icône gardé |
-| `systeme` (`ecran_autour`, `position_souris`, `disque_local`, `choix_windows`…) | 802 | L | `src/bords/systeme/` | chemin gardé |
+| `toutes_faites` (`Simple`, `FenetreSimple`, `ouvrir_simple`, `dessiner_simple`, `Champ`…) | 1 299 | H | `src/dessin/toutes_faites/simple.rs`, `lecture.rs`, `prete.rs` | chemin gardé |
+| `capture` (`capture`, `Options`) | 494 | I | `src/dessin/capture.rs` | chemin gardé ; **les images de référence de PowerPeek** (il compare ses pages au pixel avant chaque dépôt) **sont un critère de bascule** (plan §6) |
+| `fenetres` (`envoyer_le_clic`, `Demande`, `Ouvert`, `Liens`, `superviser_les_fenetres`) | 1 629 | J (+ D : décision du clic, des pertes) | `src/bords/fenetres/` + `ic-coeur` | chemin gardé |
+| `autres_fenetres` (`Ouverture`, `AutresFenetres` avec `lier` et `montrer`, `Contenu`, `Cadre`) | 1 500 | J | `src/bords/fenetres/autres.rs` | chemin gardé ; la boucle du logiciel (`lier`, `montrer`) en fait partie |
+| `horloge` (`Horloge`, `Horloge::new`, `Reveil`, `Poste`, `Niveau`, `MessageWindows`, `reglage_dpi`, `instance_unique_avec`) | 1 508 | M, K, N, L, A (`Reveil`, `Niveau`) | `src/bords/icone/`, `poste.rs`, `unique.rs` | chemin gardé (`Horloge` façade sur `Zone`) ; `Horloge::new` reste sans effet sur Windows avant `lancer` : les tests de KVMSoft s'en servent sans jamais attendre |
+| `zone` (`Zone`, `FenetresCommunes`, `Aiguilleur`, `guid_stable`, `FinDeSession`, `Image`, `LigneMenu`, `Bouton`, `Evenement`, `Message`, `SuiteDuGeste`) | 1 617 | M (+ D : l'aiguilleur unique) | `src/bords/icone/` + `ic-coeur` | chemin gardé ; GUID de l'icône gardé |
+| `systeme` (`ecran_autour`, `position_souris`, `disque_local`, `choix_windows`…) | 802 | L | `src/bords/systeme/` | chemin gardé ; **`disque_local` est une parade de sécurité** (le sélecteur de dossier ne part jamais d'un partage, d'un lecteur réseau ni d'une jonction) : son comportement garde ses essais (C-111) |
 | `echelle` (`suivre_windows`) | 90 | L | `src/bords/systeme/echelle.rs` | chemin gardé |
 | `polices` (`polices`, `polices_ou_vides`, `semibold`, `icone_disponible`, `dossier`) | 151 | L | `src/bords/systeme/polices.rs` | chemin gardé |
-| `sonde` (`inscrire`, `battement`, `etape`, `imbriquee`, `regler`, `brancher_le_journal`, `Inscription`) | 1 027 | O (+ D : décision « bloqué ») | `src/bords/sonde/` + `ic-coeur` | chemin gardé |
+| `sonde` (`inscrire`, `battement`, `etape`, `imbriquee`, `regler`, `Delais`, `brancher_le_journal`, `Inscription`) | 1 027 | O (+ D : décision « bloqué ») | `src/bords/sonde/` + `ic-coeur` | chemin gardé ; `regler` et `Delais` gardés : les tests de KVMSoft règlent la sonde pour ne jamais attendre |
 | `verification` (`logos_absents`…) | 164 | O | `src/bords/verification.rs` | chemin gardé |
+
+Trois promesses en plus des chemins (relevées le 25 nov. dans KVMSoft et PowerPeek, rev e077572) :
+
+- **La version d'egui fait partie de l'API.** PowerPeek prend egui en direct (ses pages propres,
+  ses dessins) : passer à un autre egui (ou eframe) est un changement d'API, écrit dans
+  `MIGRATION.md` avec la migration de chaque logiciel (essai `la_version_d_egui_reste`, 0.37
+  aujourd'hui).
+- **Le style des fenêtres vient de la seule bibliothèque** (sa boucle et sa `Palette`) : PowerPeek
+  ne pose plus de style à lui. Sa fonction `pour_les_fenetres` est à lui (elle ne prend que
+  `polices::polices`) ; la bibliothèque n'a rien de ce nom à garder.
+- **Les rangs des dix couleurs** (`couleurs::palette`) et **les images de référence de PowerPeek**
+  : voir les lignes `couleurs` et `capture` ci-dessus.
 
 Les modules `echelle`, `horloge`, `systeme`, `volet` et `zone` restent réservés à Windows
 (`#[cfg(windows)]`), comme aujourd'hui.

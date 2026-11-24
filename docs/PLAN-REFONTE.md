@@ -111,7 +111,9 @@ Deux voies, une session par voie. Jours ouvrés ; pause du 24 décembre au 1er j
 
 Ce que prend chaque logiciel aujourd'hui (`ANALYSE.md` §6) :
 - **KVMSoft** épingle `rev = "e077572"` ;
-- **PowerPeek** épingle `rev = "119c500"` (il garde sa propre boucle eframe : façon 2 du bloc J) ;
+- **PowerPeek** : sa refonte épingle `rev = "e077572"` (son `main`, gelé, reste sur `77bad2b`) ;
+  il garde sa propre boucle eframe et y branche les fenêtres de la bibliothèque
+  (`AutresFenetres::lier`, `montrer`) : façon 2 du bloc J ;
 - **Vocalis** épingle `rev = "119c500"` ;
 - **Chat PDC** épingle `rev = "77bad2b"` et ne prend que `horloge::Horloge` et
   `parametres::modele`.
@@ -145,6 +147,14 @@ Ce qui **ne change pas**, dit parce qu'on aurait pu le changer :
 - **le GUID de l'icône et son identifiant** : Windows garde la place que l'utilisateur a choisie
   pour l'icône (visible ou dans le menu caché) ;
 - `Place` et ses champs : les fichiers des logiciels n'ont rien à migrer ;
+- **les rangs 0 à 9 des couleurs** (`couleurs::palette`) : KVMSoft envoie le rang à un autre PC,
+  c'est un format (essai `les_rangs_des_couleurs_restent`) ;
+- les constantes `theme::ARRONDI_*` et `theme::TAILLE_*`, avec leur type et leur valeur ;
+- `systeme::disque_local`, parade de sécurité du sélecteur de dossier (C-111) ;
+- `Horloge::new` et `sonde::regler` sans attente : les tests de KVMSoft en dépendent ;
+- **la version d'egui (0.37)** : PowerPeek la prend en direct, elle fait partie de l'API ; un
+  changement d'egui se traite comme un changement d'API, avec sa ligne dans ce tableau et la
+  migration de chaque logiciel (essai `la_version_d_egui_reste`) ;
 - la ligne `interface-commune = { git = …, rev = … }` du `Cargo.toml` : seul `rev` change.
 
 Après la bascule, toute suppression d'un élément public qui sert passe par une étape dépréciée
@@ -175,7 +185,9 @@ remplies, chacune vérifiée et notée dans `docs/ETAT.md` :
    la main par le propriétaire) ; les images de référence passent, aux seuls écarts du §5 près ;
    `tests/compatibilite.rs` compile.
 2. **Les quatre logiciels compilent et passent leurs propres tests** sur une branche à eux qui
-   pointe sur la refonte, avant tout changement de `rev` sur leur `main`.
+   pointe sur la refonte, avant tout changement de `rev` sur leur `main`. Pour **PowerPeek**, cela
+   comprend **ses images de référence** : il compare ses pages au pixel avant chaque dépôt, et
+   elles passent sans être refaites (aux seuls écarts du §5 près, chacun montré à son Atelier).
 3. **La reprise des réglages et des données** : sans objet pour la bibliothèque, qui n'écrit
    aucun fichier (principe 4) ; vérifié pour chaque logiciel par ses propres tests sur une copie
    inventée de chacun de ses formats (place retenue, réglages), comme sa fiche le demande.
