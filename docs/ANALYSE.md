@@ -210,7 +210,8 @@ garderont les essais de compatibilité (§ 3).
   brancher_le_journal, Inscription}` ; `pastilles::couleur_lettre` ; `couleurs::palette` ;
   `zone::FinDeSession` ; `verification::logos_absents` ; `textes::FRANCAIS` ; `place::Place` ;
   `mesures::PARAMETRES_TAILLE` ; `menu_choix` ; `menu::Action`.
-- **PowerPeek** (rev `119c500`) : `theme::{Surface, ChoixWindows}` ; `zone::{FenetresCommunes,
+- **PowerPeek** (rev `119c500` sur son `main` gelé ; sa refonte épingle `e077572`, relevé du
+  25 nov.) : `theme::{Surface, ChoixWindows}` ; `zone::{FenetresCommunes,
   guid_stable}` ; `polices::{polices, semibold, polices_ou_vides}` ; `place::{Place,
   PlacementVolet}` ; `apparence::{couleur, Apparence}` ; `volet` ; `textes` ;
   `surface::dessiner_borne` ; `seuils::ReponseSeuils` ; `parametres::{fenetre, TAILLE}` ;

@@ -653,7 +653,7 @@ Seuils de la méthode : aucun fichier de plus de 800 lignes (600 visés), aucune
 | Doute | Qui tranche |
 |---|---|
 | Les pages du logiciel sont dessinées par le logiciel (`dessiner_page`). PowerPeek voudrait une description pure des pages. Une seconde façon, facultative, à côté de l'actuelle ? **Hors de cette refonte** (elle ne change pas l'API) : à reprendre après la bascule. | l'Atelier Master, avec l'Atelier de PowerPeek |
-| La tolérance des images de référence (aujourd'hui : 6 par canal, 1 pixel sur 5 000) suffira-t-elle quand le dessin sera réécrit (arrondis différents) ? Si non, une décision écrite par image. | l'Atelier de l'Interface commune, au bloc F |
+| La tolérance des images de référence (aujourd'hui : 6 par canal, 1 pixel sur 5 000) suffira-t-elle quand le dessin sera réécrit (arrondis différents) ? Si non, une décision écrite par image. | l'Atelier Master, au bloc F |
 | Une boucle par programme (winit) : aucune autre voie aujourd'hui ; à revoir à winit 0.31. | veille |
 | Les essais en vraies fenêtres (SendInput) ne tournent pas tant que la limite de dépense des Actions est atteinte ; quatre comportements ne s'essaient que là, deux qu'à la main. | le propriétaire (forfait GitHub), par l'Atelier Master |
 | Le numéro de version de la bascule (0.2.0 ?). | l'Atelier |

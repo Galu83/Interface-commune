@@ -20,7 +20,7 @@ comment ils passent à la nouvelle version, et à quelles conditions on bascule.
    version suivante. PowerPeek et KVMSoft épinglent leur `rev` : rien ne bouge pour eux tant
    qu'ils ne changent pas eux-mêmes leur `rev`.
 2. **Chaque bloc est une session de travail à part**, sur sa propre branche partie de `refonte`,
-   intégrée par l'Atelier de l'Interface commune. Deux sessions en même temps au plus (les deux
+   intégrée par l'Atelier Master, qui tient ce dépôt. Deux sessions en même temps au plus (les deux
    voies du §3), jamais sur les mêmes fichiers.
 3. **Avant le premier bloc**, l'Atelier fusionne la branche des filets (`claude/filets-interface`)
    dans `main`, puis `main` dans `refonte` : les essais de compatibilité, les images de référence
@@ -111,7 +111,8 @@ Deux voies, une session par voie. Jours ouvrés ; pause du 24 décembre au 1er j
 
 Ce que prend chaque logiciel aujourd'hui (`ANALYSE.md` §6) :
 - **KVMSoft** épingle `rev = "e077572"` ;
-- **PowerPeek** : sa refonte épingle `rev = "e077572"` (son `main`, gelé, reste sur `77bad2b`) ;
+- **PowerPeek** : sa refonte épingle `rev = "e077572"` (dans `crates/bords-windows`) ; son
+  `main`, gelé, épingle encore `rev = "119c500"` (relevé sur le disque le 25 nov.) ;
   il garde sa propre boucle eframe et y branche les fenêtres de la bibliothèque
   (`AutresFenetres::lier`, `montrer`) : façon 2 du bloc J ;
 - **Vocalis** épingle `rev = "119c500"` ;
@@ -173,7 +174,7 @@ avec la liste des images qu'il touche :
 Tout autre écart, même d'un pixel au-delà de la tolérance (`ECART_PERMIS` = 6 par canal, au plus
 1 pixel sur 5 000), fait échouer l'essai. La session qui le trouve ne refait pas l'image : elle
 corrige son dessin, ou elle écrit une ligne de plus dans ce tableau et la fait valider par
-l'Atelier de l'Interface commune.
+l'Atelier Master.
 
 ## 6. Les conditions de bascule (méthode, §5, étape 4)
 
@@ -214,7 +215,7 @@ L'ordre de bascule des logiciels : **Chat PDC** d'abord (il prend le moins), pui
 
 ## 8. Les sessions à lancer
 
-Chaque ligne du §2 devient une session, briefée par l'Atelier de l'Interface commune avec : son
+Chaque ligne du §2 devient une session, briefée par l'Atelier Master avec : son
 bloc (ORGANIGRAMME §3), ses comportements (§13), ses fichiers (§10.1), ses limites (§1 de ce
 plan), et le rappel « aucune fenêtre sur le PC ». La première est la **Préparation**, le
 26 novembre ; ensuite deux à la fois au plus, selon le §3.
