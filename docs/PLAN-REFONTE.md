@@ -107,6 +107,12 @@ Deux voies, une session par voie. Jours ouvrés ; pause du 24 décembre au 1er j
 - **Si le forfait dépasse 80 %** (fiche « Forfait ») : une seule voie, dans l'ordre de la voie 1
   puis de la voie 2 ; la fin glisse vers la fin février 2027.
 
+> **Décision de l'Atelier Master, 25 nov. 2026** : plan et organigramme (version 2) validés.
+> **Une seule voie à la fois** pour commencer : le forfait de la semaine est déjà à 38 % après
+> un jour, et Outils communs se refait en même temps. On suit l'ordre de la voie 1, puis
+> celui de la voie 2 ; la fin glisse vers la fin février 2027. Une deuxième voie s'ouvre quand
+> le forfait le permet (fiche « Forfait »). La Préparation commence le 26 nov.
+
 ## 4. Les changements d'API, et la migration de chaque logiciel
 
 Ce que prend chaque logiciel aujourd'hui (`ANALYSE.md` §6) :
