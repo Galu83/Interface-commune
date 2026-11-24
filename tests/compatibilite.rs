@@ -368,6 +368,21 @@ mod powerpeek {
         let _: fn(&mut ic::parametres::Parametres, &mut egui::Ui, &ic::Palette, &dyn ic::Reglages) =
             ic::parametres::Parametres::dessiner;
         let _: fn(isize) -> bool = ic::echelle::suivre_windows;
+        // La supervision de sa boucle : le trait (ses quatre méthodes) et la fonction.
+        let _: fn(&mut FaussesFenetres) -> Result<(), String> =
+            <FaussesFenetres as ic::fenetres::Supervise>::boucle;
+        let _: fn(&mut FaussesFenetres, &ic::fenetres::Evenement) =
+            <FaussesFenetres as ic::fenetres::Supervise>::perdues;
+        let _: fn(&mut FaussesFenetres) -> bool =
+            <FaussesFenetres as ic::fenetres::Supervise>::attendre_un_clic;
+        let _: fn(&FaussesFenetres) -> bool = <FaussesFenetres as ic::fenetres::Supervise>::quitter;
+        let _: fn(&mut FaussesFenetres, fn() -> std::time::Instant) -> ic::fenetres::Fin =
+            ic::fenetres::superviser_les_fenetres;
+        let _ = [
+            ic::fenetres::Fin::Quitter,
+            ic::fenetres::Fin::Impossible(String::new()),
+        ];
+        let _: fn(&ic::fenetres::Evenement) -> String = ic::fenetres::Evenement::phrase;
         // La sonde des fils, branchée sur le journal de PowerPeek.
         let _: fn(&'static str, Option<Box<dyn Fn() + Send + Sync>>) -> ic::sonde::Inscription =
             ic::sonde::inscrire;
@@ -404,6 +419,127 @@ mod powerpeek {
                 );
             }
         }
+    }
+
+    // -----------------------------------------------------------------------------------
+    // La boucle du logiciel (façon 2 du bloc J), vue du dehors et sans fenêtre : PowerPeek
+    // tient sa propre boucle eframe, la fait superviser par la bibliothèque et y ouvre les
+    // Paramètres. Ici, la boucle est jouée d'avance et l'horloge est inventée.
+
+    /// Une boucle de fenêtres jouée d'avance : chaque tour rend le résultat suivant de
+    /// `tours` ; quand il n'y en a plus, le logiciel se ferme. `clics` : les réponses
+    /// d'`attendre_un_clic` (faux quand il n'y en a plus).
+    struct FaussesFenetres {
+        tours: std::collections::VecDeque<Result<(), String>>,
+        clics: std::collections::VecDeque<bool>,
+        recues: Vec<ic::fenetres::Evenement>,
+        fin: bool,
+    }
+
+    impl FaussesFenetres {
+        fn new(tours: Vec<Result<(), String>>, clics: Vec<bool>) -> Self {
+            Self {
+                tours: tours.into(),
+                clics: clics.into(),
+                recues: Vec::new(),
+                fin: false,
+            }
+        }
+
+        fn reprises(&self) -> Vec<(usize, ic::fenetres::Reprise)> {
+            self.recues.iter().map(|e| (e.nombre, e.reprise)).collect()
+        }
+    }
+
+    impl ic::fenetres::Supervise for FaussesFenetres {
+        fn boucle(&mut self) -> Result<(), String> {
+            match self.tours.pop_front() {
+                Some(r) => r,
+                None => {
+                    self.fin = true;
+                    Ok(())
+                }
+            }
+        }
+        fn perdues(&mut self, e: &ic::fenetres::Evenement) {
+            assert!(!e.phrase().is_empty());
+            self.recues.push(e.clone());
+        }
+        fn attendre_un_clic(&mut self) -> bool {
+            self.clics.pop_front().unwrap_or(false)
+        }
+        fn quitter(&self) -> bool {
+            self.fin
+        }
+    }
+
+    /// C-50 et C-52 vus du dehors : jusqu'à 3 pertes en une minute, les fenêtres sont
+    /// recréées tout de suite ; la 4e attend le clic suivant ; pas de clic, le logiciel se
+    /// ferme. Une boucle jamais créée arrête tout ; un échec passager ne compte pas.
+    #[test]
+    fn la_supervision_vue_du_dehors() {
+        use ic::fenetres::{Fin, Perte, Reprise::*, superviser_les_fenetres};
+        let t0 = std::time::Instant::now();
+
+        // Une rafale : l'horloge ne bouge pas.
+        let mut f = FaussesFenetres::new(vec![Ok(()); 4], vec![]);
+        assert_eq!(superviser_les_fenetres(&mut f, || t0), Fin::Quitter);
+        assert_eq!(
+            f.reprises(),
+            [
+                (1, Maintenant),
+                (2, Maintenant),
+                (3, Maintenant),
+                (4, AuClicSuivant)
+            ]
+        );
+        assert!(f.recues.iter().all(|e| e.perte == Perte::Fermee));
+
+        // Les mêmes pertes, une par minute et une seconde : jamais de rafale.
+        let heure = std::cell::Cell::new(t0);
+        let horloge = || {
+            let t = heure.get();
+            heure.set(t + std::time::Duration::from_secs(61));
+            t
+        };
+        let mut f = FaussesFenetres::new(vec![Ok(()); 5], vec![]);
+        assert_eq!(superviser_les_fenetres(&mut f, horloge), Fin::Quitter);
+        assert_eq!(f.reprises(), [(1, Maintenant); 5]);
+
+        // Rien n'a jamais marché : le menu de Windows pour de bon, sans perte annoncée.
+        let mut f = FaussesFenetres::new(vec![Err("pas d'OpenGL".into())], vec![]);
+        assert_eq!(
+            superviser_les_fenetres(&mut f, || t0),
+            Fin::Impossible("pas d'OpenGL".into())
+        );
+        assert!(f.recues.is_empty());
+
+        // Un échec passager après un premier tour : nouvel essai au clic suivant, sans
+        // compter une perte de plus ; puis le logiciel se ferme pendant un tour.
+        let mut f = FaussesFenetres::new(vec![Ok(()), Err("écrans en veille".into())], vec![true]);
+        assert_eq!(superviser_les_fenetres(&mut f, || t0), Fin::Quitter);
+        assert_eq!(f.reprises(), [(1, Maintenant), (1, AuClicSuivant)]);
+        assert_eq!(f.recues[1].perte, Perte::Echec("écrans en veille".into()));
+    }
+
+    /// C-47 vu du dehors : les Paramètres s'ouvrent parmi les fenêtres de la boucle du
+    /// logiciel, une seule fois ; redemandés, ils changent de page. Aucune boucle egui ne
+    /// tourne : rien n'est dessiné, aucune fenêtre n'apparaît.
+    #[test]
+    fn les_parametres_s_ouvrent_dans_la_boucle_sans_fenetre() {
+        use ic::parametres::fenetre::{PageVoulue, ouvrir_dans_boucle};
+        let autres = ic::autres_fenetres::AutresFenetres::default();
+        let reglages: std::sync::Arc<dyn ic::Reglages> = std::sync::Arc::new(Imite(super::identite()));
+        let voulue = PageVoulue::default();
+
+        ouvrir_dans_boucle(&autres, &reglages, &voulue, Some("general".into()));
+        assert_eq!(autres.cles(), [ic::parametres::CLE_FENETRE]);
+        assert!(autres.ouverte(ic::parametres::CLE_FENETRE));
+        assert_eq!(*voulue.lock().unwrap(), None);
+
+        ouvrir_dans_boucle(&autres, &reglages, &voulue, Some("apparence".into()));
+        assert_eq!(autres.cles().len(), 1);
+        assert_eq!(voulue.lock().unwrap().as_deref(), Some("apparence"));
     }
 }
 
