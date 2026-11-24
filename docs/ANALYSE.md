@@ -8,6 +8,14 @@ garder (`COMPORTEMENTS.md`). Il finit par une recommandation : **A**, une refont
 **Réponse courte : B, un nettoyage sur place, par étapes. Fin estimée vers le 15 décembre
 2026.** Les raisons sont au § 5.
 
+> **Décision du propriétaire, 24 nov. 2026 : A, une refonte à part.** La recommandation B
+> n'est pas retenue. La refonte se fait sur une branche `refonte` séparée. `main` ne reçoit plus
+> que des correctifs et des essais, jusqu'à la bascule. La première étape est confiée à une
+> session : les filets sur le code actuel (images de référence, essais de compatibilité par
+> logiciel), la correction de `IDEAL.md` en `ORGANIGRAMME.md` d'après `RELECTURE-IDEAL.md`, puis
+> `PLAN-REFONTE.md`. Le choix « une seule crate », fait pour B, est à revoir pour A. Les logiciels
+> gardent leur `rev` épinglée jusqu'à la bascule, puis migrent avec `MIGRATION.md`.
+
 ## 0. Comment lire ce document
 
 - **Verdict** : *tel quel* (on n'y touche pas, ou presque), *adapter* (on range, on découpe,
