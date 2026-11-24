@@ -15,14 +15,14 @@
 | `src/menu.rs` | l'ordre du petit menu |
 | `src/parametres/` | les Paramètres : modèle (pages, Annuler, « Conserver ces modifications ? »), dessin, fenêtre |
 | `src/nuancier.rs` | le nuancier : pastille de couleur, grille, bouton qui ouvre la grille (choisir une couleur sans taper de code) |
-| `src/couleurs.rs` | les couleurs dans les Paramètres, aux couleurs du volet : `pastille_de_carte` (la pastille d'un appareil dans une carte), `choisir_couleur` (rangée de pastilles rondes : flèches, Entrée ou Espace, contour de focus), `carte_couleur` (la carte, avec « Annuler » en option), `palette()` = `apparence::couleurs_pastilles()` |
+| `src/couleurs.rs` | les couleurs dans les Paramètres, aux couleurs du volet : `pastille_de_carte` (la pastille d'un appareil dans une carte), `choisir_couleur` (rangée de pastilles rondes : flèches, Entrée ou Espace, contour de focus ; sur des lignes égales si elle ne tient pas, `colonnes`), `carte_couleur` (la carte, avec « Annuler » en option), `palette()` = `apparence::couleurs_pastilles()` (10 couleurs, les 6 premiers rangs inchangés) |
 | `src/seuils.rs` | la barre à seuils : une barre de 0 à 100 coupée en zones colorées, dont on règle les limites en glissant les poignées (ou au clavier) |
 | `src/dessin.rs`, `icones.rs` | cartes, interrupteurs, bandeau, boutons, champ de raccourci ; les icônes communes |
 | `src/place.rs`, `clics.rs`, `systeme.rs` | placement près de la barre des tâches, clics de l'icône, appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme) |
 | `src/capture.rs` | captures PNG du volet, du petit menu et des Paramètres pour la documentation, sans fenêtre |
 | `src/menu_choix.rs` | le menu flottant de choix (logique pure : touches, placement, nom pour le lecteur d'écran ; puis le dessin dans une `Area`) |
 | `src/verification.rs` | contrôles des polices, pour les tests des logiciels |
-| `tests/` | volet, menu et Paramètres sans fenêtre ; polices ; avis de licence à jour |
+| `tests/` | volet, menu et Paramètres sans fenêtre ; polices ; avis de licence à jour ; `palette_pastilles.rs` : les couleurs des pastilles (ΔE2000 d'au moins 12, lisibles, rangs gardés) |
 | `docs/LICENCES.md` | avis MIT des crates publiées sans fichier de licence (egui…) |
 | `docs/MIGRATION.md`, `ETAT.md` | ce que chaque projet change ; où en est la bibliothèque |
 | `examples/demo.rs` | un logiciel d'exemple, avec une fenêtre principale (double-clic, « Ouvrir Exemple » en gras, roue dentée, interrupteur écrit) |

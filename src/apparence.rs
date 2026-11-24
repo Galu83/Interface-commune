@@ -16,8 +16,8 @@ pub fn couleur(c: Rgb) -> Color32 {
     Color32::from_rgb(c.0, c.1, c.2)
 }
 
-/// Les 6 couleurs des pastilles d'appareils du volet (voir [`crate::pastilles`]).
-pub fn couleurs_pastilles() -> [Rgb; 6] {
+/// Les 10 couleurs des pastilles d'appareils du volet (voir [`crate::pastilles`]).
+pub fn couleurs_pastilles() -> [Rgb; 10] {
     crate::pastilles::couleurs_pastilles()
 }
 

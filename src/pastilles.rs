@@ -395,11 +395,13 @@ pub fn dessiner_pastilles(
 
 // ---- Le choix illustré ----------------------------------------------------------------
 
-/// Les 6 couleurs des pastilles et des cases : lisibles en clair comme en sombre (3 contre
+/// Les 10 couleurs des pastilles et des cases : lisibles en clair comme en sombre (3 contre
 /// 1 au moins avec le fond des deux modes, lettre à 4,5 contre 1), sans vert, orange, rouge
-/// ni bleu d'accent, qui disent un état ou l'accent de Windows. Violet, magenta, sarcelle
-/// foncé, brun, ardoise, olive : un logiciel prend la suivante pour chaque appareil.
-pub fn couleurs_pastilles() -> [Rgb; 6] {
+/// ni bleu d'accent, qui disent un état ou l'accent de Windows, et à un écart ΔE2000 d'au
+/// moins 12 l'une de l'autre (contrôlé par `tests/palette_pastilles.rs`). Un logiciel prend la
+/// suivante pour chaque appareil. Les 6 premières ne bougent jamais : un rang déjà enregistré
+/// garde sa couleur ; les suivantes s'ajoutent derrière.
+pub fn couleurs_pastilles() -> [Rgb; 10] {
     [
         Rgb::hex(0x7B57C9), // violet
         Rgb::hex(0xB03A9C), // magenta
@@ -407,6 +409,10 @@ pub fn couleurs_pastilles() -> [Rgb; 6] {
         Rgb::hex(0x94604F), // brun
         Rgb::hex(0x667A94), // ardoise
         Rgb::hex(0x857A2A), // olive
+        Rgb::hex(0x3865F3), // indigo
+        Rgb::hex(0xC0416B), // framboise
+        Rgb::hex(0x8E679E), // prune
+        Rgb::hex(0x7C6D61), // taupe
     ]
 }
 
@@ -943,36 +949,6 @@ mod essais {
         assert_eq!(couleur_lettre(Rgb(0xF0, 0xE0, 0x90)), NOIR);
         assert_eq!(couleur_lettre(NOIR), BLANC);
         assert_eq!(couleur_lettre(BLANC), NOIR);
-    }
-
-    /// Les 6 couleurs : distinctes, lettre lisible (4,5), visibles sur le fond clair comme
-    /// sombre (3), et loin du vert, de l'orange, du rouge et de l'accent bleu de Windows.
-    #[test]
-    fn six_couleurs_lisibles() {
-        let c = couleurs_pastilles();
-        for (i, a) in c.iter().enumerate() {
-            assert!(!c[..i].contains(a), "{a:?} en double");
-            assert!(
-                contraste(*a, couleur_lettre(*a)) >= 4.5,
-                "{a:?} : lettre illisible"
-            );
-            for sombre in [false, true] {
-                let p = Palette::de(&ChoixWindows {
-                    sombre,
-                    ..Default::default()
-                });
-                assert!(
-                    contraste(*a, p.fond) >= 3.0,
-                    "{a:?} sur le fond (sombre : {sombre})"
-                );
-                for etat in [p.vert, p.orange, p.rouge, p.accent] {
-                    let d = (i32::from(a.0) - i32::from(etat.0)).abs()
-                        + (i32::from(a.1) - i32::from(etat.1)).abs()
-                        + (i32::from(a.2) - i32::from(etat.2)).abs();
-                    assert!(d > 90, "{a:?} trop près de {etat:?}");
-                }
-            }
-        }
     }
 
     /// 3 pastilles : 2 colonnes, donc 2 rangées ; le choix illustré a sa hauteur propre.

@@ -4,7 +4,8 @@
 //!   que celle de la brique [`crate::briques::Brique::Pastilles`]) posée dans une carte ;
 //! - [`choisir_couleur`] : une rangée de pastilles rondes à choisir, comme la couleur d'accent
 //!   de Windows 11 : contour sur la couleur choisie, flèches pour passer de l'une à l'autre,
-//!   Entrée ou Espace pour choisir, contour de focus visible ;
+//!   Entrée ou Espace pour choisir, contour de focus visible ; trop étroite, elle passe sur
+//!   des lignes égales ([`colonnes`]) ;
 //! - [`carte_couleur`] : une carte avec cette rangée, et la bulle « Annuler » en option.
 //!
 //! Les couleurs viennent d'un seul endroit : [`crate::apparence::couleurs_pastilles`]
@@ -21,8 +22,23 @@ use crate::pastilles::{Pastille, carre};
 use crate::theme::{Palette, Rgb};
 
 /// Les couleurs proposées : celles des pastilles du volet (une seule liste pour tous).
-pub fn palette() -> [Rgb; 6] {
+pub fn palette() -> [Rgb; 10] {
     couleurs_pastilles()
+}
+
+/// Ce qu'une carte prend hors de son contrôle : ses marges (2 × 16), l'icône (28), l'espace
+/// après l'icône (8), trois écarts entre éléments (3 × 8) et le texte le plus étroit (160).
+const CARTE_HORS_CONTROLE: f32 = 2.0 * 16.0 + 28.0 + 8.0 + 3.0 * 8.0 + 160.0;
+
+/// Le nombre de pastilles par ligne pour `n` couleurs dans `largeur` : toutes sur une ligne
+/// si elles tiennent, sinon des lignes égales (10 → 2 lignes de 5), jamais plus larges que la
+/// place (une pastille au moins par ligne).
+pub fn colonnes(n: usize, largeur: f32) -> usize {
+    let tiennent = ((largeur / ZONE).floor() as usize).max(1);
+    if n <= tiennent {
+        return n.max(1);
+    }
+    n.div_ceil(n.div_ceil(tiennent))
 }
 
 /// La pastille d'un appareil dans une carte des Paramètres, à poser dans le contrôle d'une
@@ -45,9 +61,11 @@ pub fn pastille_de_carte(ui: &mut Ui, p: &Palette, pastille: &Pastille) -> Respo
 }
 
 /// Une rangée de pastilles rondes : `choisie` (le rang de la couleur choisie) porte le
-/// contour. Rend le rang cliqué, ou choisi au clavier (Entrée, Espace). Les flèches gauche et
-/// droite passent de l'une à l'autre sans choisir ; Tab sort de la rangée. `nom` : ce que dit
-/// un lecteur d'écran (« Couleur du PC », suivi du rang et du code de la couleur).
+/// contour. Trop étroite pour la place, la rangée passe sur des lignes égales ([`colonnes`]),
+/// lues de gauche à droite puis de haut en bas. Rend le rang cliqué, ou choisi au clavier
+/// (Entrée, Espace). Les flèches gauche et droite passent de l'une à l'autre sans choisir ;
+/// Tab sort de la rangée. `nom` : ce que dit un lecteur d'écran (« Couleur du PC », suivi du
+/// rang et du code de la couleur).
 pub fn choisir_couleur(
     ui: &mut Ui,
     p: &Palette,
@@ -87,9 +105,18 @@ pub fn choisir_couleur(
     }
     // Posées une à une à la main : la rangée se lit de gauche à droite même dans une carte,
     // dont le contrôle est aligné à droite.
-    let (zone, _) = ui.allocate_exact_size(vec2(ZONE * couleurs.len() as f32, ZONE), Sense::hover());
+    let par_ligne = colonnes(couleurs.len(), ui.available_width());
+    let lignes = couleurs.len().div_ceil(par_ligne);
+    let (zone, _) = ui.allocate_exact_size(
+        vec2(ZONE * par_ligne as f32, ZONE * lignes as f32),
+        Sense::hover(),
+    );
     for (i, &c) in couleurs.iter().enumerate() {
-        let rect = Rect::from_min_size(pos2(zone.left() + ZONE * i as f32, zone.top()), vec2(ZONE, ZONE));
+        let coin = pos2(
+            zone.left() + ZONE * (i % par_ligne) as f32,
+            zone.top() + ZONE * (i / par_ligne) as f32,
+        );
+        let rect = Rect::from_min_size(coin, vec2(ZONE, ZONE));
         let r = ui.interact(rect, ids[i], Sense::click());
         ui.memory_mut(|m| m.set_focus_lock_filter(ids[i], filtre));
         let libelle = format!("{nom} {}/{}", i + 1, couleurs.len());
@@ -101,8 +128,9 @@ pub fn choisir_couleur(
     choix
 }
 
-/// Une carte des Paramètres avec la rangée de couleurs à droite. `choisie` : le rang de la
-/// couleur actuelle dans [`palette`] (ou dans `couleurs`). Rend le rang choisi, à enregistrer.
+/// Une carte des Paramètres avec la rangée de couleurs à droite : sur une ligne si la carte
+/// est assez large, sinon sur deux lignes égales. `choisie` : le rang de la couleur actuelle
+/// dans [`palette`] (ou dans `couleurs`). Rend le rang choisi, à enregistrer.
 ///
 /// Avec `annuler: Some(titre)`, le choix est aussi rendu à la bibliothèque comme un réglage
 /// (`Contexte::changer`, clé `cle`, valeur [`Valeur::Nombre`] = le rang) : le logiciel le
@@ -121,13 +149,19 @@ pub fn carte_couleur(
 ) -> Option<usize> {
     let p = page.palette;
     let mut choix = None;
+    let n = couleurs.len();
+    let par_ligne = if ui.available_width() - CARTE_HORS_CONTROLE >= n as f32 * ZONE + 16.0 {
+        n
+    } else {
+        n.div_ceil(2)
+    };
     carte_large(
         ui,
         p,
         glyphe,
         texte,
         explication,
-        couleurs.len() as f32 * ZONE + 16.0,
+        par_ligne as f32 * ZONE + 16.0,
         |ui| {
             choix = choisir_couleur(ui, p, couleurs, Some(choisie), texte);
         },

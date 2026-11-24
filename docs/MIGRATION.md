@@ -509,7 +509,8 @@ Deux **nouvelles variantes** de `Brique` (aucune brique existante ne change ; un
 `Brique` doit en tenir compte). `Brique::Pastilles { titre, pastilles }` : une rangée d'appareils
 (`Pastille` : clé facultative, lettre, couleur, nom, mention « ce PC », glyphe, absent hachuré) sur
 2 colonnes, retour à la ligne dès 3 ; avec une clé, un clic ferme le volet et la rend.
-`apparence::couleurs_pastilles()` donne 6 couleurs lisibles en clair et en sombre.
+`apparence::couleurs_pastilles()` donne les couleurs lisibles en clair et en sombre (10 depuis la
+branche `couleurs-12`, voir plus bas).
 `Brique::ChoixIllustre` : un choix à deux lignes avec une illustration de 1 à 4 cases d'écran
 (`Case` : lettre, couleur, veille), le raccourci en toutes lettres, et, actif, « ✓ » et
 `etiquette_active` en accent ; un clic ferme le volet et rend la clé. `Choix` reste inchangé.
@@ -636,6 +637,29 @@ Exemple et captures sans fenêtre : `cargo run --example mise_a_jour -- <dossier
 - Nouveau, public : `Parametres::suivre(&reglages)` (déjà appelé par `Parametres::dessiner`).
   Rien à changer dans les logiciels ; Vocalis peut retirer son contournement (pages envoyées
   d'avance).
+
+## Dix couleurs de pastilles au lieu de six (branche `couleurs-12`, pour tous)
+
+- **`apparence::couleurs_pastilles()`, `pastilles::couleurs_pastilles()` et `couleurs::palette()`
+  rendent `[Rgb; 10]`** au lieu de `[Rgb; 6]`. À faire : changer le type là où un logiciel l'écrit
+  (`[Rgb; 6]` → `[Rgb; 10]`) ; un code qui prend `.len()`, une tranche ou un rang n'a rien à changer.
+  Un logiciel qui borne lui-même un rang enregistré (par exemple `rang.min(5)` ou `rang % 6`) doit
+  passer à `palette().len()`.
+- **Les rangs déjà enregistrés gardent leur couleur** : les 6 premières ne changent pas (rangs 0 à 5 :
+  violet #7B57C9, magenta #B03A9C, sarcelle #1D7F86, brun #94604F, ardoise #667A94, olive #857A2A).
+  Quatre s'ajoutent derrière : 6 indigo #3865F3, 7 framboise #C0416B, 8 prune #8E679E, 9 taupe #7C6D61.
+- Toutes sont à un écart ΔE2000 d'au moins 12 l'une de l'autre (le plus petit : 12,3), en plus des
+  règles d'avant (lettre à 4,5:1, 3:1 sur le fond clair et sombre, loin du vert, de l'orange, du
+  rouge et de l'accent). Le test `tests/palette_pastilles.rs` le contrôle ; ΔE2000 y est écrit en Rust
+  seul et vérifié sur les 34 paires de référence de Sharma (2005).
+- Pourquoi 10 et non 12 : à la clarté que demandent ces règles, il ne reste aucune place pour un
+  pétrole (bleu-vert) entre la sarcelle et l'ardoise, et un ocre est trop près de l'orange d'état
+  (#9D5D00) et serré contre le brun, l'olive et le taupe.
+- **`couleurs::choisir_couleur` passe sur plusieurs lignes** quand la rangée ne tient pas : des lignes
+  égales, lues de gauche à droite puis de haut en bas (`couleurs::colonnes(n, largeur)`, public).
+  `carte_couleur` garde une ligne quand la carte est assez large (fenêtre des Paramètres à sa taille
+  par défaut), deux lignes de 5 un peu plus étroite, trois lignes (4, 4, 2) à la plus petite taille.
+  Flèches gauche et droite : d'une couleur à la suivante, d'une ligne à l'autre. Rien à changer.
 
 ## Pour tous
 

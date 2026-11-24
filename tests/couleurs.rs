@@ -7,7 +7,7 @@
 use std::sync::Mutex;
 
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
-use interface_commune::couleurs::{carte_couleur, choisir_couleur, palette, pastille_de_carte};
+use interface_commune::couleurs::{carte_couleur, choisir_couleur, colonnes, palette, pastille_de_carte};
 use interface_commune::parametres::{Contexte, Parametres};
 use interface_commune::pastilles::Pastille;
 use interface_commune::{Communs, Identite, Page, Reglages, Valeur, apparence, polices};
@@ -62,11 +62,21 @@ fn rangee(
     events: Vec<Event>,
     choisie: Option<usize>,
 ) -> (Option<usize>, Vec<Pos2>, Vec<Pos2>) {
+    rangee_dans(ctx, events, choisie, 400.0)
+}
+
+/// La rangée dans un écran de `largeur` points.
+fn rangee_dans(
+    ctx: &egui::Context,
+    events: Vec<Event>,
+    choisie: Option<usize>,
+    largeur: f32,
+) -> (Option<usize>, Vec<Pos2>, Vec<Pos2>) {
     let p = apparence::Apparence::de(Default::default(), Some(false)).palette;
     let mut choix = None;
     let entree = RawInput {
         events,
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 200.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(largeur, 200.0))),
         ..Default::default()
     };
     let mut sortie = ctx.run_ui(entree, |ui| {
@@ -90,7 +100,7 @@ fn un_clic_choisit_et_le_contour_suit_le_choix() {
     let ctx = contexte();
     let _ = rangee(&ctx, vec![], Some(1));
     let (_, pleins, anneaux) = rangee(&ctx, vec![], Some(1));
-    assert_eq!(pleins.len(), 6);
+    assert_eq!(pleins.len(), palette().len());
     assert_eq!(anneaux.len(), 1);
     assert_eq!(anneaux[0], pleins[1], "le contour entoure la couleur choisie");
     let au = pleins[3];
@@ -140,6 +150,54 @@ fn les_fleches_s_arretent_aux_bords() {
         choix = choix.or(rangee(&ctx, vec![e], None).0);
     }
     assert_eq!(choix, Some(0));
+}
+
+/// Les lignes d'une liste de centres : chaque hauteur et le nombre de ronds à cette hauteur.
+fn lignes(ronds: &[Pos2]) -> Vec<(f32, usize)> {
+    let mut l: Vec<(f32, usize)> = vec![];
+    for r in ronds {
+        match l.iter_mut().find(|(y, _)| (y - r.y).abs() < 0.5) {
+            Some((_, n)) => *n += 1,
+            None => l.push((r.y, 1)),
+        }
+    }
+    l
+}
+
+/// Toutes sur une ligne si elles tiennent, sinon des lignes égales, jamais plus larges que
+/// la place.
+#[test]
+fn colonnes_selon_la_place() {
+    let zone = interface_commune::nuancier::ZONE;
+    assert_eq!(colonnes(10, 10.0 * zone), 10);
+    assert_eq!(colonnes(10, 9.9 * zone), 5);
+    assert_eq!(colonnes(10, 5.0 * zone), 5);
+    assert_eq!(colonnes(10, 4.0 * zone), 4);
+    assert_eq!(colonnes(7, 4.0 * zone), 4);
+    assert_eq!(colonnes(10, 0.0), 1);
+    assert_eq!(colonnes(0, 100.0), 1);
+}
+
+/// Trop étroite, la rangée passe sur deux lignes de cinq, chaque rond garde sa taille, et le
+/// clic choisit toujours le bon rang.
+#[test]
+fn la_rangee_etroite_passe_sur_deux_lignes() {
+    let zone = interface_commune::nuancier::ZONE;
+    let ctx = contexte();
+    let largeur = 7.0 * zone;
+    let _ = rangee_dans(&ctx, vec![], Some(0), largeur);
+    let (_, pleins, _) = rangee_dans(&ctx, vec![], Some(0), largeur);
+    assert_eq!(pleins.len(), palette().len());
+    let l = lignes(&pleins);
+    assert_eq!(l.len(), 2, "{l:?}");
+    assert!(l.iter().all(|&(_, n)| n == 5), "{l:?}");
+    assert!((l[1].0 - l[0].0 - zone).abs() < 0.5, "une ligne d'écart : {l:?}");
+    assert!((pleins[1].x - pleins[0].x - zone).abs() < 0.5);
+    let au = pleins[7];
+    let _ = rangee_dans(&ctx, vec![Event::PointerMoved(au)], Some(0), largeur);
+    let _ = rangee_dans(&ctx, vec![bouton(au, true)], Some(0), largeur);
+    let (choix, _, _) = rangee_dans(&ctx, vec![bouton(au, false)], Some(0), largeur);
+    assert_eq!(choix, Some(7));
 }
 
 /// Un logiciel inventé : une page « Couleurs », deux cartes (avec et sans « Annuler »).
@@ -204,10 +262,21 @@ fn exemple() -> Exemple {
 
 /// Une image des Paramètres ; rend les centres des ronds pleins.
 fn image(ctx: &egui::Context, s: &mut Parametres, l: &Exemple, events: Vec<Event>) -> Vec<Pos2> {
+    image_de(ctx, s, l, events, interface_commune::mesures::PARAMETRES_TAILLE)
+}
+
+/// Une image des Paramètres dans une fenêtre de `taille` points.
+fn image_de(
+    ctx: &egui::Context,
+    s: &mut Parametres,
+    l: &Exemple,
+    events: Vec<Event>,
+    taille: [f32; 2],
+) -> Vec<Pos2> {
     let p = apparence::Apparence::de(Default::default(), Some(false)).palette;
     let entree = RawInput {
         events,
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(920.0, 680.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(taille[0], taille[1]))),
         ..Default::default()
     };
     let mut sortie = ctx.run_ui(entree, |ui| s.dessiner(ui, &p, l));
@@ -225,7 +294,11 @@ fn cliquer(ctx: &egui::Context, s: &mut Parametres, l: &Exemple, rang: usize) {
         let _ = image(ctx, s, l, vec![]);
     }
     let pleins = image(ctx, s, l, vec![]);
-    assert!(pleins.len() >= 12, "deux rangées de six : {}", pleins.len());
+    assert!(
+        pleins.len() >= 2 * palette().len(),
+        "deux rangées : {}",
+        pleins.len()
+    );
     let au = pleins[rang];
     let _ = image(ctx, s, l, vec![Event::PointerMoved(au)]);
     let _ = image(ctx, s, l, vec![bouton(au, true)]);
@@ -252,7 +325,7 @@ fn sans_annuler_rien_n_est_signale_a_la_bibliotheque() {
     let ctx = contexte();
     let l = exemple();
     let mut s = Parametres::new(&l, Some("p"));
-    cliquer(&ctx, &mut s, &l, 6 + 2);
+    cliquer(&ctx, &mut s, &l, palette().len() + 2);
     assert!(l.rendu.lock().expect("verrou").contains(&Some(2)));
     assert!(l.changes.lock().expect("verrou").is_empty());
     assert!(s.annulation.annuler(std::time::Instant::now()).is_empty());
@@ -284,4 +357,30 @@ fn la_pastille_de_carte_a_la_taille_de_celle_du_volet() {
             interface_commune::mesures::PASTILLE_HAUTEUR
         )
     );
+}
+
+/// Dans les Paramètres, la rangée d'une carte suit la largeur de la fenêtre : une ligne à la
+/// taille par défaut, deux lignes de cinq un peu plus étroite, et à la plus petite taille trois
+/// lignes (le texte de la carte garde ses 160 points). Les ronds restent dans la fenêtre.
+#[test]
+fn la_rangee_d_une_carte_suit_la_largeur_de_la_fenetre() {
+    let mesures = interface_commune::mesures::PARAMETRES_TAILLE;
+    let minimum = interface_commune::mesures::PARAMETRES_TAILLE_MIN;
+    assert_eq!(palette().len(), 10, "les lignes attendues comptent 10 couleurs");
+    for (taille, attendu) in [
+        (mesures, vec![10, 10]),
+        ([800.0, 680.0], vec![5, 5, 5, 5]),
+        (minimum, vec![4, 4, 2, 4, 4, 2]),
+    ] {
+        let ctx = contexte();
+        let l = exemple();
+        let mut s = Parametres::new(&l, Some("p"));
+        for _ in 0..3 {
+            let _ = image_de(&ctx, &mut s, &l, vec![], taille);
+        }
+        let pleins = image_de(&ctx, &mut s, &l, vec![], taille);
+        let par_ligne: Vec<usize> = lignes(&pleins).into_iter().map(|(_, k)| k).collect();
+        assert_eq!(par_ligne, attendu, "{taille:?}");
+        assert!(pleins.iter().all(|r| r.x <= taille[0]), "{taille:?} : {pleins:?}");
+    }
 }

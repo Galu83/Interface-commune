@@ -901,7 +901,7 @@ mod essais {
     }
 
     /// Le glyphe a la couleur de la lettre : contraste d'au moins 3:1 avec le carré, pour
-    /// chacune des 6 couleurs, en clair comme en sombre (la lettre est même à 4,5:1).
+    /// chacune des couleurs des pastilles, en clair comme en sombre (la lettre est même à 4,5:1).
     #[test]
     fn le_glyphe_est_lisible_sur_chaque_couleur() {
         for f in crate::pastilles::couleurs_pastilles() {
