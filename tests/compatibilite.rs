@@ -1,5 +1,6 @@
 //! Les filets de compatibilité (C-114) : ce que chacun des quatre logiciels prend de la
-//! bibliothèque, relevé dans leur code le 24 nov. 2026 (KVMSoft, PowerPeek, Vocalis, Chat PDC).
+//! bibliothèque, relevé dans leur code le 24 nov. 2026 (KVMSoft, PowerPeek, Vocalis, Chat PDC),
+//! complété le 25 nov. avec les usages de KVMSoft et de PowerPeek sur la rev e077572.
 //!
 //! Chaque module reprend :
 //! - tous les chemins que le logiciel importe ou écrit en entier (`use … as _` : le chemin doit
@@ -36,7 +37,7 @@ fn identite() -> Identite {
 mod kvmsoft {
     use interface_commune as ic;
     #[rustfmt::skip]
-    use interface_commune::{Communs as _, Credit as _, Etat as _, EtatMiseAJour as _, GenreEtat as _, Identite as _, Instantane as _, Logiciel as _, Page as _, Palette as _, Reglages as _, Rgb as _, Valeur as _, autres_fenetres::Ouverture as _, briques as _, briques::Brique as _, briques::Case as _, briques::Pastille as _, capture as _, capture::Options as _, cles as _, couleurs as _, dessin as _, dessin::Genre as _, dessin::carte as _, dessin::carte_large as _, horloge as _, horloge::AuClic as _, horloge::Horloge as _, horloge::MessageWindows as _, horloge::Niveau as _, horloge::Poste as _, horloge::Reveil as _, menu::Action as _, menu_choix as _, menu_choix::Ligne as _, menu_choix::MenuChoix as _, menu_choix::Resultat as _, mesures::ILLUSTRE_CASES_MAX as _, mesures::PARAMETRES_TAILLE as _, parametres::Contexte as _, parametres::Parametres as _, parametres::modele as _, parametres::modele::A_PROPOS as _, parametres::modele::GENERAL as _, parametres::modele::MISE_A_JOUR as _, parametres::modele::PAGES_POUR_RECHERCHE as _, pastilles as _, pastilles::Marque as _, pastilles::marque as _, place::Place as _, sonde as _, sonde::Inscription as _, sonde::brancher_le_journal as _, textes::FRANCAIS as _, theme as _, theme::ARRONDI_CARTE as _, theme::ARRONDI_CONTROLE as _, theme::Rgb as _, theme::TAILLE_EXPLICATION as _, theme::TAILLE_PETIT as _, toutes_faites as _, toutes_faites::Bouton as _, toutes_faites::Champ as _, toutes_faites::EtatSimple as _, toutes_faites::FenetreSimple as _, toutes_faites::PLUS_TARD as _, toutes_faites::Reponse as _, toutes_faites::Simple as _, toutes_faites::Ton as _, toutes_faites::ouvrir_simple as _, zone::FinDeSession as _};
+    use interface_commune::{Communs as _, Credit as _, Etat as _, EtatMiseAJour as _, GenreEtat as _, Identite as _, Instantane as _, Logiciel as _, Page as _, Palette as _, Reglages as _, Rgb as _, Valeur as _, autres_fenetres::Ouverture as _, briques as _, briques::Brique as _, briques::Case as _, briques::Pastille as _, capture as _, capture::Options as _, cles as _, couleurs as _, dessin as _, dessin::Genre as _, dessin::carte as _, dessin::carte_large as _, horloge as _, horloge::AuClic as _, horloge::Horloge as _, horloge::MessageWindows as _, horloge::Niveau as _, horloge::Poste as _, horloge::Reveil as _, menu::Action as _, menu_choix as _, menu_choix::Ligne as _, menu_choix::MenuChoix as _, menu_choix::Resultat as _, mesures::ILLUSTRE_CASES_MAX as _, mesures::PARAMETRES_TAILLE as _, parametres::Contexte as _, parametres::Parametres as _, parametres::modele as _, parametres::modele::A_PROPOS as _, parametres::modele::GENERAL as _, parametres::modele::MISE_A_JOUR as _, parametres::modele::PAGES_POUR_RECHERCHE as _, pastilles as _, pastilles::Marque as _, pastilles::marque as _, place::Place as _, sonde as _, sonde::Delais as _, sonde::Inscription as _, sonde::battement as _, sonde::brancher_le_journal as _, sonde::etape as _, sonde::inscrire as _, sonde::regler as _, textes::FRANCAIS as _, theme as _, theme::ARRONDI_CARTE as _, theme::ARRONDI_CONTROLE as _, theme::Rgb as _, theme::TAILLE_EXPLICATION as _, theme::TAILLE_PETIT as _, theme::TAILLE_SECTION as _, theme::TAILLE_TEXTE as _, theme::TAILLE_TITRE as _, theme::TAILLE_TITRE_VOLET as _, toutes_faites as _, toutes_faites::Bouton as _, toutes_faites::Champ as _, toutes_faites::EtatSimple as _, toutes_faites::FenetreSimple as _, toutes_faites::PLUS_TARD as _, toutes_faites::Reponse as _, toutes_faites::Simple as _, toutes_faites::Ton as _, toutes_faites::ouvrir_simple as _, zone::FinDeSession as _};
 
     /// Un logiciel inventé qui remplace, dans les traits, les mêmes méthodes que KVMSoft.
     struct Imite(ic::Identite);
@@ -154,8 +155,76 @@ mod kvmsoft {
             &mut ic::toutes_faites::EtatSimple,
         ) -> Option<ic::toutes_faites::Clic> = ic::toutes_faites::dessiner_simple;
         let _: fn(&[char]) -> Result<Vec<char>, String> = ic::verification::logos_absents;
+        // Ajoutés le 25 nov. 2026 (KVMSoft sur la rev e077572).
+        let _: fn(Option<char>, Option<char>, fn(char) -> bool) -> Option<ic::pastilles::Marque> =
+            ic::pastilles::marque;
+        let _: fn(
+            &ic::autres_fenetres::AutresFenetres,
+            &str,
+            ic::autres_fenetres::Ouverture,
+            &ic::Textes,
+            ic::toutes_faites::Simple,
+            fn(ic::toutes_faites::Reponse),
+        ) -> Option<ic::toutes_faites::FenetreSimple> = ic::toutes_faites::ouvrir_simple;
+        let _: fn(&str, [f32; 2]) -> ic::autres_fenetres::Ouverture = ic::autres_fenetres::Ouverture::new;
+        let _: fn(u32, usize, isize) -> Option<ic::zone::FinDeSession> = ic::zone::FinDeSession::de;
+        // Les tests de KVMSoft qui n'attendent jamais : une horloge à soi, une sonde réglée.
+        let _: fn(&str) -> ic::horloge::Horloge = ic::horloge::Horloge::new;
+        let _: fn(&'static str, Option<Box<dyn Fn() + Send + Sync>>) -> ic::sonde::Inscription =
+            ic::sonde::inscrire;
+        let _: fn() = ic::sonde::battement;
+        let _: fn(&'static str) = ic::sonde::etape;
+        let _: fn(fn(String)) = ic::sonde::brancher_le_journal;
+        let _: fn(ic::sonde::Delais) = ic::sonde::regler;
+        let _ = ic::sonde::Delais {
+            pas: std::time::Duration::ZERO,
+            blocage: std::time::Duration::ZERO,
+        };
+        // Les mesures du thème que KVMSoft reprend pour ses propres dessins.
+        let _: [u8; 2] = [ic::theme::ARRONDI_CARTE, ic::theme::ARRONDI_CONTROLE];
+        let _: [f32; 6] = [
+            ic::theme::TAILLE_TITRE,
+            ic::theme::TAILLE_TITRE_VOLET,
+            ic::theme::TAILLE_SECTION,
+            ic::theme::TAILLE_TEXTE,
+            ic::theme::TAILLE_PETIT,
+            ic::theme::TAILLE_EXPLICATION,
+        ];
         let logiciel = Imite(super::identite());
         let _: &dyn ic::Logiciel = &logiciel;
+    }
+
+    /// Promesse de format : KVMSoft envoie à un autre PC le rang (0 à 9) de la couleur d'un
+    /// appareil, pas la couleur. Le même rang doit donner la même couleur partout, quelle que
+    /// soit la version de la bibliothèque de chaque côté : ces dix couleurs ne changent pas
+    /// d'ordre ni de valeur. Une couleur en plus s'ajoute derrière (rang 10, 11…).
+    #[test]
+    fn les_rangs_des_couleurs_restent() {
+        const RANGS: [u32; 10] = [
+            0x7B57C9, // 0 violet
+            0xB03A9C, // 1 magenta
+            0x1D7F86, // 2 sarcelle foncé
+            0x94604F, // 3 brun
+            0x667A94, // 4 ardoise
+            0x857A2A, // 5 olive
+            0x3865F3, // 6 indigo
+            0xC0416B, // 7 framboise
+            0x8E679E, // 8 prune
+            0x7C6D61, // 9 taupe
+        ];
+        let palette = ic::couleurs::palette();
+        for (rang, (couleur, attendue)) in palette.iter().zip(RANGS).enumerate() {
+            let lue = u32::from(couleur.0) << 16 | u32::from(couleur.1) << 8 | u32::from(couleur.2);
+            assert_eq!(
+                lue, attendue,
+                "le rang {rang} a changé de couleur : promesse de format rompue"
+            );
+        }
+        assert_eq!(
+            palette,
+            ic::apparence::couleurs_pastilles(),
+            "une seule liste de couleurs"
+        );
     }
 }
 
@@ -163,7 +232,7 @@ mod kvmsoft {
 mod powerpeek {
     use interface_commune as ic;
     #[rustfmt::skip]
-    use interface_commune::{Communs as _, Credit as _, Etat as _, EtatMiseAJour as _, GenreEtat as _, Identite as _, Logiciel as _, Palette as _, Reglages as _, Rgb as _, Textes as _, Valeur as _, apparence::Apparence as _, briques as _, briques::Brique as _, briques::ImageAppareil as _, briques::PlusAppareil as _, capture as _, capture::Options as _, cles as _, dessin as _, fenetres::Demande as _, horloge::Niveau as _, icones::INSTALLER as _, menu::Action as _, parametres as _, parametres::Contexte as _, parametres::Parametres as _, parametres::modele as _, place::Place as _, place::PlacementVolet as _, seuils as _, seuils::Options as _, seuils::ReponseSeuils as _, seuils::Zone as _, textes as _, theme::ChoixWindows as _, theme::Surface as _, zone as _, zone::Evenement as _, zone::FenetresCommunes as _, zone::Image as _, zone::LigneMenu as _, zone::Message as _, zone::SuiteDuGeste as _, zone::Zone as _};
+    use interface_commune::{Communs as _, Credit as _, Etat as _, EtatMiseAJour as _, GenreEtat as _, Identite as _, Logiciel as _, Page as _, Palette as _, Reglages as _, Rgb as _, Textes as _, Valeur as _, apparence::Apparence as _, autres_fenetres::AutresFenetres as _, autres_fenetres::Ouverture as _, briques as _, briques::Brique as _, briques::ImageAppareil as _, briques::PlusAppareil as _, capture as _, capture::Options as _, cles as _, dessin as _, echelle as _, echelle::suivre_windows as _, fenetres::Demande as _, fenetres::Fin as _, fenetres::Liens as _, fenetres::Ouvert as _, fenetres::Supervise as _, fenetres::superviser_les_fenetres as _, horloge::Niveau as _, icones::INSTALLER as _, menu::Action as _, parametres as _, parametres::Contexte as _, parametres::Parametres as _, parametres::fenetre::PageVoulue as _, parametres::fenetre::choisir_dossier as _, parametres::fenetre::ouverture as _, parametres::fenetre::ouvrir_dans_boucle as _, parametres::modele as _, place::Place as _, place::PlacementVolet as _, polices::polices as _, seuils as _, sonde as _, sonde::Delais as _, sonde::Inscription as _, sonde::battement as _, sonde::brancher_le_journal as _, sonde::etape as _, sonde::inscrire as _, sonde::regler as _, seuils::Options as _, seuils::ReponseSeuils as _, seuils::Zone as _, textes as _, theme::ChoixWindows as _, theme::Surface as _, zone as _, zone::Bouton as _, zone::Evenement as _, zone::FenetresCommunes as _, zone::Image as _, zone::LigneMenu as _, zone::Message as _, zone::SuiteDuGeste as _, zone::Zone as _};
 
     /// Un logiciel inventé qui remplace, dans les traits, les mêmes méthodes que PowerPeek.
     struct Imite(ic::Identite);
@@ -270,8 +339,71 @@ mod powerpeek {
         let _ = ic::theme::Surface::Menu;
         let _ = ic::theme::Surface::Volet;
         let _: fn(&str, &str, &str) -> u128 = ic::zone::guid_stable;
+        // Ajoutés le 25 nov. 2026 (PowerPeek en refonte, sur la rev e077572).
+        let _ = ic::Page::new;
+        let _: ic::fenetres::Ouvert = Default::default();
+        let _ = ic::fenetres::Ouvert::Parametres;
+        let _ = [
+            ic::zone::Bouton::Gauche,
+            ic::zone::Bouton::Droit,
+            ic::zone::Bouton::Milieu,
+        ];
+        let _: fn(&dyn ic::Reglages, bool) -> ic::autres_fenetres::Ouverture =
+            ic::parametres::fenetre::ouverture;
+        let _: fn(&dyn ic::Reglages, Option<&std::path::Path>, &str) -> Option<std::path::PathBuf> =
+            ic::parametres::fenetre::choisir_dossier;
+        let _: fn(&dyn ic::Reglages) -> String = ic::parametres::Parametres::titre_fenetre;
+        // La boucle du logiciel : les fenêtres de la bibliothèque, ses Paramètres, son échelle.
+        let _: fn(&ic::autres_fenetres::AutresFenetres, Option<egui::Context>) =
+            ic::autres_fenetres::AutresFenetres::lier;
+        let _: fn(&ic::autres_fenetres::AutresFenetres, &egui::Context, &ic::Palette) =
+            ic::autres_fenetres::AutresFenetres::montrer;
+        let _: fn(
+            &ic::autres_fenetres::AutresFenetres,
+            &std::sync::Arc<dyn ic::Reglages>,
+            &ic::parametres::fenetre::PageVoulue,
+            Option<String>,
+        ) = ic::parametres::fenetre::ouvrir_dans_boucle;
+        let _: ic::parametres::fenetre::PageVoulue = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let _: fn(&mut ic::parametres::Parametres, &mut egui::Ui, &ic::Palette, &dyn ic::Reglages) =
+            ic::parametres::Parametres::dessiner;
+        let _: fn(isize) -> bool = ic::echelle::suivre_windows;
+        // La sonde des fils, branchée sur le journal de PowerPeek.
+        let _: fn(&'static str, Option<Box<dyn Fn() + Send + Sync>>) -> ic::sonde::Inscription =
+            ic::sonde::inscrire;
+        let _: fn() = ic::sonde::battement;
+        let _: fn(&'static str) = ic::sonde::etape;
+        let _: fn(fn(String)) = ic::sonde::brancher_le_journal;
+        let _: fn(ic::sonde::Delais) = ic::sonde::regler;
         let logiciel = Imite(super::identite());
         let _: &dyn ic::Logiciel = &logiciel;
+    }
+
+    /// PowerPeek prend egui en direct (ses pages propres, ses dessins) : la version d'egui fait
+    /// partie de l'API de la bibliothèque. Un changement de version d'egui (ou d'eframe) se
+    /// traite comme un changement d'API : écrit dans `MIGRATION.md`, avec la migration de chaque
+    /// logiciel, et ce garde mis à jour en même temps.
+    #[test]
+    fn la_version_d_egui_reste() {
+        const ATTENDUE: &str = "0.37.";
+        let verrou = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock"));
+        let lignes: Vec<&str> = verrou.lines().collect();
+        for nom in ["egui", "eframe"] {
+            let entete = format!("name = \"{nom}\"");
+            let versions: Vec<&str> = lignes
+                .windows(2)
+                .filter(|l| l[0] == entete)
+                .filter_map(|l| l[1].strip_prefix("version = \""))
+                .map(|v| v.trim_end_matches('"'))
+                .collect();
+            assert!(!versions.is_empty(), "{nom} introuvable dans Cargo.lock");
+            for v in versions {
+                assert!(
+                    v.starts_with(ATTENDUE),
+                    "{nom} {v} au lieu de {ATTENDUE}x : changement d'egui = changement d'API, à migrer"
+                );
+            }
+        }
     }
 }
 
