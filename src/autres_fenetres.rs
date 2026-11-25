@@ -639,9 +639,16 @@ impl AutresFenetres {
     /// Réveille la fenêtre principale, pour qu'elle ouvre, ferme ou redessine. Cachée au repos,
     /// elle ne répond pas à une simple demande de dessin venue d'un autre fil : elle est
     /// montrée voilée (rien n'apparaît), dessine, puis se recache.
+    ///
+    /// Pendant un réveil de Windows ([`crate::reprise`]), elle n'est pas montrée : le réveil
+    /// est remis à plus tard.
     pub fn reveiller(&self) {
         if let Some(c) = verrou(&self.contexte).as_ref() {
             c.request_repaint_of(ViewportId::ROOT);
+        }
+        if let Some(d) = crate::reprise::attente_avant_dessin() {
+            self.reveiller_dans(d);
+            return;
         }
         #[cfg(windows)]
         crate::systeme::reveiller(self.racine.load(std::sync::atomic::Ordering::Acquire));

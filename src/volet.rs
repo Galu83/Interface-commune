@@ -950,16 +950,27 @@ impl eframe::App for Volet<'_> {
         }
         if let Etape::Preparation(_) = self.etape {
             // Une fenêtre cachée n'est dessinée que sur demande ; les demandes attendent la
-            // fin de la préparation.
-            ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
-            ctx.request_repaint();
+            // fin de la préparation. Pendant un réveil de Windows, la préparation attend.
+            match crate::reprise::attente_avant_dessin() {
+                Some(d) => ctx.request_repaint_after(d),
+                None => {
+                    ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
+                    ctx.request_repaint();
+                }
+            }
             return;
         }
         self.lire(ctx);
         if let Some(dans) = self.liens.autres.prochaine_image() {
             // Une autre fenêtre à ouvrir, à amener devant ou à fermer : il faut une image
             // complète, même la fenêtre principale cachée (sans fenêtre visible, egui n'en
-            // ferait aucune). Une création ratée attend son nouvel essai.
+            // ferait aucune). Une création ratée attend son nouvel essai. Pendant un réveil
+            // de Windows (`crate::reprise`), aucune image complète : OpenGL et SwapBuffers
+            // ont bloqué ce fil plus d'une minute au sortir d'une veille.
+            let dans = match crate::reprise::attente_avant_dessin() {
+                Some(r) => dans.max(r),
+                None => dans,
+            };
             if dans.is_zero() {
                 ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
                 ctx.request_repaint();

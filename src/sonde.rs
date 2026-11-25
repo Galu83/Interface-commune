@@ -450,10 +450,18 @@ fn demarrer_la_surveillance() {
         let d = delais();
         let _ = std::thread::Builder::new().name("sonde".into()).spawn(move || {
             let mut s = Surveillance::avec_pas(d.blocage, d.pas);
+            let mut avant = Instant::now();
             loop {
                 std::thread::sleep(d.pas);
+                let maintenant = Instant::now();
+                if est_une_veille(maintenant.saturating_duration_since(avant), d.pas) {
+                    // Une reprise que Windows n'aurait pas signalée (WM_POWERBROADCAST) : le
+                    // dessin des fenêtres attend aussi la fin du réveil.
+                    crate::reprise::reveil();
+                }
+                avant = maintenant;
                 let fils: Vec<Arc<Fil>> = FILS.lock().unwrap_or_else(PoisonError::into_inner).clone();
-                s.tour_et_reveils(Instant::now(), &fils, &mut noter);
+                s.tour_et_reveils(maintenant, &fils, &mut noter);
             }
         });
     });

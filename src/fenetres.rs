@@ -341,9 +341,13 @@ impl Demandes {
         // Un message à la fenêtre principale cachée : l'image qui lit la demande se fait dans le
         // contexte de winit, le seul où une fenêtre (les Paramètres…) peut être créée. Un
         // simple `request_repaint` fait peindre la fenêtre cachée hors de ce contexte (minuterie
-        // d'eframe) : la création ratait au premier essai.
+        // d'eframe) : la création ratait au premier essai. Pendant un réveil de Windows
+        // (`crate::reprise`), pas de message : la demande est lue par une image sans dessin,
+        // et la fenêtre principale, réveillée plus tard (`AutresFenetres::reveiller_dans`).
         #[cfg(windows)]
-        crate::systeme::reveiller(self.racine.load(Ordering::Acquire));
+        if crate::reprise::attente_avant_dessin().is_none() {
+            crate::systeme::reveiller(self.racine.load(Ordering::Acquire));
+        }
         r
     }
 }
