@@ -367,7 +367,62 @@
   - **À savoir pour l'intégration** : conflits possibles avec `refonte` si elle a bougé dans
     `src/surface.rs`, `src/volet.rs`, `src/lib.rs`, `src/dessin.rs`, `tests/polices.rs`,
     `docs/CARTE.md`, `crates/ic-coeur/src/{contrat,gestes,placement}.rs`.
-- **Prochaine étape de la refonte** : intégrer le bloc G dans `refonte`, puis le bloc
+- **Refonte, bloc E « Modèle des Paramètres »** (25 nov. au soir, deuxième voie, branche
+  `refonte-bloc-e-parametres`, partie de `refonte` à c6a354d, à intégrer par l'Atelier Master ;
+  **rien n'est commité** : tout est indexé, le message est dans `MESSAGE-COMMIT.txt`, à la
+  racine, hors de l'index) :
+  - **dans le cœur** (calcul pur, sans egui, sans Windows, sans horloge) :
+    `ic_coeur::parametres` en sept modules : `pages` (ordre de la navigation, page demandée sur
+    la ligne de commande, page gardée quand les pages changent : `Suivi`, `page_suivie`),
+    `recherche` (sans accents, section ouverte), `colonne` (lignes montrées et espace avant
+    Général, champ de recherche dès sept pages, largeur de la colonne C-80), `annuler` (la bulle
+    « Annuler »), `conserver` (« Conserver ces modifications ? »), `envois` (ce que chaque geste
+    rend au logiciel, dans l'ordre : la liste `Envoi` ; le bandeau « Redémarrer », C-78),
+    `mise_a_jour` (icône, titre, couleurs, ligne grise, explication des recherches, bouton de la
+    carte, carte du dossier) ;
+  - **repris aux mêmes chemins** : `parametres::modele` (816 → 18 lignes) reprend tout du cœur
+    (`pub use`) ; `parametres::{TonMiseAJour, presentation_mise_a_jour, texte_mise_a_jour,
+    ligne_grise_mise_a_jour}` aussi. `Parametres` ne fait plus que dessiner et passer les
+    envois au logiciel (`envoyer`) ; `src/parametres/mod.rs` : 1 390 → 1 204 lignes.
+    `tests/compatibilite.rs` et les images de référence inchangés ;
+  - **essais** : ceux du modèle et de la page Mise à jour passent dans le cœur, sur une fausse
+    horloge (`Duration`) : `essais.rs` (8), `essais_gestes.rs` (15), `essais_mise_a_jour.rs`
+    (8) ; nouveaux : largeur de la colonne, lignes et espace, recherche montrée, page gardée,
+    bulle qui disparaît à 6 s, envois d'un changement et d'« Annuler », brouillon remis d'abord,
+    changement et groupe à confirmer, bandeau, bouton et carte du dossier. `COMPORTEMENTS.md`
+    (C-66 à C-80) et `CARTE.md` suivent ; la ligne du 25 nov. au soir est au plan, §3 ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 147 essais ; `interface-commune` : 128 essais internes (les essais du modèle et de
+    la page Mise à jour sont partis dans le cœur), tous les fichiers de `tests/` verts
+    (references aux images identiques, compatibilite, conserver, comportements, etages,
+    sans_fenetre…), exemples de documentation ; `fmt`, `clippy -D warnings`, `cargo deny`
+    propres ; contrôle de la règle n° 1 : 0 trouvé dans les fichiers suivis et dans une copie de
+    l'index avec `MESSAGE-COMMIT.txt` (`--dossier .` lit aussi `target-bloc-e/`, hors du dépôt,
+    plein des chemins du PC : on contrôle donc la copie de l'index) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - E-1 : les types qui gardent un instant sont génériques (`Annulation<T = Instant>`,
+      `Confirmation<T = Instant>`…) sur le trait `Horodatage` du bloc D : le code des logiciels
+      ne change pas, les essais passent une fausse horloge ;
+    - E-2 : le calcul de la colonne de navigation s'appelle `colonne` (et non `navigation`, déjà
+      le nom de la fonction qui fait la liste des pages) ;
+    - E-3 : chaque geste rend une liste `Envoi` (changer, remettre) dans l'ordre d'avant (le délai
+      écoulé d'abord, le brouillon avant les valeurs) ; les fonctions de `envois` ne sont pas
+      reprises dans `ic_coeur::parametres` (leurs noms croiseraient ceux des méthodes) : on les
+      appelle `envois::changer`… ;
+    - E-4 : le bandeau « Redémarrer » est `envois::noter_redemarrage` : la dernière raison
+      l'emporte, une image sans demande ne l'efface pas (comme avant) ;
+    - E-5 : toute la présentation de la page Mise à jour passe dans le cœur, avec deux décisions
+      de plus (le bouton de la carte, ce que montre la carte du dossier) ; le dessin les pose ;
+      l'explication des recherches ne cite plus un autre projet (« pas de redite ») ;
+    - E-6 : la page gardée quand la navigation est refaite est `Suivi` (les clés d'avant) et
+      `page_suivie` (`Gardee` ou `Perdue`, qui renvoie à Général) ;
+  - **reste** : `src/parametres/mod.rs` garde plus de 800 lignes et des fonctions longues : il se
+    découpe au bloc H (le dessin des Paramètres, un fichier par page) ;
+  - **à savoir pour l'intégration** : conflits possibles si `refonte` a bougé dans
+    `src/parametres/`, `crates/ic-coeur/src/parametres.rs`, `docs/COMPORTEMENTS.md` ou
+    `docs/CARTE.md` ; le dossier de compilation `target-bloc-e/` reste hors de l'index ;
+  - **sous-agents** : aucun.
+- **Prochaine étape de la refonte** : blocs G et E intégrés (26 nov.) ; ensuite le bloc H, puis le bloc
   suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).

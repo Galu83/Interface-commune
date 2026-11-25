@@ -112,6 +112,8 @@ Deux voies, une session par voie. Jours ouvrés ; pause du 24 décembre au 1er j
 > un jour, et Outils communs se refait en même temps. On suit l'ordre de la voie 1, puis
 > celui de la voie 2 ; la fin glisse vers la fin février 2027. Une deuxième voie s'ouvre quand
 > le forfait le permet (fiche « Forfait »). La Préparation commence le 26 nov.
+>
+> 25 nov. au soir : deuxième voie ouverte à la demande du propriétaire (forfait de la semaine à 51 %) ; bloc E, puis L.
 
 ## 4. Les changements d'API, et la migration de chaque logiciel
 
