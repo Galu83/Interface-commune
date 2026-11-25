@@ -34,8 +34,9 @@ use crate::dessin::{
 use crate::polices::semibold;
 use crate::textes::{Textes, remplir};
 use crate::theme::{Palette, TAILLE_PETIT};
-use crate::{Communs, EtatMiseAJour, Reglages, cles, icones};
-use modele::{Annulation, Changement, Confirmation, PAGES_POUR_RECHERCHE, Page, Retour, Valeur};
+use crate::{Communs, Reglages, cles, icones};
+use ic_coeur::parametres::{self as coeur, BoutonMiseAJour, CarteDossier, Envoi, PageSuivie, Suivi, envois};
+use modele::{Annulation, Changement, Confirmation, Page, Valeur};
 
 /// La clé de la fenêtre des Paramètres parmi les autres fenêtres de la boucle
 /// ([`crate::autres_fenetres`]) : réservée.
@@ -47,7 +48,7 @@ pub use crate::mesures::{
     NAVIGATION_LARGEUR_MIN as LARGEUR_NAVIGATION_MIN, NAVIGATION_LIGNE as LIGNE_NAVIGATION,
     PARAMETRES_TAILLE as TAILLE, PARAMETRES_TAILLE_MIN as TAILLE_MIN, RAYON_ALERTE, TAILLE_LOGO, TAILLE_NOM,
 };
-use crate::mesures::{NAVIGATION_DROITE, NAVIGATION_MARGES as MARGE_NAVIGATION, NAVIGATION_TEXTE_X};
+use crate::mesures::{NAVIGATION_MARGES as MARGE_NAVIGATION, NAVIGATION_TEXTE_X};
 
 /// Ce qu'une page reçoit pour se dessiner : la palette, et de quoi signaler un changement,
 /// un redémarrage nécessaire ou une sous-page.
@@ -260,7 +261,7 @@ pub struct Parametres {
     textes: Textes,
     /// L'Accueil et les clés des pages propres avec lesquels la navigation a été faite :
     /// des pages qui changent (arrivées après l'ouverture) la refont.
-    faite_avec: (bool, Vec<String>),
+    faite_avec: Suivi,
     logo: Option<Logo>,
     /// Le numéro de cette ouverture (les sections repliables repartent repliées).
     session: u64,
@@ -276,7 +277,7 @@ impl Parametres {
         let textes = l.textes().clone();
         let accueil = l.accueil();
         let propres = l.pages();
-        let faite_avec = (accueil, propres.iter().map(|p| p.cle.clone()).collect());
+        let faite_avec = Suivi::de(accueil, &propres);
         let pages = modele::navigation(&textes, accueil, &propres);
         let page = modele::rang_de_page(&pages, page);
         Parametres {
@@ -301,7 +302,7 @@ impl Parametres {
 
     /// Va à la page de cette clé, si elle existe.
     pub fn aller_a(&mut self, cle: &str) {
-        if let Some(i) = self.pages.iter().position(|p| p.cle == cle) {
+        if let Some(i) = coeur::rang_de_cle(&self.pages, cle) {
             self.page = i;
             self.sous_page = None;
             self.recherche_page.clear();
@@ -322,31 +323,26 @@ impl Parametres {
         self.pages.get(self.page).map_or("", |p| p.cle.as_str())
     }
 
+    /// Passe au logiciel, dans l'ordre, ce que le cœur a décidé de lui rendre.
+    fn envoyer(l: &dyn Reglages, envois: Vec<Envoi>) {
+        for e in envois {
+            match e {
+                Envoi::Changer(cle, valeur) => l.changer(&cle, valeur),
+                Envoi::Remettre(avant) => l.remettre(&avant),
+            }
+        }
+    }
+
     /// Un changement : rendu au logiciel tout de suite, et la bulle « Annuler ».
     pub fn changer(&mut self, l: &dyn Reglages, cle: &str, titre: &str, avant: Valeur, apres: Valeur) {
-        self.annulation.changer(cle, titre, avant, &apres, Instant::now());
-        l.changer(cle, apres);
+        let e = envois::changer(&mut self.annulation, cle, titre, avant, apres, Instant::now());
+        Self::envoyer(l, e);
     }
 
     /// Un groupe de changements : tous rendus au logiciel, une seule bulle « Annuler ».
     pub fn changer_groupe(&mut self, l: &dyn Reglages, titre: &str, changements: Vec<Changement>) {
-        for (cle, avant, apres) in &changements {
-            if avant != apres {
-                l.changer(cle, apres.clone());
-            }
-        }
-        self.annulation.changer_groupe(titre, changements, Instant::now());
-    }
-
-    /// Rend au logiciel ce que « Revenir » ramène : le brouillon d'avant, puis chaque
-    /// valeur d'avant, par le même chemin qu'« Annuler ».
-    fn rendre(l: &dyn Reglages, retour: Retour) {
-        if let Some(avant) = &retour.brouillon {
-            l.remettre(avant);
-        }
-        for (cle, avant) in retour.valeurs {
-            l.changer(&cle, avant);
-        }
+        let e = envois::changer_groupe(&mut self.annulation, titre, changements, Instant::now());
+        Self::envoyer(l, e);
     }
 
     /// Un changement **à confirmer** : rendu au logiciel tout de suite, puis la carte
@@ -359,14 +355,9 @@ impl Parametres {
         avant: Valeur,
         apres: Valeur,
     ) {
-        self.tic(l);
-        if avant == apres {
-            return;
-        }
-        self.annulation.oublier();
-        self.confirmation
-            .changer(cle, titre, avant, &apres, Instant::now());
-        l.changer(cle, apres);
+        let (an, co) = (&mut self.annulation, &mut self.confirmation);
+        let e = envois::changer_a_confirmer(an, co, cle, titre, avant, apres, Instant::now());
+        Self::envoyer(l, e);
     }
 
     /// Un groupe de changements **à confirmer**, d'un seul coup.
@@ -376,26 +367,17 @@ impl Parametres {
         titre: &str,
         changements: Vec<Changement>,
     ) {
-        self.tic(l);
-        if changements.iter().all(|(_, avant, apres)| avant == apres) {
-            return;
-        }
-        self.annulation.oublier();
-        for (cle, avant, apres) in &changements {
-            if avant != apres {
-                l.changer(cle, apres.clone());
-            }
-        }
-        self.confirmation
-            .changer_groupe(titre, changements, Instant::now());
+        let (an, co) = (&mut self.annulation, &mut self.confirmation);
+        let e = envois::changer_groupe_a_confirmer(an, co, titre, changements, Instant::now());
+        Self::envoyer(l, e);
     }
 
     /// Un brouillon entier **à confirmer** : `avant` est son état avant ce changement (le
     /// logiciel l'a déjà modifié).
     pub fn brouillon_a_confirmer(&mut self, l: &dyn Reglages, titre: &str, avant: modele::Instantane) {
-        self.tic(l);
-        self.annulation.oublier();
-        self.confirmation.changer_brouillon(titre, avant, Instant::now());
+        let (an, co) = (&mut self.annulation, &mut self.confirmation);
+        let e = envois::brouillon_a_confirmer(an, co, titre, avant, Instant::now());
+        Self::envoyer(l, e);
     }
 
     /// « Conserver » : les changements restent.
@@ -406,8 +388,8 @@ impl Parametres {
     /// « Revenir » : tout revient comme avant le premier changement à confirmer. Appelé aussi
     /// par la fermeture des Paramètres ([`Parametres::fermer`]).
     pub fn revenir(&mut self, l: &dyn Reglages) {
-        Self::rendre(l, self.confirmation.revenir());
-        self.annulation.oublier();
+        let e = envois::revenir(&mut self.annulation, &mut self.confirmation);
+        Self::envoyer(l, e);
     }
 
     /// À appeler à chaque image (la bibliothèque le fait) : le délai de « Conserver » est-il
@@ -418,10 +400,9 @@ impl Parametres {
 
     /// Comme [`Parametres::tic`], à une heure donnée (pour les essais : pas d'attente de 15 s).
     pub fn tic_a(&mut self, l: &dyn Reglages, maintenant: Instant) -> bool {
-        match self.confirmation.echu(maintenant) {
-            Some(retour) => {
-                Self::rendre(l, retour);
-                self.annulation.oublier();
+        match envois::echu(&mut self.annulation, &mut self.confirmation, maintenant) {
+            Some(e) => {
+                Self::envoyer(l, e);
                 true
             }
             None => false,
@@ -447,9 +428,7 @@ impl Parametres {
         let accueil = l.accueil();
         let propres = l.pages();
         let langue = *l.textes() != self.textes;
-        let memes_pages = self.faite_avec.0 == accueil
-            && self.faite_avec.1.len() == propres.len()
-            && self.faite_avec.1.iter().zip(&propres).all(|(a, p)| *a == p.cle);
+        let memes_pages = self.faite_avec.memes_pages(accueil, &propres);
         if !langue && memes_pages {
             return;
         }
@@ -458,13 +437,13 @@ impl Parametres {
             self.textes = l.textes().clone();
         }
         if !memes_pages {
-            self.faite_avec = (accueil, propres.iter().map(|p| p.cle.clone()).collect());
+            self.faite_avec = Suivi::de(accueil, &propres);
         }
         self.pages = modele::navigation(&self.textes, accueil, &propres);
-        match self.pages.iter().position(|p| p.cle == cle) {
-            Some(i) => self.page = i,
-            None => {
-                self.page = modele::rang_de_page(&self.pages, Some(modele::GENERAL));
+        match coeur::page_suivie(&self.pages, &cle) {
+            PageSuivie::Gardee(i) => self.page = i,
+            PageSuivie::Perdue(i) => {
+                self.page = i;
                 self.sous_page = None;
                 self.recherche_page.clear();
             }
@@ -487,16 +466,11 @@ impl Parametres {
             &remplir(self.textes.version, &[&id.version]),
             FontId::proportional(TAILLE_PETIT),
         );
-        let entete = 8.0 + TAILLE_LOGO + 4.0 + ui.spacing().item_spacing.x + nom.max(version);
-        let lignes = self
+        let titres = self
             .pages
             .iter()
-            .map(|p| NAVIGATION_TEXTE_X + mesure(&p.titre, FontId::proportional(14.0)) + NAVIGATION_DROITE)
-            .fold(0.0, f32::max);
-        let marges = f32::from(MARGE_NAVIGATION[0]) + f32::from(MARGE_NAVIGATION[1]);
-        (entete.max(lignes) + marges)
-            .ceil()
-            .clamp(LARGEUR_NAVIGATION_MIN, LARGEUR_NAVIGATION_MAX)
+            .map(|p| mesure(&p.titre, FontId::proportional(14.0)));
+        coeur::largeur_navigation(nom, version, ui.spacing().item_spacing.x, titres)
     }
 
     /// Toute la fenêtre : navigation et page.
@@ -604,7 +578,7 @@ impl Parametres {
             });
         });
         ui.add_space(18.0);
-        let trouvees = if self.pages.len() >= PAGES_POUR_RECHERCHE {
+        if coeur::recherche_montree(&self.pages) {
             ui.add(
                 egui::TextEdit::singleline(&mut self.recherche)
                     .hint_text(self.textes.rechercher_un_parametre)
@@ -613,17 +587,10 @@ impl Parametres {
                     .char_limit(60),
             );
             ui.add_space(6.0);
-            let t = modele::chercher(&self.pages, &self.recherche);
-            (!self.recherche.trim().is_empty()).then_some(t)
-        } else {
-            None
-        };
-        let communes = self.pages.len().saturating_sub(3);
-        for i in 0..self.pages.len() {
-            if trouvees.as_ref().is_some_and(|t| !t.contains(&i)) {
-                continue;
-            }
-            if i == communes && i > 0 && trouvees.is_none() {
+        }
+        for ligne in coeur::lignes_de_navigation(&self.pages, &self.recherche) {
+            let i = ligne.rang;
+            if ligne.espace_avant {
                 // Les trois pages communes, juste après les pages propres, séparées d'elles.
                 ui.add_space(ESPACE_COMMUNES);
             }
@@ -787,9 +754,7 @@ impl Parametres {
         {
             self.brouillon_a_confirmer(l, &titre, avant);
         }
-        if let Some(r) = c.redemarrage {
-            self.redemarrage = Some(r);
-        }
+        envois::noter_redemarrage(&mut self.redemarrage, c.redemarrage);
         if let Some(s) = c.sous_page_voulue {
             self.sous_page = s;
         }
@@ -822,12 +787,7 @@ impl Parametres {
         });
         ui.add_space(8.0);
         if annuler {
-            if let Some(avant) = self.annulation.annuler_brouillon(Instant::now()) {
-                l.remettre(&avant);
-            }
-            for (cle, avant) in self.annulation.annuler(Instant::now()) {
-                l.changer(&cle, avant);
-            }
+            Self::envoyer(l, envois::annuler(&mut self.annulation, Instant::now()));
         } else if fermer {
             self.annulation.oublier();
         }
@@ -1126,63 +1086,11 @@ impl Parametres {
     }
 }
 
-/// La couleur d'une icône d'état de la mise à jour, avant de choisir dans la palette.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TonMiseAJour {
-    Neutre,
-    Bon,
-    Occupe,
-    Accent,
-    Probleme,
-}
-
-/// Ce que dit la page « Mise à jour » d'un état, à la façon de Windows Update : une seule
-/// icône (coche = à jour, flèche = mise à jour disponible, triangle = problème), sa couleur
-/// et le titre.
-pub fn presentation_mise_a_jour(e: &EtatMiseAJour, t: &Textes) -> (char, TonMiseAJour, String) {
-    use TonMiseAJour::*;
-    match e {
-        EtatMiseAJour::Inconnu => (icones::MISE_A_JOUR, Neutre, t.maj_pas_cherche.into()),
-        EtatMiseAJour::AJour => (icones::COCHE, Bon, t.maj_a_jour.into()),
-        EtatMiseAJour::Recherche => (icones::MISE_A_JOUR, Occupe, t.maj_recherche.into()),
-        EtatMiseAJour::Prete(v) => (icones::INSTALLER, Accent, remplir(t.maj_prete, &[v])),
-        EtatMiseAJour::Erreur(_) => (icones::ATTENTION, Probleme, t.maj_erreur.into()),
-        EtatMiseAJour::Coupee => (icones::A_PROPOS, Neutre, t.maj_coupee.into()),
-        EtatMiseAJour::Information(e) => (icones::A_PROPOS, Neutre, e.clone()),
-    }
-}
-
-/// La ligne grise sous le titre : la raison d'une erreur, la version installée, puis la
-/// dernière recherche, séparées par « · ».
-pub fn ligne_grise_mise_a_jour(
-    e: &EtatMiseAJour,
-    version: &str,
-    derniere: Option<&str>,
-    t: &Textes,
-) -> String {
-    let mut morceaux: Vec<String> = Vec::new();
-    if let EtatMiseAJour::Erreur(raison) = e {
-        morceaux.push(raison.clone());
-    }
-    morceaux.push(remplir(t.version_actuelle, &[version]));
-    if let Some(d) = derniere {
-        morceaux.push(remplir(t.derniere_recherche, &[d]));
-    }
-    morceaux.join(" · ")
-}
-
-/// Le texte de l'état de la mise à jour, et sa couleur.
-pub fn texte_mise_a_jour(e: &EtatMiseAJour, p: &Palette, t: &Textes) -> (char, crate::Rgb, String) {
-    let (glyphe, ton, texte) = presentation_mise_a_jour(e, t);
-    let c = match ton {
-        TonMiseAJour::Neutre => p.texte_secondaire,
-        TonMiseAJour::Bon => p.vert,
-        TonMiseAJour::Occupe => p.orange,
-        TonMiseAJour::Accent => p.accent,
-        TonMiseAJour::Probleme => p.rouge,
-    };
-    (glyphe, c, texte)
-}
+/// La présentation de la page « Mise à jour » vient du cœur (bloc E) ; ces noms restent ici
+/// pour les logiciels qui les appellent depuis `interface_commune::parametres`.
+pub use ic_coeur::parametres::{
+    TonMiseAJour, ligne_grise_mise_a_jour, presentation_mise_a_jour, texte_mise_a_jour,
+};
 
 fn page_mise_a_jour(
     ui: &mut egui::Ui,
@@ -1206,29 +1114,17 @@ fn page_mise_a_jour(
         // Une hauteur fixe : une disposition de droite à gauche prendrait toute celle de la page.
         let taille = egui::vec2(ui.available_width(), 56.0);
         ui.allocate_ui_with_layout(taille, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if let EtatMiseAJour::Prete(_) = c.mise_a_jour {
-                if bouton(
-                    ui,
-                    p,
-                    Some(icones::INSTALLER),
-                    t.installer_maintenant,
-                    Genre::Accent,
-                )
-                .clicked()
-                {
-                    l.action(cles::INSTALLER);
+            if let Some(b) = coeur::bouton_mise_a_jour(c) {
+                let (icone, texte) = match b {
+                    BoutonMiseAJour::Installer => (icones::INSTALLER, t.installer_maintenant),
+                    BoutonMiseAJour::Rechercher => (icones::MISE_A_JOUR, t.rechercher_mise_a_jour),
+                };
+                if bouton(ui, p, Some(icone), texte, Genre::Accent).clicked() {
+                    match b {
+                        BoutonMiseAJour::Installer => l.action(cles::INSTALLER),
+                        BoutonMiseAJour::Rechercher => l.rechercher_mise_a_jour(),
+                    }
                 }
-            } else if c.recherches != Some(false)
-                && bouton(
-                    ui,
-                    p,
-                    Some(icones::MISE_A_JOUR),
-                    t.rechercher_mise_a_jour,
-                    Genre::Accent,
-                )
-                .clicked()
-            {
-                l.rechercher_mise_a_jour();
             }
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(40.0, 44.0), egui::Sense::hover());
@@ -1266,7 +1162,7 @@ fn page_mise_a_jour(
     titre_section(ui, t.reglages);
     if let Some(actif) = c.recherches {
         let mut v = actif;
-        let explication = explication_recherches(t, actif);
+        let explication = coeur::explication_recherches(t, actif);
         carte(
             ui,
             p,
@@ -1286,10 +1182,9 @@ fn page_mise_a_jour(
             );
         }
     }
-    if c.recherches == Some(false) {
+    let Some(CarteDossier { choisir, automatique }) = coeur::carte_dossier(c) else {
         return;
-    }
-    let automatique = !c.dossier_fixe && c.dossier_automatique == Some(false);
+    };
     carte_large(
         ui,
         p,
@@ -1298,7 +1193,7 @@ fn page_mise_a_jour(
         &c.dossier_installateurs,
         if automatique { 240.0 } else { 120.0 },
         |ui| {
-            if !c.dossier_fixe && bouton(ui, p, None, t.choisir, Genre::Normal).clicked() {
+            if choisir && bouton(ui, p, None, t.choisir, Genre::Normal).clicked() {
                 l.action(cles::DOSSIER);
             }
             if automatique && bouton(ui, p, None, t.automatique, Genre::Normal).clicked() {
@@ -1306,85 +1201,4 @@ fn page_mise_a_jour(
             }
         },
     );
-}
-
-/// L'explication de la carte « Rechercher les mises à jour » : rien quand elles sont actives,
-/// car la carte « Dossier des installateurs » suit et dit déjà où (audit KVMSoft : pas de
-/// redite) ; « Coupé… » quand elles sont coupées (la carte du dossier n'est alors pas affichée).
-fn explication_recherches(t: &Textes, actif: bool) -> &'static str {
-    if actif { "" } else { t.recherches_coupees }
-}
-
-#[cfg(test)]
-mod essais_mise_a_jour {
-    use super::*;
-    use crate::textes::{ANGLAIS, FRANCAIS};
-
-    /// Recherches actives : pas de redite du dossier, que la carte du dossier montre juste
-    /// en dessous ; coupées : « Coupé… ».
-    #[test]
-    fn pas_de_redite_du_dossier() {
-        assert_eq!(explication_recherches(&FRANCAIS, true), "");
-        assert_eq!(
-            explication_recherches(&FRANCAIS, false),
-            FRANCAIS.recherches_coupees
-        );
-        assert_eq!(
-            explication_recherches(&ANGLAIS, false),
-            ANGLAIS.recherches_coupees
-        );
-    }
-
-    #[test]
-    fn une_seule_icone_selon_l_etat() {
-        let icone = |e: EtatMiseAJour| presentation_mise_a_jour(&e, &FRANCAIS).0;
-        assert_eq!(icone(EtatMiseAJour::AJour), icones::COCHE);
-        assert_eq!(icone(EtatMiseAJour::Prete("2.0.0".into())), icones::INSTALLER);
-        assert_eq!(icone(EtatMiseAJour::Erreur("x".into())), icones::ATTENTION);
-    }
-
-    #[test]
-    fn le_titre_dit_l_etat_dans_les_deux_langues() {
-        let titre = |e: EtatMiseAJour, t: &Textes| presentation_mise_a_jour(&e, t).2;
-        assert_eq!(titre(EtatMiseAJour::AJour, &FRANCAIS), "Vous êtes à jour");
-        assert_eq!(titre(EtatMiseAJour::AJour, &ANGLAIS), "You're up to date");
-        assert_eq!(
-            titre(EtatMiseAJour::Prete("2.1.0".into()), &FRANCAIS),
-            "Version 2.1.0 disponible"
-        );
-        assert_eq!(
-            titre(EtatMiseAJour::Prete("2.1.0".into()), &ANGLAIS),
-            "Version 2.1.0 is available"
-        );
-        assert_eq!(
-            titre(EtatMiseAJour::Erreur("Réseau coupé.".into()), &FRANCAIS),
-            "La recherche a échoué"
-        );
-    }
-
-    #[test]
-    fn les_couleurs_suivent_l_etat() {
-        let ton = |e: EtatMiseAJour| presentation_mise_a_jour(&e, &FRANCAIS).1;
-        assert_eq!(ton(EtatMiseAJour::AJour), TonMiseAJour::Bon);
-        assert_eq!(ton(EtatMiseAJour::Prete("2.0.0".into())), TonMiseAJour::Accent);
-        assert_eq!(ton(EtatMiseAJour::Erreur("x".into())), TonMiseAJour::Probleme);
-    }
-
-    #[test]
-    fn la_ligne_grise_donne_la_version_et_la_derniere_recherche() {
-        let a_jour = EtatMiseAJour::AJour;
-        assert_eq!(
-            ligne_grise_mise_a_jour(&a_jour, "1.0.0", Some("20 nov. 2026, 14:05"), &FRANCAIS),
-            "Version actuelle : 1.0.0 · Dernière recherche : 20 nov. 2026, 14:05"
-        );
-        assert_eq!(
-            ligne_grise_mise_a_jour(&a_jour, "1.0.0", None, &ANGLAIS),
-            "Current version: 1.0.0"
-        );
-        let erreur = EtatMiseAJour::Erreur("Réseau coupé.".into());
-        assert_eq!(
-            ligne_grise_mise_a_jour(&erreur, "1.0.0", None, &FRANCAIS),
-            "Réseau coupé. · Version actuelle : 1.0.0"
-        );
-    }
 }
