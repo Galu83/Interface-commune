@@ -47,7 +47,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-11 | La fin de session de Windows (déconnexion, arrêt) est reçue et rendue au logiciel (`FinDeSession`). | auto : `zone::fin_de_session_decodee`, `zone::fin_de_session_recue_par_la_fenetre_cachee` |
 | C-12 | Une fenêtre bloquée ne retient pas la fermeture du logiciel. | auto : `horloge::fenetre_bloquee_ne_retient_pas_la_fermeture` |
 | C-13 | Le changement d'affichage (écran branché, résolution) est signalé au logiciel. | auto : `tests/zone_affichage::la_zone_signale_le_changement_d_affichage` |
-| C-14 | Les messages venus d'un autre fil (`Reveil`, `Poste`) arrivent sur le fil principal, dans l'ordre. | auto : `horloge::code_pour_le_fil_principal` |
+| C-14 | Les messages venus d'un autre fil (`Reveil`, `Poste`) arrivent sur le fil principal, dans l'ordre. | auto : `bords::poste::essais::code_pour_le_fil_principal`, `…::rafales_de_plusieurs_fils` (8 fils, ordre de chaque fil gardé), `…::le_fil_reveille_trouve_tout`, `…::chaque_demande_va_au_bon_fil` (bloc K : faux réveil, sans fenêtre) |
 
 ## 2. Une seule copie du logiciel
 
@@ -62,8 +62,8 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-19 | Trois niveaux de notification (information, attention, erreur), avec l'icône de Windows qui va avec. | auto : `horloge::notification_a_trois_niveaux` |
-| C-20 | Un clic sur une notification ouvre la page des Paramètres qu'elle nomme. | auto : `horloge::clic_sur_une_notification` |
+| C-19 | Trois niveaux de notification (information, attention, erreur), avec l'icône de Windows qui va avec. | auto : `bords::poste::essais::notification_a_trois_niveaux` |
+| C-20 | Un clic sur une notification ouvre la page des Paramètres qu'elle nomme. | auto : `bords::poste::essais::clic_sur_une_notification` |
 | C-21 | Le bouton « Essayer » des notifications n'en montre une que si on le demande. | auto : `tests/sans_fenetre::notifications_essayer_seulement_si_demande` |
 
 ## 4. Le volet

@@ -1,0 +1,5 @@
+//! Les bords Windows (ORGANIGRAMME.md, §3.3 et §10) : le seul endroit où `unsafe` est permis,
+//! chaque appel commenté. Les blocs J à O y entrent un à un (PLAN-REFONTE.md, §2) ; leurs types
+//! publics restent repris à leurs chemins d'aujourd'hui.
+
+pub(crate) mod poste;

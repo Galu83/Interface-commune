@@ -8,7 +8,8 @@
 | `src/lib.rs` | les traits `Reglages` (les Paramètres) et `Logiciel` (l'icône, le volet, le menu), `Identite`, `Etat`, `Communs`, les clés communes |
 | `src/textes.rs` | les mots écrits par la bibliothèque, en français et en anglais |
 | `src/theme.rs`, `apparence.rs`, `polices.rs` | couleurs Windows 11, clair/sombre, accent, durées d'animation (écrits dans `ic_coeur::theme`, repris dans `theme.rs`) ; `apparence.rs` lit Windows et donne la palette à egui ; polices Segoe |
-| `src/horloge.rs` | l'icône près de l'horloge, une seule copie, `Horloge::lancer`, `Poste` |
+| `src/horloge.rs` | l'icône près de l'horloge, une seule copie, `Horloge::lancer` (`Poste` y est repris : `horloge::{Poste, AuClic}`) |
+| `src/bords/` | les bords Windows de la refonte, bloc par bloc (`unsafe` permis, chaque appel commenté) : `poste.rs`, le guichet (bloc K) : `Poste`, `AuClic`, la boîte bornée du fil de l'icône et son réveil ; ses essais (`poste/essais.rs`) : rafales de plusieurs fils avec un faux réveil, sans fenêtre |
 | `src/zone.rs` | plusieurs icônes à la fois pour un logiciel qui garde sa boucle de messages : `Zone` (poser, retirer, notifier sur une icône, clic avec l'icône et sa place, menu gris de Windows avec cases et sous-menus) ; `FenetresCommunes` et `Aiguilleur` : le volet, le petit menu et les Paramètres communs pour ces icônes |
 | `src/sonde.rs` | la sonde des fils : clics de l'icône, boucles imbriquées, chien de garde (un compteur de battements et une « dernière étape » par fil), tout au journal du logiciel |
 | `src/fenetres.rs`, `volet.rs`, `surface.rs` | le fil des fenêtres, l'aiguillage d'un clic d'icône (`envoyer_le_clic`), la fenêtre unique du volet et du petit menu (la fenêtre principale de la boucle), leur contenu (hauteur bornée : `dessiner_borne`) ; la supervision d'une boucle de fenêtres tenue par le logiciel (`superviser_les_fenetres`) |

@@ -22,9 +22,8 @@
 //! Chaque `unsafe` est commenté.
 
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
@@ -56,7 +55,7 @@ use windows::core::{HSTRING, PCWSTR};
 
 use crate::Logiciel;
 use crate::clics::{Clics, Suite, evenement, suite};
-use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, Ouvreur, Reception};
+use crate::fenetres::{self, Aiguillage, Demande, Liens, Ouvreur, Reception};
 use crate::menu::{self, Choix};
 use crate::place::Rect;
 use crate::systeme::{choix_windows, hwnd, reveiller, temps_double_clic};
@@ -129,6 +128,9 @@ impl Drop for Unique {
 
 // Le contrat (bloc A), repris du cœur à ce chemin.
 pub use ic_coeur::contrat::{Niveau, Reveil};
+// Le guichet (bloc K), repris des bords à ce chemin.
+pub use crate::bords::poste::{AuClic, Poste};
+use crate::bords::poste::{Commande, ReveilParMessage};
 
 /// Le nombre d'arguments qu'un second lancement peut transmettre.
 pub const ARGUMENTS_MAX: usize = 16;
@@ -271,21 +273,6 @@ fn lire_arguments(lparam: isize) -> Option<Vec<String>> {
     decoder_arguments(octets)
 }
 
-/// Une commande du logiciel au fil principal.
-enum Commande {
-    Notifier {
-        texte: String,
-        niveau: Niveau,
-        au_clic: AuClic,
-    },
-    Infobulle(String),
-    Icone,
-    Quitter,
-    /// Du code du logiciel, à faire sur le fil de la fenêtre cachée (son adresse en
-    /// paramètre) : `RegisterHotKey`…
-    Executer(Box<dyn FnOnce(isize) + Send>),
-}
-
 /// Un message de Windows reçu par la fenêtre cachée du logiciel (celle de l'icône).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MessageWindows {
@@ -335,127 +322,6 @@ fn destinataire(msg: u32, wp: usize, taskbar_created: u32) -> Destinataire {
     }
 }
 
-/// Ce que fait un clic sur une notification.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AuClic {
-    /// Ouvre les Paramètres (à cette page).
-    Parametres(Option<String>),
-    /// Rend cette action au logiciel (`Reglages::action`) : par exemple, montrer sa propre
-    /// fenêtre.
-    Action(String),
-}
-
-impl Default for AuClic {
-    fn default() -> Self {
-        AuClic::Parametres(None)
-    }
-}
-
-/// De quoi parler à l'icône depuis n'importe quel fil (à cloner et garder par le logiciel).
-#[derive(Clone)]
-pub struct Poste {
-    liens: Arc<Liens>,
-    demandes: Demandes,
-    file: Arc<Mutex<VecDeque<Commande>>>,
-}
-
-impl Poste {
-    fn envoyer(&self, c: Commande) {
-        if let Ok(mut f) = self.file.lock() {
-            // Bornée : un logiciel qui enverrait sans fin ne remplit pas la mémoire.
-            if f.len() < 64 {
-                f.push_back(c);
-            }
-        }
-        let h = self.liens.fenetre.load(Ordering::Acquire);
-        if h != 0 {
-            // SAFETY: la fenêtre est celle du logiciel ; PostMessageW n'attend rien et
-            // accepte une fenêtre déjà détruite (il échoue simplement).
-            let _ = unsafe { PostMessageW(Some(hwnd(h)), WM_COMMANDE, WPARAM(jeton()), LPARAM(0)) };
-        }
-    }
-
-    /// Une notification près de l'horloge ; un clic dessus ouvre cette page des Paramètres.
-    pub fn notifier(&self, texte: &str, probleme: bool, page: Option<&str>) {
-        self.envoyer(Commande::Notifier {
-            texte: texte.into(),
-            niveau: if probleme {
-                Niveau::Erreur
-            } else {
-                Niveau::Information
-            },
-            au_clic: AuClic::Parametres(page.map(str::to_string)),
-        });
-    }
-
-    /// Une notification près de l'horloge, à ce niveau ; un clic dessus fait `au_clic`.
-    pub fn notifier_avec(&self, texte: &str, niveau: Niveau, au_clic: AuClic) {
-        self.envoyer(Commande::Notifier {
-            texte: texte.into(),
-            niveau,
-            au_clic,
-        });
-    }
-
-    /// Fait ce code du logiciel sur le fil de la fenêtre cachée de l'icône, qui le reçoit en
-    /// paramètre (son adresse) : par exemple `RegisterHotKey`, qui exige le fil de la fenêtre.
-    /// Les messages arrivent ensuite au récepteur ([`Horloge::recevoir_messages`]).
-    pub fn sur_le_fil_principal(&self, f: impl FnOnce(isize) + Send + 'static) {
-        self.envoyer(Commande::Executer(Box::new(f)));
-    }
-
-    /// Une notification près de l'horloge ; un clic dessus rend cette action au logiciel
-    /// (`Reglages::action`), pour revenir à sa propre fenêtre par exemple.
-    pub fn notifier_action(&self, texte: &str, probleme: bool, action: &str) {
-        self.envoyer(Commande::Notifier {
-            texte: texte.into(),
-            niveau: if probleme {
-                Niveau::Erreur
-            } else {
-                Niveau::Information
-            },
-            au_clic: AuClic::Action(action.into()),
-        });
-    }
-
-    /// Le texte qui s'affiche au survol de l'icône.
-    pub fn infobulle(&self, texte: &str) {
-        self.envoyer(Commande::Infobulle(texte.into()));
-    }
-
-    /// L'icône doit être redessinée (son état a changé).
-    pub fn redessiner_icone(&self) {
-        self.envoyer(Commande::Icone);
-    }
-
-    /// L'état a changé : le volet ou les Paramètres ouverts se redessinent.
-    pub fn redessiner(&self) {
-        self.liens.redessiner();
-    }
-
-    /// Ouvre les Paramètres à cette page (une notification, une demande du logiciel).
-    pub fn ouvrir_parametres(&self, page: Option<&str>) {
-        self.liens.montrer_page(&self.demandes, page.map(str::to_string));
-    }
-
-    /// Ferme tout : les fenêtres, l'icône, puis rend la main à `Horloge::lancer`.
-    pub fn quitter(&self) {
-        self.liens.tout_fermer();
-        self.envoyer(Commande::Quitter);
-    }
-
-    pub fn liens(&self) -> &Arc<Liens> {
-        &self.liens
-    }
-
-    /// Les autres fenêtres du logiciel (une fenêtre simple, une fenêtre de lecture…),
-    /// ouvertes et fermées dans la boucle de la bibliothèque, depuis n'importe quel fil (voir
-    /// [`crate::autres_fenetres`]).
-    pub fn fenetres(&self) -> crate::autres_fenetres::AutresFenetres {
-        self.liens.autres.clone()
-    }
-}
-
 /// L'icône près de l'horloge, avant son lancement.
 pub struct Horloge {
     nom: String,
@@ -470,13 +336,16 @@ impl Horloge {
     /// `nom` : le nom court du logiciel, le même que pour [`instance_unique`].
     pub fn new(nom: &str) -> Horloge {
         let (demandes, reception) = fenetres::canal();
+        let liens = Arc::new(Liens::default());
+        // Le guichet réveille la fenêtre cachée par son message des commandes, avec son jeton.
+        let reveil = Arc::new(ReveilParMessage {
+            liens: liens.clone(),
+            message: WM_COMMANDE,
+            jeton: jeton(),
+        });
         Horloge {
             nom: nom.into(),
-            poste: Poste {
-                liens: Arc::new(Liens::default()),
-                demandes,
-                file: Arc::default(),
-            },
+            poste: Poste::nouveau(liens, demandes, reveil),
             reception,
             messages: None,
             arguments: None,
@@ -532,21 +401,21 @@ impl Horloge {
             crate::systeme::sans_fantome();
         }
         if let Some(page) = parametres {
-            let _ = poste.demandes.send(Demande::Parametres(page));
+            let _ = poste.demandes().send(Demande::Parametres(page));
         }
         // La sonde des fils écrit dans le journal du logiciel (clics, boucles imbriquées, blocages).
         let pour_la_sonde = logiciel.clone();
         crate::sonde::brancher_le_journal(move |ligne| pour_la_sonde.noter(ligne));
         let fil = lancer_le_fil_des_fenetres(
             logiciel.clone(),
-            poste.liens.clone(),
+            poste.liens().clone(),
             reception,
-            secours_de_l_horloge(poste.liens.clone()),
+            secours_de_l_horloge(poste.liens().clone()),
         )?;
         let pour_noter = logiciel.clone();
         let r = boucle(&nom, logiciel, poste.clone(), messages, arguments);
-        poste.liens.tout_fermer();
-        let _ = poste.demandes.send(Demande::Quitter);
+        poste.liens().tout_fermer();
+        let _ = poste.demandes().send(Demande::Quitter);
         if !attendre_la_fin(fil, ATTENTE_FERMETURE) {
             pour_noter.noter("Une fenêtre ne répond plus : le logiciel se ferme sans l'attendre.".into());
         }
@@ -631,7 +500,7 @@ fn secours_de_l_horloge(liens: Arc<Liens>) -> Secours {
         let lp = (i64::from(point[0]) & 0xFFFF) | ((i64::from(point[1]) & 0xFFFF) << 16);
         let h = liens.fenetre.load(Ordering::Acquire);
         if h != 0 {
-            // SAFETY: comme `Poste::envoyer`.
+            // SAFETY: comme `ReveilParMessage::reveiller` (le guichet).
             let _ = unsafe {
                 PostMessageW(
                     Some(hwnd(h)),
@@ -769,7 +638,7 @@ type Etat = RefCell<Option<Principal>>;
 
 impl Principal {
     fn liens(&self) -> &Liens {
-        &self.poste.liens
+        self.poste.liens()
     }
 
     fn ajouter_icone(&mut self) {
@@ -818,13 +687,7 @@ impl Principal {
     }
 
     fn commandes(&mut self) {
-        let file: Vec<Commande> = self
-            .poste
-            .file
-            .lock()
-            .map(|mut f| f.drain(..).collect())
-            .unwrap_or_default();
-        for c in file {
+        for c in self.poste.commandes() {
             match c {
                 Commande::Notifier {
                     texte,
@@ -924,7 +787,7 @@ impl Principal {
         let deja_impossible = self.liens().egui_impossible.load(Ordering::Acquire);
         // Les Paramètres ouverts ne bloquent pas le clic : le volet ou le petit menu s'ouvre
         // devant eux, qui restent ouverts derrière.
-        match fenetres::envoyer_le_clic(self.liens(), &self.poste.demandes, surface, icone, ancre, clic) {
+        match fenetres::envoyer_le_clic(self.liens(), self.poste.demandes(), surface, icone, ancre, clic) {
             Aiguillage::Rien => {}
             // La fenêtre prête se montre tout de suite, encore invisible.
             Aiguillage::Envoye => reveiller(self.liens().surface_prete.load(Ordering::Acquire)),
@@ -944,7 +807,7 @@ impl Principal {
     }
 
     fn ouvrir_parametres(&self, page: Option<String>) {
-        self.liens().montrer_page(&self.poste.demandes, page);
+        self.liens().montrer_page(self.poste.demandes(), page);
     }
 
     /// L'icône doit changer : tout de suite, ou à la fin du délai contre le clignotement.
@@ -1230,7 +1093,7 @@ fn boucle(
         )
         .map_err(|e| e.to_string())?
     };
-    poste.liens.fenetre.store(fenetre.0 as isize, Ordering::Release);
+    poste.liens().fenetre.store(fenetre.0 as isize, Ordering::Release);
     // Surveillé : sa boucle de messages bat à chaque message ; un message vide (WM_NULL) posté par
     // la surveillance le tire de son attente.
     let h_reveil = fenetre.0 as isize;
@@ -1422,65 +1285,5 @@ mod essais {
         );
         assert_eq!(attente_icone(Some(t), t + DELAI_ICONE), None);
         assert_eq!(attente_icone(Some(t), t + Duration::from_secs(5)), None);
-    }
-
-    /// Trois niveaux de notification.
-    #[test]
-    fn notification_a_trois_niveaux() {
-        let p = Horloge::new("essai-niveaux").poste();
-        p.notifier("Info.", false, None);
-        p.notifier_avec("Attention.", Niveau::Avertissement, AuClic::Action("voir".into()));
-        p.notifier("Erreur.", true, None);
-        let niveaux: Vec<Niveau> = p
-            .file
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|c| match c {
-                Commande::Notifier { niveau, .. } => Some(*niveau),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(
-            niveaux,
-            [Niveau::Information, Niveau::Avertissement, Niveau::Erreur]
-        );
-    }
-
-    /// Du code du logiciel attend son tour sur le fil de la fenêtre cachée.
-    #[test]
-    fn code_pour_le_fil_principal() {
-        let p = Horloge::new("essai-fil").poste();
-        p.sur_le_fil_principal(|_| {});
-        assert!(matches!(
-            p.file.lock().unwrap().front(),
-            Some(Commande::Executer(_))
-        ));
-    }
-
-    /// Une notification ouvre les Paramètres à sa page, ou rend une action au logiciel.
-    #[test]
-    fn clic_sur_une_notification() {
-        let h = Horloge::new("essai-notification");
-        let p = h.poste();
-        p.notifier("Mise à jour prête.", false, Some("mise_a_jour"));
-        p.notifier_action("Lecture finie.", false, "montrer");
-        let clics: Vec<AuClic> = p
-            .file
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|c| match c {
-                Commande::Notifier { au_clic, .. } => Some(au_clic.clone()),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(
-            clics,
-            vec![
-                AuClic::Parametres(Some("mise_a_jour".into())),
-                AuClic::Action("montrer".into())
-            ]
-        );
     }
 }
