@@ -32,7 +32,7 @@ use egui::{
     pos2, vec2,
 };
 
-use crate::apparence::couleur;
+use crate::dessin::couleur::couleur;
 use crate::dessin::icone;
 use crate::icones;
 use crate::mesures::{
@@ -106,90 +106,24 @@ impl Ligne {
 }
 
 /// Le nom d'une ligne pour le lecteur d'écran : le texte, le sous-texte, puis `mot_coche`
-/// (« coché ») si elle est choisie. La couleur n'y est pour rien.
+/// (« coché ») si elle est choisie. La couleur n'y est pour rien. Calcul pur, dans le cœur
+/// ([`ic_coeur::gestes::choix::nom_accessible`], bloc F).
 pub fn nom_accessible(l: &Ligne, mot_coche: &str) -> String {
-    let mut parties = vec![l.texte.as_str()];
-    if let Some(s) = l.sous_texte.as_deref().filter(|s| !s.is_empty()) {
-        parties.push(s);
-    }
-    if l.coche {
-        parties.push(mot_coche);
-    }
-    parties.join(", ")
+    ic_coeur::gestes::choix::nom_accessible(&l.texte, l.sous_texte.as_deref(), l.coche, mot_coche)
 }
 
-// ---- La logique (pure) -----------------------------------------------------------------
+// ---- La logique (pure, dans le cœur) ---------------------------------------------------
 
-/// Les touches que le menu comprend.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Touche {
-    Haut,
-    Bas,
-    Debut,
-    Fin,
-    Entree,
-    Echap,
-}
-
-/// Ce que fait une touche.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Effet {
-    /// Rien ne change.
-    Rien,
-    /// Cette ligne devient la ligne active.
-    Active(usize),
-    /// Cette ligne est choisie : le menu se ferme.
-    Choisir(usize),
-    /// Le menu se ferme sans rien choisir.
-    Fermer,
-}
-
-fn libre(grisees: &[bool], i: usize) -> bool {
-    grisees.get(i) == Some(&false)
-}
-
-fn premiere(grisees: &[bool]) -> Option<usize> {
-    (0..grisees.len()).find(|&i| libre(grisees, i))
-}
-
-fn derniere(grisees: &[bool]) -> Option<usize> {
-    (0..grisees.len()).rev().find(|&i| libre(grisees, i))
-}
-
-/// Ce que fait `touche` quand `active` est la ligne active et que `grisees[i]` dit si la
-/// ligne `i` est grisée. Les flèches sautent les lignes grisées et font le tour (comme les
-/// menus de Windows) ; sans ligne active, Bas va à la première et Haut à la dernière ; Début
-/// et Fin vont à la première et à la dernière ligne libres ; Entrée choisit la ligne active
-/// si elle est libre ; Échap ferme. Une ligne active hors liste ou grisée compte pour aucune.
-pub fn suivre(grisees: &[bool], active: Option<usize>, touche: Touche) -> Effet {
-    let n = grisees.len();
-    let active = active.filter(|&i| i < n);
-    let vers = |i: Option<usize>| i.map_or(Effet::Rien, Effet::Active);
-    match touche {
-        Touche::Echap => Effet::Fermer,
-        Touche::Entree => active
-            .filter(|&i| libre(grisees, i))
-            .map_or(Effet::Rien, Effet::Choisir),
-        Touche::Debut => vers(premiere(grisees)),
-        Touche::Fin => vers(derniere(grisees)),
-        Touche::Bas => match active {
-            None => vers(premiere(grisees)),
-            Some(i) => vers((1..=n).map(|d| (i + d) % n).find(|&j| libre(grisees, j))),
-        },
-        Touche::Haut => match active {
-            None => vers(derniere(grisees)),
-            Some(i) => vers((1..=n).map(|d| (i + n - d) % n).find(|&j| libre(grisees, j))),
-        },
-    }
-}
+// Les touches du menu et ce qu'elles font : du calcul pur, dans le cœur (bloc F), repris ici à
+// leurs chemins d'aujourd'hui.
+pub use ic_coeur::gestes::choix::{Effet, Touche, suivre};
 
 /// La ligne active à l'ouverture : la ligne cochée si elle est libre, sinon la première
-/// ligne libre, sinon aucune.
+/// ligne libre, sinon aucune ([`ic_coeur::gestes::choix::initiale`]).
 pub fn ligne_initiale(lignes: &[Ligne]) -> Option<usize> {
-    lignes
-        .iter()
-        .position(|l| l.coche && !l.grise)
-        .or_else(|| lignes.iter().position(|l| !l.grise))
+    let cochees: Vec<bool> = lignes.iter().map(|l| l.coche).collect();
+    let grisees: Vec<bool> = lignes.iter().map(|l| l.grise).collect();
+    ic_coeur::gestes::choix::initiale(&cochees, &grisees)
 }
 
 /// Où poser un menu de `taille` pour la case `ancre`, dans `fenetre` : **sous la case** s'il y
@@ -347,11 +281,7 @@ fn touches_de_l_image(ui: &Ui) -> Vec<Touche> {
 /// Le carré coloré d'une ligne (même dessin que la pastille d'un appareil).
 fn dessiner_carre(ui: &Ui, p: &Palette, rect: Rect, l: &Ligne, grise: bool) {
     let arrondi = CornerRadius::same(4);
-    let fond = match l.couleur {
-        Some(f) if !grise => f,
-        _ => Rgb(0, 0, 0),
-    };
-    if l.couleur.is_some() && !grise {
+    if let Some(fond) = l.couleur.filter(|_| !grise) {
         ui.painter().rect_filled(rect, arrondi, couleur(fond));
     } else {
         ui.painter().rect_filled(rect, arrondi, couleur(p.controle));
@@ -406,27 +336,12 @@ pub fn afficher(
         menu.fermer();
         return Some(Resultat::Ferme);
     }
-    let grisees: Vec<bool> = lignes.iter().map(|l| l.grise).collect();
     let dessinee_avant = menu.pret;
     menu.pret = true;
 
     // Le clavier : pas dans l'image d'ouverture (la touche qui ouvre ne choisit pas).
-    if dessinee_avant {
-        for t in touches_de_l_image(ui) {
-            menu.clavier = true;
-            match suivre(&grisees, menu.active, t) {
-                Effet::Rien => {}
-                Effet::Active(i) => menu.active = Some(i),
-                Effet::Choisir(i) => {
-                    menu.fermer();
-                    return Some(Resultat::Choisi(i));
-                }
-                Effet::Fermer => {
-                    menu.fermer();
-                    return Some(Resultat::Ferme);
-                }
-            }
-        }
+    if dessinee_avant && let Some(fin) = suivre_le_clavier(ui, menu, lignes) {
+        return Some(fin);
     }
 
     let fenetre = ui.ctx().content_rect();
@@ -434,6 +349,11 @@ pub fn afficher(
     let complet = vec2(largeur, hauteur_totale(lignes));
     let place = placer(ancre, complet, fenetre);
     let defile = place.height() < complet.y - 0.5;
+    let forme = Forme {
+        carre: lignes.iter().any(Ligne::a_un_carre),
+        choix_unique: lignes.iter().any(|l| l.coche),
+        mot_coche,
+    };
 
     let mut choisi = None;
     let reponse = egui::Area::new(id)
@@ -442,30 +362,7 @@ pub fn afficher(
         .constrain(false)
         .fade_in(false)
         .show(ui.ctx(), |ui| {
-            egui::Frame::new()
-                .fill(couleur(p.fond_menu))
-                .stroke(Stroke::new(1.0, couleur(p.bord_carte)))
-                .corner_radius(CornerRadius::same(ARRONDI_MENU))
-                .shadow(egui::Shadow {
-                    offset: [0, 4],
-                    blur: 16,
-                    spread: 0,
-                    color: egui::Color32::from_black_alpha(if p.sombre { 110 } else { 50 }),
-                })
-                .inner_margin(egui::Margin::same(MENU_MARGE as i8))
-                .show(ui, |ui| {
-                    ui.set_width(place.width() - 2.0 * MENU_MARGE - 2.0);
-                    ui.spacing_mut().item_spacing = vec2(0.0, MENU_ECART);
-                    if defile {
-                        egui::ScrollArea::vertical()
-                            .max_height(place.height() - 2.0 * MENU_MARGE - 2.0)
-                            .show(ui, |ui| {
-                                choisi = lignes_du_menu(ui, p, menu, lignes, mot_coche);
-                            });
-                    } else {
-                        choisi = lignes_du_menu(ui, p, menu, lignes, mot_coche);
-                    }
-                });
+            choisi = cadre(ui, p, menu, place, defile, lignes, &forme);
         });
 
     if let Some(i) = choisi {
@@ -473,19 +370,87 @@ pub fn afficher(
         return Some(Resultat::Choisi(i));
     }
     // Un clic à côté (ni dans le menu, ni sur la case) le ferme.
-    if dessinee_avant {
-        let dehors = ui.input(|e| {
-            e.events.iter().any(|ev| {
-                matches!(ev, Event::PointerButton { pressed: true, pos, .. }
-                    if !reponse.response.rect.contains(*pos) && !ancre.contains(*pos))
-            })
-        });
-        if dehors {
-            menu.fermer();
-            return Some(Resultat::Ferme);
+    if dessinee_avant && clic_dehors(ui, reponse.response.rect, ancre) {
+        menu.fermer();
+        return Some(Resultat::Ferme);
+    }
+    None
+}
+
+/// Les touches de l'image ; rend la fin du menu (choisi ou fermé) si l'une d'elles le ferme.
+fn suivre_le_clavier(ui: &Ui, menu: &mut MenuChoix, lignes: &[Ligne]) -> Option<Resultat> {
+    let grisees: Vec<bool> = lignes.iter().map(|l| l.grise).collect();
+    for t in touches_de_l_image(ui) {
+        menu.clavier = true;
+        match suivre(&grisees, menu.active, t) {
+            Effet::Rien => {}
+            Effet::Active(i) => menu.active = Some(i),
+            Effet::Choisir(i) => {
+                menu.fermer();
+                return Some(Resultat::Choisi(i));
+            }
+            Effet::Fermer => {
+                menu.fermer();
+                return Some(Resultat::Ferme);
+            }
         }
     }
     None
+}
+
+/// Vrai si un bouton de la souris a été pressé hors du menu et hors de la case qui l'ouvre.
+fn clic_dehors(ui: &Ui, menu: Rect, ancre: Rect) -> bool {
+    ui.input(|e| {
+        e.events.iter().any(|ev| {
+            matches!(ev, Event::PointerButton { pressed: true, pos, .. }
+                if !menu.contains(*pos) && !ancre.contains(*pos))
+        })
+    })
+}
+
+/// Ce que toutes les lignes d'un menu partagent : un carré devant, une coche (choix unique),
+/// le mot « coché » pour le lecteur d'écran.
+struct Forme<'a> {
+    carre: bool,
+    choix_unique: bool,
+    mot_coche: &'a str,
+}
+
+/// Le cadre du menu (fond, bord, ombre), qui défile s'il ne tient pas ; rend le rang de la
+/// ligne cliquée.
+fn cadre(
+    ui: &mut Ui,
+    p: &Palette,
+    menu: &mut MenuChoix,
+    place: Rect,
+    defile: bool,
+    lignes: &[Ligne],
+    forme: &Forme<'_>,
+) -> Option<usize> {
+    egui::Frame::new()
+        .fill(couleur(p.fond_menu))
+        .stroke(Stroke::new(1.0, couleur(p.bord_carte)))
+        .corner_radius(CornerRadius::same(ARRONDI_MENU))
+        .shadow(egui::Shadow {
+            offset: [0, 4],
+            blur: 16,
+            spread: 0,
+            color: egui::Color32::from_black_alpha(if p.sombre { 110 } else { 50 }),
+        })
+        .inner_margin(egui::Margin::same(MENU_MARGE as i8))
+        .show(ui, |ui| {
+            ui.set_width(place.width() - 2.0 * MENU_MARGE - 2.0);
+            ui.spacing_mut().item_spacing = vec2(0.0, MENU_ECART);
+            if defile {
+                egui::ScrollArea::vertical()
+                    .max_height(place.height() - 2.0 * MENU_MARGE - 2.0)
+                    .show(ui, |ui| lignes_du_menu(ui, p, menu, lignes, forme))
+                    .inner
+            } else {
+                lignes_du_menu(ui, p, menu, lignes, forme)
+            }
+        })
+        .inner
 }
 
 /// Les lignes, l'une sous l'autre ; rend le rang de celle qu'on vient de cliquer.
@@ -494,105 +459,116 @@ fn lignes_du_menu(
     p: &Palette,
     menu: &mut MenuChoix,
     lignes: &[Ligne],
-    mot_coche: &str,
+    forme: &Forme<'_>,
 ) -> Option<usize> {
-    let carre = lignes.iter().any(Ligne::a_un_carre);
-    let choix_unique = lignes.iter().any(|l| l.coche);
     let mut clic = None;
     for (i, l) in lignes.iter().enumerate() {
-        let (rect, r) = ui.allocate_exact_size(
-            vec2(ui.available_width(), l.hauteur()),
-            if l.grise { Sense::hover() } else { Sense::click() },
-        );
-        // La souris qui bouge sur une ligne libre la rend active (comme Windows).
-        if !l.grise && r.hovered() && ui.input(|e| e.pointer.delta() != Vec2::ZERO) {
-            menu.active = Some(i);
-            menu.clavier = false;
-        }
-        let active = menu.active == Some(i) && !l.grise;
-        let arrondi = CornerRadius::same(LIGNE_ARRONDI);
-        if active {
-            let f = if r.is_pointer_button_down_on() {
-                p.appui
-            } else {
-                p.survol
-            };
-            ui.painter().rect_filled(rect, arrondi, couleur(f));
-        }
-        let (texte, second) = if l.grise {
-            (p.texte_desactive, p.texte_desactive)
-        } else {
-            (p.texte, p.texte_secondaire)
-        };
-        let cy = rect.center().y;
-        let mut x = rect.left() + MARGE_GAUCHE;
-        if carre {
-            let c = Rect::from_center_size(
-                pos2(x + PASTILLE_LARGEUR / 2.0, cy),
-                vec2(PASTILLE_LARGEUR, PASTILLE_HAUTEUR),
-            );
-            dessiner_carre(ui, p, c, l, l.grise);
-            x += PASTILLE_LARGEUR + ESPACE_CARRE;
-        }
-        let droite = rect.right()
-            - if choix_unique {
-                LIGNE_ECART + LIGNE_ICONE + LIGNE_MARGE_DROITE - LIGNE_ECART
-            } else {
-                LIGNE_MARGE_DROITE
-            };
-        let place = (droite - x).max(1.0);
-        let coupe = |t: &str, taille: f32, c: Rgb| {
-            let mut job = egui::text::LayoutJob::simple_singleline(
-                t.to_string(),
-                egui::FontId::proportional(taille),
-                couleur(c),
-            );
-            job.wrap = egui::text::TextWrapping::truncate_at_width(place);
-            ui.painter().layout_job(job)
-        };
-        if let Some(s) = l.sous_texte.as_deref() {
-            let g = coupe(&l.texte, TAILLE_TEXTE, texte);
-            ui.painter()
-                .galley(pos2(x, cy - 9.0 - g.size().y / 2.0), g, couleur(texte));
-            let g = coupe(s, TAILLE_PETIT, second);
-            ui.painter()
-                .galley(pos2(x, cy + 9.0 - g.size().y / 2.0), g, couleur(second));
-        } else {
-            let g = coupe(&l.texte, TAILLE_TEXTE, texte);
-            ui.painter()
-                .galley(pos2(x, cy - g.size().y / 2.0), g, couleur(texte));
-        }
-        if l.coche {
-            icone(
-                ui,
-                pos2(rect.right() - LIGNE_MARGE_DROITE - LIGNE_ICONE / 2.0, cy),
-                icones::COCHE,
-                LIGNE_ICONE,
-                if l.grise { p.texte_desactive } else { p.accent },
-            );
-        }
-        // Le contour de focus : seulement au clavier.
-        if active && menu.clavier {
-            ui.painter().rect_stroke(
-                rect.expand(1.0),
-                CornerRadius::same(LIGNE_ARRONDI + 1),
-                Stroke::new(2.0, couleur(p.texte)),
-                StrokeKind::Outside,
-            );
-            ui.scroll_to_rect(rect, None);
-        }
-        let role = if choix_unique {
-            Role::MenuItemRadio
-        } else {
-            Role::MenuItem
-        };
-        let nom = nom_accessible(l, mot_coche);
-        r.widget_info(|| egui::WidgetInfo::selected(role, !l.grise, l.coche, &nom));
-        if !l.grise && r.clicked() {
+        if une_ligne(ui, p, menu, i, l, forme) {
             clic = Some(i);
         }
     }
     clic
+}
+
+/// La ligne `i` : son fond actif, son carré, ses textes, sa coche, son contour de focus ;
+/// rend vrai si on vient de la cliquer.
+fn une_ligne(ui: &mut Ui, p: &Palette, menu: &mut MenuChoix, i: usize, l: &Ligne, forme: &Forme<'_>) -> bool {
+    let (rect, r) = ui.allocate_exact_size(
+        vec2(ui.available_width(), l.hauteur()),
+        if l.grise { Sense::hover() } else { Sense::click() },
+    );
+    // La souris qui bouge sur une ligne libre la rend active (comme Windows).
+    if !l.grise && r.hovered() && ui.input(|e| e.pointer.delta() != Vec2::ZERO) {
+        menu.active = Some(i);
+        menu.clavier = false;
+    }
+    let active = menu.active == Some(i) && !l.grise;
+    if active {
+        let f = if r.is_pointer_button_down_on() {
+            p.appui
+        } else {
+            p.survol
+        };
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(LIGNE_ARRONDI), couleur(f));
+    }
+    let cy = rect.center().y;
+    let mut x = rect.left() + MARGE_GAUCHE;
+    if forme.carre {
+        let c = Rect::from_center_size(
+            pos2(x + PASTILLE_LARGEUR / 2.0, cy),
+            vec2(PASTILLE_LARGEUR, PASTILLE_HAUTEUR),
+        );
+        dessiner_carre(ui, p, c, l, l.grise);
+        x += PASTILLE_LARGEUR + ESPACE_CARRE;
+    }
+    let droite = rect.right()
+        - if forme.choix_unique {
+            LIGNE_ECART + LIGNE_ICONE + LIGNE_MARGE_DROITE - LIGNE_ECART
+        } else {
+            LIGNE_MARGE_DROITE
+        };
+    dessiner_textes(ui, p, l, pos2(x, cy), droite);
+    if l.coche {
+        icone(
+            ui,
+            pos2(rect.right() - LIGNE_MARGE_DROITE - LIGNE_ICONE / 2.0, cy),
+            icones::COCHE,
+            LIGNE_ICONE,
+            if l.grise { p.texte_desactive } else { p.accent },
+        );
+    }
+    // Le contour de focus : seulement au clavier.
+    if active && menu.clavier {
+        ui.painter().rect_stroke(
+            rect.expand(1.0),
+            CornerRadius::same(LIGNE_ARRONDI + 1),
+            Stroke::new(2.0, couleur(p.texte)),
+            StrokeKind::Outside,
+        );
+        ui.scroll_to_rect(rect, None);
+    }
+    let role = if forme.choix_unique {
+        Role::MenuItemRadio
+    } else {
+        Role::MenuItem
+    };
+    let nom = nom_accessible(l, forme.mot_coche);
+    r.widget_info(|| egui::WidgetInfo::selected(role, !l.grise, l.coche, &nom));
+    !l.grise && r.clicked()
+}
+
+/// Le texte de la ligne (et son sous-texte dessous), à partir de `debut` (gauche, milieu de la
+/// ligne), coupés (« … ») avant `droite`.
+fn dessiner_textes(ui: &Ui, p: &Palette, l: &Ligne, debut: egui::Pos2, droite: f32) {
+    let (texte, second) = if l.grise {
+        (p.texte_desactive, p.texte_desactive)
+    } else {
+        (p.texte, p.texte_secondaire)
+    };
+    let (x, cy) = (debut.x, debut.y);
+    let place = (droite - x).max(1.0);
+    let coupe = |t: &str, taille: f32, c: Rgb| {
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            t.to_string(),
+            egui::FontId::proportional(taille),
+            couleur(c),
+        );
+        job.wrap = egui::text::TextWrapping::truncate_at_width(place);
+        ui.painter().layout_job(job)
+    };
+    if let Some(s) = l.sous_texte.as_deref() {
+        let g = coupe(&l.texte, TAILLE_TEXTE, texte);
+        ui.painter()
+            .galley(pos2(x, cy - 9.0 - g.size().y / 2.0), g, couleur(texte));
+        let g = coupe(s, TAILLE_PETIT, second);
+        ui.painter()
+            .galley(pos2(x, cy + 9.0 - g.size().y / 2.0), g, couleur(second));
+    } else {
+        let g = coupe(&l.texte, TAILLE_TEXTE, texte);
+        ui.painter()
+            .galley(pos2(x, cy - g.size().y / 2.0), g, couleur(texte));
+    }
 }
 
 #[cfg(test)]
@@ -600,79 +576,8 @@ mod essais {
     use super::*;
     use crate::theme::{ChoixWindows, contraste};
 
-    fn libres(n: usize) -> Vec<bool> {
-        vec![false; n]
-    }
-
-    #[test]
-    fn bas_et_haut_font_le_tour() {
-        let g = libres(3);
-        assert_eq!(suivre(&g, Some(0), Touche::Bas), Effet::Active(1));
-        assert_eq!(suivre(&g, Some(2), Touche::Bas), Effet::Active(0));
-        assert_eq!(suivre(&g, Some(0), Touche::Haut), Effet::Active(2));
-        assert_eq!(suivre(&g, Some(2), Touche::Haut), Effet::Active(1));
-    }
-
-    #[test]
-    fn sans_ligne_active_bas_va_a_la_premiere_et_haut_a_la_derniere() {
-        let g = libres(4);
-        assert_eq!(suivre(&g, None, Touche::Bas), Effet::Active(0));
-        assert_eq!(suivre(&g, None, Touche::Haut), Effet::Active(3));
-    }
-
-    #[test]
-    fn les_lignes_grisees_sont_sautees() {
-        let g = [true, false, true, false, true];
-        assert_eq!(suivre(&g, None, Touche::Bas), Effet::Active(1));
-        assert_eq!(suivre(&g, Some(1), Touche::Bas), Effet::Active(3));
-        assert_eq!(suivre(&g, Some(3), Touche::Bas), Effet::Active(1), "fait le tour");
-        assert_eq!(suivre(&g, Some(1), Touche::Haut), Effet::Active(3));
-        assert_eq!(suivre(&g, Some(3), Touche::Haut), Effet::Active(1));
-        assert_eq!(
-            suivre(&g, Some(0), Touche::Bas),
-            Effet::Active(1),
-            "active grisée : on avance"
-        );
-    }
-
-    #[test]
-    fn debut_et_fin_vont_aux_lignes_libres_des_extremites() {
-        let g = [true, false, false, true];
-        assert_eq!(suivre(&g, Some(2), Touche::Debut), Effet::Active(1));
-        assert_eq!(suivre(&g, Some(1), Touche::Fin), Effet::Active(2));
-    }
-
-    #[test]
-    fn entree_choisit_la_ligne_active_si_elle_est_libre() {
-        let g = [false, true, false];
-        assert_eq!(suivre(&g, Some(2), Touche::Entree), Effet::Choisir(2));
-        assert_eq!(suivre(&g, Some(1), Touche::Entree), Effet::Rien, "grisée");
-        assert_eq!(suivre(&g, None, Touche::Entree), Effet::Rien);
-        assert_eq!(suivre(&g, Some(9), Touche::Entree), Effet::Rien, "hors liste");
-    }
-
-    #[test]
-    fn echap_ferme_toujours() {
-        assert_eq!(suivre(&[], None, Touche::Echap), Effet::Fermer);
-        assert_eq!(suivre(&libres(2), Some(1), Touche::Echap), Effet::Fermer);
-    }
-
-    #[test]
-    fn tout_grise_ou_vide_rien_ne_bouge() {
-        for g in [vec![], vec![true, true]] {
-            for t in [
-                Touche::Haut,
-                Touche::Bas,
-                Touche::Debut,
-                Touche::Fin,
-                Touche::Entree,
-            ] {
-                assert_eq!(suivre(&g, Some(0), t), Effet::Rien, "{g:?} {t:?}");
-                assert_eq!(suivre(&g, None, t), Effet::Rien, "{g:?} {t:?}");
-            }
-        }
-    }
-
+    // Les touches (`suivre`) et la ligne initiale sont essayées dans le cœur
+    // (`ic_coeur::gestes::choix`) ; ici, la reprise sur des lignes.
     #[test]
     fn ligne_initiale_est_la_cochee_sinon_la_premiere_libre() {
         let mut l = vec![Ligne::new("a", "A"), Ligne::new("b", "B"), Ligne::new("c", "C")];

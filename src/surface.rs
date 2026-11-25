@@ -133,7 +133,6 @@ fn largeur_avec(ui: &egui::Ui, s: Surface, l: &dyn Logiciel, briques: &[Brique],
                     + ui.spacing().item_spacing.x
                     + mesure(&e.ligne, semibold(TAILLE_TEXTE)),
             );
-            b = b.max(l.largeur_rapides(ui));
             b = b.max(briques::largeur(ui, briques));
             b = b.max(briques::largeur(ui, pied));
             (LARGEUR, b)
@@ -342,9 +341,6 @@ fn volet(
             Some(Geste::Action(cle)) => choisi = Some(Choisi::Rapide(cle)),
             Some(Geste::Changer(cle, v)) => l.changer(&cle, v),
             None => {}
-        }
-        if let Some(cle) = l.dessiner_rapides(ui, p) {
-            choisi = Some(Choisi::Rapide(cle));
         }
         choisi
     };

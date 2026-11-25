@@ -305,8 +305,8 @@ fn c98_espace_insecable_avant_l_unite() {
     // Tous les textes, dans les deux langues : un nombre (« {} » ou un chiffre) suivi d'une
     // espace normale puis d'une unité. Plus aucun écart connu dans les textes : le bloc B de la
     // refonte a corrigé `conserver_retour` (R1, `docs/PLAN-REFONTE.md` §5) et « 24 h » du
-    // journal détaillé. Reste, hors des textes : le pourcentage des appareils du volet
-    // (`briques`, fonction privée, R2), corrigé au bloc F.
+    // journal détaillé. Hors des textes, le pourcentage des appareils du volet (`briques`,
+    // fonction privée, R2) est corrigé au bloc F (essai `le_pourcentage_a_l_espace_insecable`).
     const UNITES: &[&str] = &["s", "%", "ms", "px", "Mo", "Ko", "Go", "min", "h", "j"];
     let mut trouves = Vec::new();
     for t in [&textes::FRANCAIS, &textes::ANGLAIS] {

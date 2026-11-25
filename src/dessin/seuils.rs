@@ -15,9 +15,9 @@ use egui::{
     vec2,
 };
 
-use crate::apparence::couleur;
+use crate::dessin::couleur::couleur;
 use crate::polices::semibold;
-use crate::theme::{Palette, Rgb, contraste};
+use crate::theme::{Palette, Rgb};
 
 /// Hauteur de la barre colorée, en points.
 const BARRE: f32 = 28.0;
@@ -70,38 +70,19 @@ pub struct ReponseSeuils {
     pub termine: bool,
 }
 
-/// Les bornes entre lesquelles la limite `i` peut aller, ses voisines étant à leur place.
-fn bornes(seuils: &[u8], i: usize, ecart: u8, max: u8) -> (u8, u8) {
-    let bas = if i == 0 {
-        0
-    } else {
-        seuils[i - 1].saturating_add(ecart).min(max)
-    };
-    let haut = if i + 1 == seuils.len() {
-        max
-    } else {
-        seuils[i + 1].saturating_sub(ecart)
-    };
-    (bas, haut.max(bas))
-}
-
-/// Met la limite `i` à `voulu`, ramené entre ses voisines. Rend vrai si elle a bougé.
-pub fn deplacer(seuils: &mut [u8], i: usize, voulu: i32, ecart: u8, max: u8) -> bool {
-    let (bas, haut) = bornes(seuils, i, ecart, max);
-    let v = voulu.clamp(i32::from(bas), i32::from(haut)) as u8;
-    let change = seuils[i] != v;
-    seuils[i] = v;
-    change
-}
+// Où une limite peut aller et ce que demandent les touches : du calcul pur, dans le cœur
+// (bloc F), repris ici à son chemin d'aujourd'hui.
+pub use ic_coeur::gestes::seuils::deplacer;
+use ic_coeur::gestes::seuils::{Borne, voulu_au_clavier};
 
 /// Le nombre écrit au-dessus d'une poignée, avec son unité (espace insécable avant l'unité).
 fn texte_valeur(v: u8, unite: &str) -> String {
     ic_coeur::textes::avec_unite(v, unite)
 }
 
-/// Le pas demandé par les touches de cette image (en négatif vers la gauche), et si on veut
-/// une borne (`Some(false)` : le début, `Some(true)` : la fin).
-fn touches(ui: &Ui) -> (i32, Option<bool>) {
+/// Le pas demandé par les touches de cette image (en négatif vers la gauche), et la borne
+/// demandée (Début ou Fin).
+fn touches(ui: &Ui) -> (i32, Option<Borne>) {
     let mut pas = 0;
     let mut borne = None;
     ui.input_mut(|i| {
@@ -125,10 +106,10 @@ fn touches(ui: &Ui) -> (i32, Option<bool>) {
             pas -= 10;
         }
         if i.consume_key(Modifiers::NONE, Key::Home) {
-            borne = Some(false);
+            borne = Some(Borne::Debut);
         }
         if i.consume_key(Modifiers::NONE, Key::End) {
-            borne = Some(true);
+            borne = Some(Borne::Fin);
         }
     });
     (pas, borne)
@@ -148,94 +129,24 @@ pub fn barre_seuils(
     options: &Options<'_>,
 ) -> ReponseSeuils {
     assert_eq!(seuils.len() + 1, zones.len(), "une limite entre deux zones");
-    let max = options.max.max(1);
     let mut reponse = ReponseSeuils::default();
     let hauteur = BULLE + ECART_BULLE + DEPASSE + BARRE + DEPASSE + REPERES;
     let (zone, _) = ui.allocate_exact_size(vec2(ui.available_width(), hauteur), Sense::hover());
-    // La barre laisse la place de la moitié d'une poignée à chaque bout.
-    let marge = ZONE_POIGNEE / 2.0;
-    let (x0, x1) = (zone.left() + marge, zone.right() - marge);
-    let barre = Rect::from_min_max(
-        pos2(x0, zone.top() + BULLE + ECART_BULLE + DEPASSE),
-        pos2(x1, zone.top() + BULLE + ECART_BULLE + DEPASSE + BARRE),
-    );
-    let x_de = |v: u8| x0 + (x1 - x0) * f32::from(v) / f32::from(max);
-    let valeur_de = |x: f32| (((x - x0) / (x1 - x0).max(1.0)) * f32::from(max)).round() as i32;
-
-    // Les zones colorées : arrondies aux deux bouts seulement.
+    let g = Gabarit::de(zone, options.max.max(1));
     if ui.is_rect_visible(zone) {
-        let limites: Vec<f32> = std::iter::once(x0)
-            .chain(seuils.iter().map(|&s| x_de(s)))
-            .chain(std::iter::once(x1))
-            .collect();
-        for (n, z) in zones.iter().enumerate() {
-            let (a, b) = (limites[n], limites[n + 1]);
-            if b - a < 0.5 {
-                continue;
-            }
-            let rond = |haut: bool| if haut { 6 } else { 0 };
-            let arrondi = CornerRadius {
-                nw: rond(n == 0),
-                sw: rond(n == 0),
-                ne: rond(n + 1 == zones.len()),
-                se: rond(n + 1 == zones.len()),
-            };
-            let r = Rect::from_min_max(pos2(a, barre.top()), pos2(b, barre.bottom()));
-            ui.painter().rect_filled(r, arrondi, couleur(z.couleur));
-        }
-        ui.painter().rect_stroke(
-            barre,
-            CornerRadius::same(6),
-            Stroke::new(1.0, couleur(p.bord_controle)),
-            StrokeKind::Inside,
-        );
-        for (v, ancre, x) in [(0, Align2::LEFT_TOP, x0), (max, Align2::RIGHT_TOP, x1)] {
-            ui.painter().text(
-                pos2(x, barre.bottom() + DEPASSE + 4.0),
-                ancre,
-                texte_valeur(v, options.unite),
-                FontId::proportional(crate::theme::TAILLE_PETIT),
-                couleur(p.texte_secondaire),
-            );
-        }
+        dessiner_zones(ui, p, &g, zones, seuils, options.unite);
     }
 
     // Les poignées, de la dernière à la première : celle de gauche reste prise si deux se
     // touchent (la seconde se dégage en la poussant à droite).
     for i in (0..seuils.len()).rev() {
-        let centre = pos2(x_de(seuils[i]), barre.center().y);
+        let centre = pos2(g.x_de(seuils[i]), g.barre.center().y);
         let cliquable = Rect::from_center_size(centre, vec2(ZONE_POIGNEE, BARRE + 2.0 * DEPASSE + 4.0));
-        let r = ui.interact(cliquable, ui.make_persistent_id((id, i)), Sense::click_and_drag());
+        let r = ui
+            .interact(cliquable, ui.make_persistent_id((id, i)), Sense::click_and_drag())
+            .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
         let nom = format!("{} / {}", zones[i].nom, zones[i + 1].nom);
-        let r = r.on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
-        let mut voulu = i32::from(seuils[i]);
-        if r.dragged()
-            && let Some(pos) = r.interact_pointer_pos()
-        {
-            voulu = valeur_de(pos.x);
-        }
-        if r.has_focus() {
-            ui.memory_mut(|m| {
-                m.set_focus_lock_filter(
-                    r.id,
-                    EventFilter {
-                        horizontal_arrows: true,
-                        vertical_arrows: true,
-                        ..Default::default()
-                    },
-                );
-            });
-            let (pas, borne) = touches(ui);
-            let (bas, haut) = bornes(seuils, i, options.ecart_min, max);
-            match borne {
-                Some(false) => voulu = i32::from(bas),
-                Some(true) => voulu = i32::from(haut),
-                None => voulu += pas,
-            }
-        }
-        // Rien n'est demandé : une valeur écrite à la main (deux limites au même endroit, une limite au
-        // bout) reste telle quelle, elle n'est jamais bornée du seul fait d'être montrée.
-        if voulu != i32::from(seuils[i]) && deplacer(seuils, i, voulu, options.ecart_min, max) {
+        if suivre_poignee(ui, &g, &r, i, seuils, options) {
             reponse.change = true;
         }
         reponse.glisse |= r.dragged();
@@ -245,69 +156,175 @@ pub fn barre_seuils(
         if r.clicked() || r.drag_started() {
             r.request_focus();
         }
-
-        // Le dessin : un nombre dans une bulle, puis la poignée en travers de la barre.
         if ui.is_rect_visible(cliquable) {
-            let x = x_de(valeur);
-            let actif = r.hovered() || r.dragged();
-            let police = semibold(crate::theme::TAILLE_PETIT + 1.0);
-            let galerie =
-                ui.painter()
-                    .layout_no_wrap(texte_valeur(valeur, options.unite), police, couleur(p.texte));
-            let taille = galerie.size() + vec2(16.0, 0.0);
-            let bulle =
-                Rect::from_center_size(pos2(x, zone.top() + BULLE / 2.0), vec2(taille.x.max(44.0), BULLE));
-            // La bulle reste dans la zone : jamais coupée au bord de la page.
-            let decalage = (zone.left() - bulle.left()).max(0.0) - (bulle.right() - zone.right()).max(0.0);
-            let bulle = bulle.translate(vec2(decalage, 0.0));
-            ui.painter().rect_filled(
-                bulle,
-                CornerRadius::same(4),
-                couleur(if actif { p.survol } else { p.controle }),
-            );
-            ui.painter().rect_stroke(
-                bulle,
-                CornerRadius::same(4),
-                Stroke::new(1.0, couleur(p.bord_controle)),
-                StrokeKind::Inside,
-            );
-            ui.painter()
-                .galley(bulle.center() - galerie.size() / 2.0, galerie, couleur(p.texte));
-            let pastille = Rect::from_center_size(
-                pos2(x, barre.center().y),
-                vec2(if actif { POIGNEE + 2.0 } else { POIGNEE }, BARRE + 2.0 * DEPASSE),
-            );
-            ui.painter()
-                .rect_filled(pastille, CornerRadius::same(4), couleur(p.texte));
-            ui.painter().rect_stroke(
-                pastille,
-                CornerRadius::same(4),
-                Stroke::new(1.5, couleur(p.fond)),
-                StrokeKind::Outside,
-            );
-            if r.has_focus() {
-                ui.painter().rect_stroke(
-                    pastille.expand(4.0),
-                    CornerRadius::same(7),
-                    Stroke::new(2.0, couleur(p.texte)),
-                    StrokeKind::Outside,
-                );
-            }
+            dessiner_poignee(ui, p, &g, &r, valeur, options.unite);
         }
     }
     reponse
 }
 
-/// Un texte lisible (noir ou blanc) sur la couleur d'une zone : pour écrire dans une zone ou
-/// sur une pastille de sa couleur.
-pub fn texte_sur(zone: Rgb) -> Rgb {
-    let (noir, blanc) = (Rgb(0, 0, 0), Rgb(255, 255, 255));
-    if contraste(zone, noir) >= contraste(zone, blanc) {
-        noir
-    } else {
-        blanc
+/// Où se trouve la barre dans sa zone, et comment passer d'une valeur à sa place.
+struct Gabarit {
+    zone: Rect,
+    barre: Rect,
+    x0: f32,
+    x1: f32,
+    max: u8,
+}
+
+impl Gabarit {
+    /// La barre laisse la place de la moitié d'une poignée à chaque bout.
+    fn de(zone: Rect, max: u8) -> Self {
+        let marge = ZONE_POIGNEE / 2.0;
+        let (x0, x1) = (zone.left() + marge, zone.right() - marge);
+        let barre = Rect::from_min_max(
+            pos2(x0, zone.top() + BULLE + ECART_BULLE + DEPASSE),
+            pos2(x1, zone.top() + BULLE + ECART_BULLE + DEPASSE + BARRE),
+        );
+        Self {
+            zone,
+            barre,
+            x0,
+            x1,
+            max,
+        }
+    }
+
+    fn x_de(&self, v: u8) -> f32 {
+        self.x0 + (self.x1 - self.x0) * f32::from(v) / f32::from(self.max)
+    }
+
+    fn valeur_de(&self, x: f32) -> i32 {
+        (((x - self.x0) / (self.x1 - self.x0).max(1.0)) * f32::from(self.max)).round() as i32
     }
 }
+
+/// Les zones colorées (arrondies aux deux bouts seulement), le cadre et les repères des bouts.
+fn dessiner_zones(ui: &Ui, p: &Palette, g: &Gabarit, zones: &[Zone<'_>], seuils: &[u8], unite: &str) {
+    let limites: Vec<f32> = std::iter::once(g.x0)
+        .chain(seuils.iter().map(|&s| g.x_de(s)))
+        .chain(std::iter::once(g.x1))
+        .collect();
+    for (n, z) in zones.iter().enumerate() {
+        let (a, b) = (limites[n], limites[n + 1]);
+        if b - a < 0.5 {
+            continue;
+        }
+        let rond = |haut: bool| if haut { 6 } else { 0 };
+        let arrondi = CornerRadius {
+            nw: rond(n == 0),
+            sw: rond(n == 0),
+            ne: rond(n + 1 == zones.len()),
+            se: rond(n + 1 == zones.len()),
+        };
+        let r = Rect::from_min_max(pos2(a, g.barre.top()), pos2(b, g.barre.bottom()));
+        ui.painter().rect_filled(r, arrondi, couleur(z.couleur));
+    }
+    ui.painter().rect_stroke(
+        g.barre,
+        CornerRadius::same(6),
+        Stroke::new(1.0, couleur(p.bord_controle)),
+        StrokeKind::Inside,
+    );
+    for (v, ancre, x) in [(0, Align2::LEFT_TOP, g.x0), (g.max, Align2::RIGHT_TOP, g.x1)] {
+        ui.painter().text(
+            pos2(x, g.barre.bottom() + DEPASSE + 4.0),
+            ancre,
+            texte_valeur(v, unite),
+            FontId::proportional(crate::theme::TAILLE_PETIT),
+            couleur(p.texte_secondaire),
+        );
+    }
+}
+
+/// La poignée `i` suit la souris ou le clavier ; rend vrai si sa limite a bougé.
+fn suivre_poignee(
+    ui: &Ui,
+    g: &Gabarit,
+    r: &egui::Response,
+    i: usize,
+    seuils: &mut [u8],
+    options: &Options<'_>,
+) -> bool {
+    let mut voulu = i32::from(seuils[i]);
+    if r.dragged()
+        && let Some(pos) = r.interact_pointer_pos()
+    {
+        voulu = g.valeur_de(pos.x);
+    }
+    if r.has_focus() {
+        ui.memory_mut(|m| {
+            m.set_focus_lock_filter(
+                r.id,
+                EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    ..Default::default()
+                },
+            );
+        });
+        let (pas, borne) = touches(ui);
+        voulu = voulu_au_clavier(seuils, i, voulu, pas, borne, options.ecart_min, g.max);
+    }
+    // Rien n'est demandé : une valeur écrite à la main (deux limites au même endroit, une limite au
+    // bout) reste telle quelle, elle n'est jamais bornée du seul fait d'être montrée.
+    voulu != i32::from(seuils[i]) && deplacer(seuils, i, voulu, options.ecart_min, g.max)
+}
+
+/// Le dessin d'une poignée : un nombre dans une bulle, puis la poignée en travers de la barre.
+fn dessiner_poignee(ui: &Ui, p: &Palette, g: &Gabarit, r: &egui::Response, valeur: u8, unite: &str) {
+    let x = g.x_de(valeur);
+    let actif = r.hovered() || r.dragged();
+    let police = semibold(crate::theme::TAILLE_PETIT + 1.0);
+    let galerie = ui
+        .painter()
+        .layout_no_wrap(texte_valeur(valeur, unite), police, couleur(p.texte));
+    let taille = galerie.size() + vec2(16.0, 0.0);
+    let bulle = Rect::from_center_size(
+        pos2(x, g.zone.top() + BULLE / 2.0),
+        vec2(taille.x.max(44.0), BULLE),
+    );
+    // La bulle reste dans la zone : jamais coupée au bord de la page.
+    let decalage = (g.zone.left() - bulle.left()).max(0.0) - (bulle.right() - g.zone.right()).max(0.0);
+    let bulle = bulle.translate(vec2(decalage, 0.0));
+    ui.painter().rect_filled(
+        bulle,
+        CornerRadius::same(4),
+        couleur(if actif { p.survol } else { p.controle }),
+    );
+    ui.painter().rect_stroke(
+        bulle,
+        CornerRadius::same(4),
+        Stroke::new(1.0, couleur(p.bord_controle)),
+        StrokeKind::Inside,
+    );
+    ui.painter()
+        .galley(bulle.center() - galerie.size() / 2.0, galerie, couleur(p.texte));
+    let pastille = Rect::from_center_size(
+        pos2(x, g.barre.center().y),
+        vec2(if actif { POIGNEE + 2.0 } else { POIGNEE }, BARRE + 2.0 * DEPASSE),
+    );
+    ui.painter()
+        .rect_filled(pastille, CornerRadius::same(4), couleur(p.texte));
+    ui.painter().rect_stroke(
+        pastille,
+        CornerRadius::same(4),
+        Stroke::new(1.5, couleur(p.fond)),
+        StrokeKind::Outside,
+    );
+    if r.has_focus() {
+        ui.painter().rect_stroke(
+            pastille.expand(4.0),
+            CornerRadius::same(7),
+            Stroke::new(2.0, couleur(p.texte)),
+            StrokeKind::Outside,
+        );
+    }
+}
+
+// Un texte lisible (noir ou blanc) sur la couleur d'une zone : dans le cœur (bloc F), repris
+// ici à son chemin d'aujourd'hui.
+pub use ic_coeur::theme::texte_sur;
 
 #[cfg(test)]
 mod tests {
@@ -318,40 +335,12 @@ mod tests {
         Palette::de(&crate::theme::ChoixWindows::default())
     }
 
-    #[test]
-    fn une_limite_reste_entre_ses_voisines() {
-        let mut s = [20u8, 50];
-        assert!(deplacer(&mut s, 0, 90, 1, 100));
-        assert_eq!(s, [49, 50]);
-        assert!(
-            !deplacer(&mut s, 1, 0, 1, 100),
-            "la deuxième ne passe pas la première"
-        );
-        assert_eq!(s, [49, 50]);
-        assert!(deplacer(&mut s, 0, -30, 1, 100));
-        assert_eq!(s, [0, 50]);
-        assert!(deplacer(&mut s, 1, 400, 1, 100));
-        assert_eq!(s, [0, 100]);
-        assert!(!deplacer(&mut s, 1, 100, 1, 100), "rien n'a bougé");
-    }
-
-    #[test]
-    fn deux_limites_peuvent_se_toucher() {
-        let mut s = [20u8, 50];
-        assert!(deplacer(&mut s, 0, 80, 0, 100));
-        assert_eq!(s, [50, 50]);
-    }
-
+    // Le déplacement d'une limite et ses bornes sont essayés dans le cœur
+    // (`ic_coeur::gestes::seuils`).
     #[test]
     fn les_nombres_ont_une_espace_insecable() {
         assert_eq!(texte_valeur(30, "%"), "30\u{a0}%");
         assert_eq!(texte_valeur(30, ""), "30");
-    }
-
-    #[test]
-    fn le_texte_sur_une_zone_est_lisible() {
-        assert_eq!(texte_sur(Rgb(255, 255, 0)), Rgb(0, 0, 0));
-        assert_eq!(texte_sur(Rgb(0, 40, 160)), Rgb(255, 255, 255));
     }
 
     const LARGEUR: f32 = 432.0;

@@ -11,7 +11,7 @@ de travail par projet, sur sa branche.
   `dessiner_page`, `dessiner_general`, `alerte`, `communs`, `changer`, `place_parametres`,
   `retenir_place`) ; `Logiciel: Reglages` ajoute l'icône, le volet et le petit menu (`etat`,
   `dessiner_rapides`, `largeur_rapides`, `actions_menu`, `lignes_en_plus`, `quitter`,
-  `noter`). À faire : déplacer ces méthodes dans un `impl Reglages for …`. Un logiciel qui ne
+  `noter` ; `dessiner_rapides` et `largeur_rapides` disparaissent à la refonte, voir plus bas). À faire : déplacer ces méthodes dans un `impl Reglages for …`. Un logiciel qui ne
   veut que les Paramètres n'écrit que `Reglages`.
 - **`Identite::glyphe` disparaît**, remplacé par `logo: Option<FaireLogo>` : le vrai logo,
   en RVBA, à la taille demandée (l'en-tête des Paramètres le montre en 32 points, la page À
@@ -82,7 +82,8 @@ de travail par projet, sur sa branche.
   coché avec raccourci à droite, choix segmenté, appareil (icône, nom, %, barre, sous-ligne),
   titre de section, liste de raccourcis, action. Un interrupteur ou un choix segmenté appelle
   `Reglages::changer` sans fermer le volet ; les autres rendent leur clé à
-  `Reglages::action`. `dessiner_rapides` ne sert plus qu'au passage, puis disparaîtra.
+  `Reglages::action`. `dessiner_rapides` ne servait qu'au passage : il disparaît à la refonte
+  (bloc F, voir plus bas).
 - **Les mesures, écrites une fois** dans `mesures` : petit menu comme Windows 11 (lignes de
   32, écart de 2, marge de 4, séparateur de 9, icône 16 centrée à 20, texte à 42) ; volet
   (briques de 36, choix segmenté de 32, écart de 2, section de 28, raccourci de 24, marges 6
@@ -660,6 +661,23 @@ Exemple et captures sans fenêtre : `cargo run --example mise_a_jour -- <dossier
   `carte_couleur` garde une ligne quand la carte est assez large (fenêtre des Paramètres à sa taille
   par défaut), deux lignes de 5 un peu plus étroite, trois lignes (4, 4, 2) à la plus petite taille.
   Flèches gauche et droite : d'une couleur à la suivante, d'une ligne à l'autre. Rien à changer.
+
+## La refonte, bloc F : contrôles et traits (branche `claude/bloc-f-controles`, pour tous)
+
+Changements 2 et 5 de `docs/PLAN-REFONTE.md`, §4. Tous les autres chemins restent
+(`tests/compatibilite.rs` inchangé) : les contrôles, les briques, les pastilles, le menu de
+choix, la barre à seuils, le nuancier, les couleurs et les traits sont rangés dans
+`src/dessin/`, et repris à leur ancien chemin (`interface_commune::briques::Brique`,
+`dessin::carte`, `Logiciel`, `Reglages`…).
+
+- **`Logiciel::dessiner_rapides` et `Logiciel::largeur_rapides` disparaissent** (changement
+  2). Aucun des quatre logiciels ne les écrit (relevé du 25 nov.) : rien à changer. Un logiciel
+  qui les écrirait passe ce contenu en briques (`Logiciel::briques`) : une `Brique::Choix`,
+  un `Interrupteur` ou des `Segments`, que la bibliothèque dessine et place elle-même.
+- **Le niveau d'un appareil du volet s'écrit « 42 % » avec l'espace insécable** (changement 5,
+  C-98, R2). Rien à écrire ; seul un essai du logiciel qui comparerait ce texte doit y mettre
+  `\u{A0}` (« 42\u{A0}% »). Aucune image de référence ne change (`tests/references` vert : les
+  images du volet restent les mêmes).
 
 ## Pour tous
 
