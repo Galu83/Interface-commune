@@ -743,6 +743,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
 
 [[package]]
+name = "ic-coeur"
+version = "0.1.0"
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -771,6 +775,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
+ "ic-coeur",
  "image",
  "proptest",
  "raw-window-handle",

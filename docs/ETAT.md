@@ -48,8 +48,37 @@
 - **Refonte à part (A, choisie par le propriétaire le 24 nov.)**, sur la branche `refonte` :
   la conception est dans `docs/ORGANIGRAMME.md` (version 2, 25 nov. : deux crates, API gardée) ;
   l'ordre des blocs, les dates, la migration et les conditions de bascule sont dans
-  `docs/PLAN-REFONTE.md` (fin estimée vers le 5 février 2027). Les filets de l'ancienne
-  bibliothèque sont sur la branche `claude/filets-interface` (a115e5f) : à fusionner dans `main`,
-  puis `main` dans `refonte`, avant le premier bloc. Aucun nouveau code écrit ; aucun sous-agent.
-- **Prochaine étape** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
+  `docs/PLAN-REFONTE.md` (validés par l'Atelier Master le 25 nov. ; une seule voie à la fois,
+  fin vers la fin février 2027). Les filets de l'ancienne bibliothèque sont fusionnés dans `main`
+  et dans `refonte`.
+- **Refonte, bloc 0 « Préparation »** (25 nov., branche `claude/bloc-0-preparation`, partie de
+  `refonte`, à intégrer par l'Atelier Master) :
+  - un **espace de travail Cargo** à la racine : `interface-commune` (inchangée pour les
+    logiciels, même ligne dans leur `Cargo.toml`) et le cœur **`crates/ic-coeur`**, vide, sans
+    aucune dépendance, `#![forbid(unsafe_code)]` ; `interface-commune` le prend déjà (le sens
+    des étages est en place) ;
+  - la liste des modules du cœur, écrite une fois pour toutes (plan, §3) : `contrat` (A),
+    `textes` (B), `theme` (C), `gestes` et `placement` (D), `parametres` (E), chacun vide ;
+  - **`tests/etages.rs`** : le cœur ne déclare aucune dépendance et `Cargo.lock` le confirme ;
+    `interface-commune` prend le cœur ; le code du cœur n'appelle ni egui, ni Windows, ni le
+    disque, le réseau, l'horloge ou le système, et n'a aucun `unsafe` ; le dessin
+    (`src/dessin.rs`, puis `src/dessin/`) n'appelle ni `windows::`, ni eframe, ni winit, ni
+    `unsafe` ; `unsafe` seulement dans `src/bords/`, plus, en attendant leur bloc, `echelle`,
+    `horloge`, `systeme` et `zone` (liste à vider aux blocs L, M, J). Chaque essai a été vu
+    échouer sur une faute posée exprès, puis la faute retirée ;
+  - **CI** : `fmt --all`, `clippy --workspace`, `test --workspace` sous Windows ; un petit
+    travail Linux pour le cœur seul (clippy et tests de `ic-coeur`) ; la vérification part aussi
+    sur un envoi vers `refonte` ;
+  - `CARTE.md` et `README.md` : les commandes de l'espace de travail.
+  - **Décisions prises seul** (à relire par l'Atelier Master) : le cœur peut avoir des
+    dépendances **d'essai** (`[dev-dependencies]`, par exemple `proptest`), jamais egui, eframe,
+    winit, Windows, skrifa ni `interface-commune` ; aucune autre section de dépendances ;
+    le travail Linux du cœur (quelques minutes Linux par envoi) ; `refonte` ajoutée aux
+    branches vérifiées à l'envoi.
+  - **Pas vérifié** : la CI elle-même (rien n'est envoyé sur GitHub par cette session ; les
+    Actions étaient bloquées par la limite de dépense). Les fichiers de plus de 800 lignes
+    d'aujourd'hui (`volet`, `fenetres`, `horloge`…) restent : ils se découpent dans leur bloc.
+- **Prochaine étape de la refonte** : intégrer le bloc 0 dans `refonte`, puis le bloc A
+  « Contrat » (`docs/PLAN-REFONTE.md`, §2).
+- **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).
