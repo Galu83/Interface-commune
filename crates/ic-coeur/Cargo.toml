@@ -1,0 +1,26 @@
+[package]
+name = "ic-coeur"
+description = "Le cœur pur de l'interface commune : les types partagés et les décisions, sans egui, sans Windows, sans unsafe"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+# Jamais publiée : elle vient avec `interface-commune`, dans le même dépôt (espace de travail).
+publish = false
+
+[lib]
+name = "ic_coeur"
+
+# Aucune dépendance, et il n'y en aura pas (ORGANIGRAMME.md, §10) : le cœur reçoit des faits
+# (un clic, une taille d'écran, l'instant) et rend des décisions. `tests/etages.rs` (à la racine
+# du dépôt) échoue si une ligne apparaît sous une section de dépendances de ce fichier.
+[dependencies]
+
+[lints.rust]
+# Aucun `unsafe` dans le cœur (aussi écrit `#![forbid(unsafe_code)]` dans `src/lib.rs`).
+unsafe_code = "forbid"
+
+[lints.clippy]
+# Rien de ce que le logiciel passe à la bibliothèque ne doit pouvoir la faire planter.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

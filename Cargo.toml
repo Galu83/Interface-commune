@@ -11,7 +11,19 @@ publish = false
 [lib]
 name = "interface_commune"
 
+# L'espace de travail de la refonte (ORGANIGRAMME.md, §10) : deux crates dans ce dépôt.
+# - `interface-commune` (ici, à la racine) : le dessin (egui) et les bords Windows ; c'est
+#   elle que prennent les logiciels, à la même ligne de leur `Cargo.toml` qu'avant ;
+# - `ic-coeur` (`crates/ic-coeur`) : le cœur pur, sans egui ni Windows ni `unsafe`.
+# Le sens des dépendances (le cœur ne dépend de rien) est vérifié par `tests/etages.rs`.
+[workspace]
+members = [".", "crates/ic-coeur"]
+resolver = "3"
+
 [dependencies]
+# Le cœur pur de la refonte : les décisions et les types partagés, repris ici aux chemins
+# d'aujourd'hui (rempli bloc par bloc, PLAN-REFONTE.md §2).
+ic-coeur = { path = "crates/ic-coeur", version = "0.1.0" }
 # Le dessin (cartes, lignes, interrupteurs…) : egui seul, sans ses polices (licences OFL et
 # UFL hors liste) : Segoe UI Variable et Segoe Fluent Icons de Windows, lues sur le PC.
 egui = { version = "0.37", default-features = false }

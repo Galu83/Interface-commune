@@ -2,6 +2,9 @@
 
 | Où | Quoi |
 |---|---|
+| `Cargo.toml` | l'espace de travail de la refonte : deux crates, `interface-commune` (ici, celle que prennent les logiciels) et `crates/ic-coeur` |
+| `crates/ic-coeur/` | le cœur pur de la refonte (sans egui, sans Windows, sans `unsafe`) : modules vides, remplis bloc par bloc (`docs/PLAN-REFONTE.md`) |
+| `tests/etages.rs` | les étages : le cœur ne dépend de rien et n'appelle ni egui, ni Windows, ni le système ; le dessin n'appelle pas Windows ; `unsafe` seulement dans les bords |
 | `src/lib.rs` | les traits `Reglages` (les Paramètres) et `Logiciel` (l'icône, le volet, le menu), `Identite`, `Etat`, `Communs`, les clés communes |
 | `src/textes.rs` | les mots écrits par la bibliothèque, en français et en anglais |
 | `src/theme.rs`, `apparence.rs`, `polices.rs` | couleurs Windows 11, clair/sombre, accent, durées d'animation, polices Segoe |
@@ -32,4 +35,4 @@
 | `examples/section_repliable.rs` | une section repliable dans une page des Paramètres, repliée puis ouverte par la recherche : deux captures sans fenêtre |
 | `examples/mesure_ouverture.rs` | mesure l'ouverture du volet et du petit menu, image par image, fenêtre voilée (rien à l'écran) |
 
-Tests : `cargo test -q` ; avant un envoi : `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`.
+Tests (les deux crates) : `cargo test --workspace -q` ; avant un envoi : `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo deny check`.

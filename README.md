@@ -131,8 +131,9 @@ de déploiement**, en lecture seule, valable pour ce seul dépôt, sans date de 
 
 ## Les vérifications
 
-- `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`,
-  `cargo build --examples`, `cargo deny check` : aucune fenêtre ne s'ouvre pendant les tests
+- `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo test --workspace`, `cargo build --examples`, `cargo deny check` (les deux crates de
+  l'espace de travail : `interface-commune` et le cœur `crates/ic-coeur`) : aucune fenêtre ne s'ouvre pendant les tests
   (le volet, le menu et les Paramètres sont mis en page par egui seul).
 - Le crochet `pre-push` commun contrôle chaque envoi (règle n° 1).
 

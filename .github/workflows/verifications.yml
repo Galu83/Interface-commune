@@ -4,7 +4,9 @@ name: Vérifications
 # rien quand seuls des documents changent.
 on:
   push:
-    branches: [main]
+    # `refonte` : la branche de la refonte à part (docs/PLAN-REFONTE.md), vérifiée à chaque
+    # bloc intégré.
+    branches: [main, refonte]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -48,10 +50,12 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           workspaces: .
+      # Espace de travail (docs/ORGANIGRAMME.md, §10) : les deux crates, `interface-commune`
+      # et le cœur `ic-coeur`, à chaque étape.
       - name: Mise en forme
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
       - name: Contrôle du code
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       # Le runner n'a pas de carte graphique : Windows n'y offre qu'OpenGL 1.1, et egui veut
       # 2.0 ou plus. Mesa (MIT, dessin par le processeur) le remplace, déclaré comme pilote
       # du runner ; version et empreinte SHA-256 figées (sécurité, point 9).
@@ -64,7 +68,7 @@ jobs:
           if ($h -ne "da0f71d9181b672c1918f3c342f11118c687f6059a46b16502845160733cc388") { throw "empreinte inattendue : $h" }
           7z x mesa.7z -omesa -y | Out-Null
       - name: Compilation des tests
-        run: cargo test --no-run
+        run: cargo test --workspace --no-run
       # Comme le fait « systemwidedeploy.cmd » de Mesa : le moteur dans System32, déclaré à
       # Windows comme pilote OpenGL (clé MSOGL). Seulement sur ce runner jetable.
       - name: Mesa, pilote OpenGL du runner
@@ -98,9 +102,29 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Tests
-        run: cargo test
+        run: cargo test --workspace
       - name: L'exemple se compile
         run: cargo build --examples
+
+  coeur:
+    name: Le cœur pur sous Linux (ic-coeur)
+    # Le cœur ne dépend ni de Windows ni d'egui (ORGANIGRAMME.md, §10 et §11) : il se compile
+    # et s'essaie sur tout système. Le faire sous Linux le prouve, pour peu de minutes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # v5.1.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+      - name: Contrôle du code
+        run: cargo clippy -p ic-coeur --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test -p ic-coeur
 
   dependances:
     name: Failles connues et licences des dépendances (cargo-deny)
