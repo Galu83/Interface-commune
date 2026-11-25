@@ -11,6 +11,7 @@ use crate::gestes::Horodatage;
 #[cfg(test)]
 mod essais;
 pub mod plan;
+pub mod surface;
 
 /// Un rectangle en pixels : gauche, haut, droite, bas (droite et bas exclus).
 pub type Rect = [i32; 4];

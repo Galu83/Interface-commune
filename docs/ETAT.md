@@ -320,7 +320,48 @@
     fichiers déplacés (`briques`, `pastilles`, `menu_choix`, `seuils`…) ;
   - `fenetres_en_rafale` et `recreation_apres_panique` ont tourné avec la suite complète
     (fenêtres voilées et hors de l'écran, jamais montrées) : verts.
-- **Prochaine étape de la refonte** : intégrer le bloc F dans `refonte`, puis le bloc
+- **Refonte, bloc G « Volet et petit menu (dessin) »** (25 nov. 23:05, branche
+  `refonte-bloc-g-volet`, partie de `refonte` à c6a354d, à intégrer par l'Atelier Master ;
+  **rien n'est commité** : tout est indexé, le message est dans `docs/MESSAGE-COMMIT.txt`) :
+  - **le dessin dans `src/dessin/`** : `src/surface.rs` déplacé (`git mv`) en
+    `dessin/surface.rs` (largeur, `dessiner`, `dessiner_borne`, petit menu, séparateur) ; le
+    dessin du volet sorti de `src/volet.rs` en `dessin/volet.rs` (haut du volet, briques qui
+    défilent, pied), `dessin/volet/entete.rs` (titre, version, roue) et
+    `dessin/volet/clavier.rs` (les flèches changées en Tab, C-33) ;
+  - **dans le cœur** (calcul pur) : `ic_coeur::placement::surface` (marges, largeur entre la
+    base et `LARGEUR_MAX`, besoin du volet et du menu, hauteur permise et rendue, place des
+    briques, places de l'en-tête : roue, titre, version ; 8 essais) ;
+    `ic_coeur::gestes::clavier` (flèche haut/bas → Maj+Tab/Tab, rien avec un modificateur ;
+    1 essai) ; `GenreEtat::icone_et_couleur` dans `contrat` (l'icône et la couleur d'un état ;
+    1 essai) ; `menu::Ligne::en_gras` (seule « Ouvrir » est en gras ; 1 essai) ;
+  - **repris aux mêmes chemins** : `interface_commune::surface` est un module mince qui reprend
+    `dessin::surface` ; `volet::fleches_en_tab` reprend `dessin::volet::clavier` ;
+    `tests/compatibilite.rs` inchangé ; **aucun changement d'API** (le PLAN, §4, n'en prévoit
+    pas pour G) ; **aucune image de référence ne change** (`references` vert) ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 127 essais (116 + 11) ; `interface-commune` 145 essais internes, tous les
+    fichiers de `tests/` verts (references, compatibilite, comportements, polices, etages,
+    sans_fenetre…), exemples de documentation ; `fmt`, `clippy -D warnings`, `cargo deny`
+    propres ; contrôle de la règle n° 1 : seulement `.git:1` (le fichier du worktree) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - `icone_et_couleur` vit dans `contrat` (à côté de `GenreEtat`) et lit la palette sans la
+      changer : `theme`, `parametres` et `src/bords/` ne sont pas touchés ;
+    - `Choisi` et la hauteur du pied gardée d'une image à l'autre (mémoire d'egui) restent
+      dans le dessin : ils sont liés à egui, sans décision dedans ;
+    - les opérations sur les nombres gardent leur ordre d'avant (même rendu au bit près) ;
+    - `tests/polices.rs` lit les nouveaux fichiers (`dessin/surface.rs`, `dessin/volet.rs`,
+      `dessin/volet/entete.rs`, `dessin/volet/clavier.rs`) ; `CARTE.md` et `COMPORTEMENTS.md`
+      (C-25, C-33) suivent ;
+    - un dossier de compilation propre au worktree (`CARGO_TARGET_DIR`), comme aux blocs D, F ;
+  - **Reste pour H et J** :
+    - J : `src/volet.rs` fait encore 1205 lignes (la fenêtre du volet : sa boucle, son voile,
+      son veilleur C-34, C-31) ; il part dans `src/bords/fenetres/volet.rs` et se découpe là ;
+    - H : les Paramètres se dessinent de la même façon (mise en page dans le cœur, dessin dans
+      `src/dessin/`) ; `separateur` et `version` de `dessin::surface` peuvent servir ;
+  - **À savoir pour l'intégration** : conflits possibles avec `refonte` si elle a bougé dans
+    `src/surface.rs`, `src/volet.rs`, `src/lib.rs`, `src/dessin.rs`, `tests/polices.rs`,
+    `docs/CARTE.md`, `crates/ic-coeur/src/{contrat,gestes,placement}.rs`.
+- **Prochaine étape de la refonte** : intégrer le bloc G dans `refonte`, puis le bloc
   suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).

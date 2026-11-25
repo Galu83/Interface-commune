@@ -11,9 +11,11 @@
 //! - [`menu`] : les lignes du petit menu et ses actions (`Action`, venue du contrat) ;
 //! - [`choix`] : le menu de choix au clavier (bloc F) ;
 //! - [`seuils`] : la barre à seuils, ses limites et ses touches (bloc F).
+//! - [`clavier`] : les flèches du volet, qui passent d'une ligne à l'autre comme Tab (bloc G).
 
 pub mod aiguilleur;
 pub mod choix;
+pub mod clavier;
 pub mod clics;
 pub mod icone;
 pub mod menu;

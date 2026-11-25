@@ -16,6 +16,8 @@ use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::theme::{Palette, Rgb, icones};
+
 #[cfg(test)]
 mod essais;
 
@@ -74,6 +76,19 @@ pub enum GenreEtat {
     Attention,
     /// Rouge.
     Probleme,
+}
+
+impl GenreEtat {
+    /// L'icône et la couleur de l'état, prises dans la palette du moment (bloc G) : coche
+    /// verte, flèches orange (en cours), attention orange, problème rouge.
+    pub fn icone_et_couleur(self, p: &Palette) -> (char, Rgb) {
+        match self {
+            GenreEtat::Pret => (icones::COCHE, p.vert),
+            GenreEtat::EnCours => (icones::MISE_A_JOUR, p.orange),
+            GenreEtat::Attention => (icones::ATTENTION, p.orange),
+            GenreEtat::Probleme => (icones::PROBLEME, p.rouge),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

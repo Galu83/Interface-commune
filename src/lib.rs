@@ -69,7 +69,12 @@ pub mod seuils {
     pub use crate::dessin::seuils::*;
 }
 pub mod sonde;
-pub mod surface;
+pub mod surface {
+    //! Le contenu du volet et du petit menu, dessiné par egui sans rien savoir de la fenêtre
+    //! (écrit dans `src/dessin/surface.rs` et `src/dessin/volet.rs`, bloc G ; la mise en page
+    //! et l'ordre du menu se décident dans le cœur).
+    pub use crate::dessin::surface::*;
+}
 pub mod textes;
 pub mod theme;
 pub mod touches {

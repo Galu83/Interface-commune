@@ -208,3 +208,31 @@ fn un_etat_se_compare_champ_par_champ() {
     };
     assert_eq!(credit.clone(), credit);
 }
+
+/// L'icône et la couleur de chaque état, dans les deux modes (bloc G) : vert pour prêt,
+/// orange pour en cours et à regarder, rouge pour un problème.
+#[test]
+fn icone_et_couleur_de_chaque_etat() {
+    use crate::theme::{ChoixWindows, icones};
+    for sombre in [false, true] {
+        let p = Palette::de(&ChoixWindows {
+            sombre,
+            barre_sombre: sombre,
+            accent: None,
+            nuances: None,
+        });
+        assert_eq!(GenreEtat::Pret.icone_et_couleur(&p), (icones::COCHE, p.vert));
+        assert_eq!(
+            GenreEtat::EnCours.icone_et_couleur(&p),
+            (icones::MISE_A_JOUR, p.orange)
+        );
+        assert_eq!(
+            GenreEtat::Attention.icone_et_couleur(&p),
+            (icones::ATTENTION, p.orange)
+        );
+        assert_eq!(
+            GenreEtat::Probleme.icone_et_couleur(&p),
+            (icones::PROBLEME, p.rouge)
+        );
+    }
+}
