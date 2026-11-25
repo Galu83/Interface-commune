@@ -4,8 +4,17 @@
 
 use interface_commune::{icones, verification};
 
-const SOURCES: [(&str, &str); 19] = [
-    ("surface.rs", include_str!("../src/surface.rs")),
+const SOURCES: [(&str, &str); 22] = [
+    ("dessin/surface.rs", include_str!("../src/dessin/surface.rs")),
+    ("dessin/volet.rs", include_str!("../src/dessin/volet.rs")),
+    (
+        "dessin/volet/entete.rs",
+        include_str!("../src/dessin/volet/entete.rs"),
+    ),
+    (
+        "dessin/volet/clavier.rs",
+        include_str!("../src/dessin/volet/clavier.rs"),
+    ),
     ("menu.rs", include_str!("../src/menu.rs")),
     ("parametres/mod.rs", include_str!("../src/parametres/mod.rs")),
     (

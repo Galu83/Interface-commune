@@ -21,6 +21,13 @@ pub struct Ligne {
     pub quoi: Choix,
 }
 
+impl Ligne {
+    /// La ligne s'écrit en gras : seulement « Ouvrir <logiciel> » (bloc G).
+    pub fn en_gras(&self) -> bool {
+        self.quoi == Choix::Ouvrir
+    }
+}
+
 /// Ce qu'une ligne du petit menu demande.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Choix {
@@ -130,6 +137,23 @@ mod tests {
         l.iter()
             .map(|l| l.as_ref().map_or("—", |l| l.texte.as_str()))
             .collect()
+    }
+
+    /// Seule « Ouvrir <logiciel> » s'écrit en gras (bloc G).
+    #[test]
+    fn seule_ouvrir_en_gras() {
+        let fr = &crate::textes::FRANCAIS;
+        let propres = [Action::new("relire", '\u{E72C}', "Relire")];
+        let l = lignes_avec(fr, Some("Fictif"), &propres, &[]);
+        let gras: Vec<bool> = l.iter().flatten().map(Ligne::en_gras).collect();
+        assert_eq!(gras.first(), Some(&true));
+        assert!(gras.iter().skip(1).all(|g| !g));
+        assert!(
+            lignes_avec(fr, None, &[], &[])
+                .iter()
+                .flatten()
+                .all(|l| !l.en_gras())
+        );
     }
 
     /// L'ordre et les icônes de la fiche : actions propres, trait, Paramètres (E713),

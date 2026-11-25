@@ -7,7 +7,8 @@
 //! Les contrôles se lisent ici (`dessin::bouton`, `dessin::carte`…). Les autres parties du
 //! dessin gardent leur chemin d'aujourd'hui, à la racine de la bibliothèque : [`crate::briques`],
 //! [`crate::pastilles`], [`crate::menu_choix`], [`crate::seuils`], [`crate::nuancier`],
-//! [`crate::couleurs`], [`crate::touches`], `apparence::couleur`, et les traits
+//! [`crate::couleurs`], [`crate::touches`], [`crate::surface`] (le volet et le petit menu, bloc G),
+//! `apparence::couleur`, et les traits
 //! [`crate::Reglages`] et [`crate::Logiciel`]. Ce qui décide (les touches du menu de choix, le
 //! déplacement des seuils, la marque d'une pastille, le plan des cases) vit dans le cœur
 //! (`ic-coeur`).
@@ -20,8 +21,10 @@ pub(crate) mod menu_choix;
 pub(crate) mod nuancier;
 pub(crate) mod pastilles;
 pub(crate) mod seuils;
+pub(crate) mod surface;
 pub(crate) mod touches;
 pub(crate) mod traits;
+pub(crate) mod volet;
 
 pub use controles::*;
 // Les espaces insécables de la typographie française (« Coupé : … ») : du texte pur, dans le
