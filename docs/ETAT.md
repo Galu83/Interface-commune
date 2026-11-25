@@ -142,7 +142,49 @@
     - R2 (`briques::pourcent`, « 42 % ») reste au bloc F, comme prévu ;
   - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
     fenêtres, prévus pour GitHub ; le bloc B ne touche pas aux fenêtres).
-- **Prochaine étape de la refonte** : intégrer les blocs 0, A et B dans `refonte`, puis C
-  « Thème, mesures » ou K « Guichet » (`docs/PLAN-REFONTE.md`, §2 ; une seule voie à la fois).
+- **Refonte, bloc C « Thème, mesures »** (25 nov. 09:36, branche `claude/bloc-c-theme`,
+  partie de `refonte` après les blocs 0, A et B, à intégrer par l'Atelier Master) :
+  - dans **`ic_coeur::theme`** : `Rgb`, `contraste`, `ChoixWindows`, `Palette` (clair, sombre,
+    accent ; `theme/couleurs.rs`), les 10 couleurs des pastilles et `couleur_lettre`, les tailles
+    et arrondis (`theme/tailles.rs`), l'animation (`theme/animation.rs` : fondus, courbe,
+    `Surface`, `Image`, et `PAS_MAX`/`avancer` venus du volet), `couverture`
+    (`theme/formes.rs`), les modules `theme::mesures` et `theme::icones` ;
+  - **suivre Windows (C-90)** dans le cœur (`theme/relecture.rs`) : `RELECTURE` (2 s),
+    `faut_relire(depuis)`, `impose(choix, force)`, `relu(actuel, lu, force)` ; le temps écoulé
+    arrive en paramètre, l'horloge n'est jamais lue dans le cœur. `Apparence` reste dans la
+    bibliothèque (ses méthodes prennent egui ; Rust interdit d'en ajouter à un type d'une autre
+    crate) : elle lit Windows (`choix_windows`, bloc L) et l'instant, puis laisse le cœur
+    décider ;
+  - **repris aux mêmes chemins** par `pub use` : `theme::…`, `mesures::*`, `icones::*`,
+    `apparence::{RELECTURE, couleurs_pastilles}`, `pastilles::{couleur_lettre,
+    couleurs_pastilles}` (`couleurs::palette` les prend toujours) ; aucun changement d'API ;
+    `tests/compatibilite.rs` inchangé ; **aucune image de référence ne change** (`references`
+    vert) ;
+  - **essais dans le cœur** (`theme/essais.rs`, horloge inventée, logiciel « Fictif ») : les 6
+    essais de `theme`, `lettre_selon_le_fond` (venu de `pastilles`),
+    `un_retard_ne_fait_pas_sauter_l_animation` (venu de `volet`), et 5 nouveaux : accent par
+    défaut et accent seul, relecture toutes les 2 s, thème de Windows suivi, thème imposé
+    (la barre des tâches, elle, reste suivie), couverture d'une forme ;
+    `tests/palette_pastilles.rs` devient `theme/essais_pastilles.rs` (4 essais, tournent aussi
+    sous Linux) ; `COMPORTEMENTS.md` (C-30, C-40, C-90, C-91, C-94) et `CARTE.md` suivent ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 44 essais (27 + 17) et 1 exemple de documentation ; `interface-commune` : 185
+    essais internes (193 moins les 8 partis dans le cœur), tous les fichiers de `tests/` verts
+    (references aux images identiques, compatibilite, comportements, couleurs, polices,
+    polices_windows10, etages, sans_fenetre, premiere_creation…), exemples de documentation ;
+    `fmt`, `clippy -D warnings`, `cargo deny` propres ; contrôle de la règle n° 1 : seulement
+    `.git:1` (le fichier du worktree) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - `HAUTEUR_LIGNE` **gardée** (dans le cœur, reprise à la racine) : le bloc C ne change pas
+      l'API ; son retrait reste le changement n° 3 du PLAN, §4, à faire avec les autres ;
+    - `PAS_MAX`, `avancer`, `RELECTURE`, `faut_relire`, `impose`, `relu` sont publics dans le
+      cœur ; seul `RELECTURE` est repris à la racine (il l'était déjà) ;
+    - l'essai des couleurs des pastilles passe de `tests/` au cœur (l'ORGANIGRAMME, §3, le met
+      dans les essais du bloc C) ;
+    - `choix_windows` et `couleur` (egui) restent dans `apparence` (blocs L et F) ;
+  - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
+    fenêtres, prévus pour GitHub ; le bloc C ne touche pas aux fenêtres).
+- **Prochaine étape de la refonte** : intégrer le bloc C dans `refonte`, puis le bloc suivant
+  du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).
