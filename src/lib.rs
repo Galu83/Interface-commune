@@ -51,6 +51,11 @@ pub mod touches;
 pub mod toutes_faites;
 pub mod verification;
 
+// Les bords Windows de la refonte (`src/bords/`) : les blocs y entrent un à un, repris à
+// leurs chemins d'aujourd'hui (le guichet `Poste` : `horloge::Poste`).
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod bords;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 pub mod echelle;

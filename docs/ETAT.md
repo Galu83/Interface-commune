@@ -184,7 +184,43 @@
     - `choix_windows` et `couleur` (egui) restent dans `apparence` (blocs L et F) ;
   - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
     fenêtres, prévus pour GitHub ; le bloc C ne touche pas aux fenêtres).
-- **Prochaine étape de la refonte** : intégrer le bloc C dans `refonte`, puis le bloc suivant
-  du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
+- **Refonte, bloc K « Guichet »** (25 nov. 14:10, branche `claude/bloc-k-guichet`, partie de
+  `refonte` après le bloc C, à intégrer par l'Atelier Master) :
+  - **`src/bords/poste.rs`** (nouveau dossier `src/bords/`, module privé ; ORGANIGRAMME §10 :
+    K est dans les bords, rien ne part dans le cœur) : `Poste`, `AuClic`, les messages au fil
+    de l'icône (`Commande`), leur **boîte bornée** (`Boite`, 64 messages, comme avant) et le
+    **réveil** (trait `Reveiller` ; le vrai, `ReveilParMessage`, poste le message Windows à la
+    fenêtre cachée). Le guichet dépose puis réveille ; il ne traite rien ;
+  - **repris au même chemin** : `interface_commune::horloge::{Poste, AuClic}` (`pub use`) ;
+    aucun changement d'API ; `tests/compatibilite.rs` inchangé ; aucune image ne change ;
+    `horloge.rs` passe de 1486 à 1289 lignes (`Principal::commandes` vide la boîte du guichet) ;
+  - **essais sans fenêtre ni matériel** (`src/bords/poste/essais.rs`, un faux réveil qui
+    compte) : rafales de 8 fils à la fois (rien ne se perd, un réveil par demande, l'ordre de
+    chaque fil gardé) ; rafale plus grande que la boîte (64 gardés, chaque demande réveille
+    quand même, la boîte reprend après lecture) ; un faux fil de l'icône qui vide la boîte à
+    chaque réveil pendant que 4 fils déposent (il reçoit tout ce qui est accepté, une fois,
+    dans l'ordre) ; chaque demande va au bon fil (icône ou boucle des fenêtres) ; `Poste` est
+    `Send + Sync` ; sans fenêtre cachée, rien n'est posté. Les 3 essais de `horloge`
+    (`notification_a_trois_niveaux`, `code_pour_le_fil_principal`,
+    `clic_sur_une_notification`) y sont venus avec toutes leurs vérifications ;
+    `COMPORTEMENTS.md` (C-14, C-19, C-20) et `CARTE.md` suivent ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 44 essais ; `interface-commune` : 191 essais internes (185 − 3 déplacés + 9 du
+    guichet ; ceux du guichet relancés 5 fois, toujours verts), tous les autres fichiers de
+    `tests/` verts (references aux images identiques, compatibilite, comportements, etages…),
+    exemples de documentation ; `fmt`, `clippy -D warnings`, `cargo deny` propres ; contrôle de
+    la règle n° 1 : seulement `.git:1` (le fichier du worktree) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - le canal `Demandes`/`Reception` de la boucle des fenêtres reste dans `fenetres.rs`
+      (bloc J) : le guichet s'en sert, il ne le possède pas ;
+    - le numéro du message de réveil (`WM_COMMANDE`) et son jeton restent dans `horloge.rs`
+      (le protocole de la fenêtre cachée, bloc M) ; ils sont donnés au guichet à sa création ;
+    - `horloge.rs` reste au-dessus de 800 lignes et garde l'`unsafe` (liste d'attente de
+      `tests/etages.rs`) : il se découpe au bloc M ;
+    - comportement inchangé : capacité de 64, réveil à chaque demande même boîte pleine ;
+  - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
+    fenêtres, prévus pour GitHub).
+- **Prochaine étape de la refonte** : intégrer le bloc K dans `refonte` (le bloc C y est déjà), puis le bloc
+  suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).
