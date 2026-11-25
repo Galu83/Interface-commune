@@ -14,6 +14,7 @@
 | `src/sonde.rs` | la sonde des fils : clics de l'icône, boucles imbriquées, chien de garde (un compteur de battements et une « dernière étape » par fil), tout au journal du logiciel |
 | `src/fenetres.rs`, `volet.rs`, `surface.rs` | le fil des fenêtres, l'aiguillage d'un clic d'icône (`envoyer_le_clic`), la fenêtre unique du volet et du petit menu (la fenêtre principale de la boucle), leur contenu (hauteur bornée : `dessiner_borne`) ; la supervision d'une boucle de fenêtres tenue par le logiciel (`superviser_les_fenetres`) |
 | `src/autres_fenetres.rs` | les autres fenêtres de la boucle (Paramètres, fenêtres du logiciel) |
+| `src/reprise.rs` | le dessin des fenêtres attend la fin d'un réveil de Windows (veille, écran éteint, 2 s après la reprise) ; lu avant toute image OpenGL |
 | `src/briques.rs`, `mesures.rs` | les briques du volet ; les mesures communes du volet, du menu et des Paramètres (écrites dans `ic_coeur::theme::mesures`, reprises dans `mesures.rs`) |
 | `src/toutes_faites.rs` | la fenêtre simple et la fenêtre de lecture |
 | `src/menu.rs` | l'ordre du petit menu |

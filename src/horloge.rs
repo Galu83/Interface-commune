@@ -42,14 +42,15 @@ use windows::Win32::UI::Shell::{
     NOTIFYICONIDENTIFIER, Shell_NotifyIconGetRect, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu, DestroyWindow,
-    DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW, HICON,
-    KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
-    RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW, SetForegroundWindow,
-    SetMenuDefaultItem, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
-    TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY,
-    WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW,
-    WS_OVERLAPPED,
+    AppendMenuW, CreatePopupMenu, CreateWindowExW, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyIcon,
+    DestroyMenu, DestroyWindow, DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW,
+    GetWindowLongPtrW, HICON, KillTimer, MF_SEPARATOR, MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC,
+    PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, PBT_POWERSETTINGCHANGE, PostMessageW, PostQuitMessage,
+    RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    SetForegroundWindow, SetMenuDefaultItem, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
+    TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA,
+    WM_DESTROY, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL, WM_POWERBROADCAST, WM_QUERYENDSESSION,
+    WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -286,7 +287,8 @@ pub struct MessageWindows {
 /// Ce que le logiciel fait des messages de Windows de la fenêtre cachée (`WM_HOTKEY`, ses
 /// messages à lui, `WM_POWERBROADCAST`…), sur le fil de l'icône. `Some(résultat)` : traité ;
 /// `None` : Windows fait le traitement par défaut. Il voit aussi, sans pouvoir les arrêter,
-/// `WM_QUERYENDSESSION`, `WM_ENDSESSION`, `WM_SETTINGCHANGE` et `WM_DISPLAYCHANGE`. Il ne voit jamais les
+/// `WM_QUERYENDSESSION`, `WM_ENDSESSION`, `WM_SETTINGCHANGE`, `WM_DISPLAYCHANGE` et
+/// `WM_POWERBROADCAST` (veille, reprise, écran allumé ou éteint). Il ne voit jamais les
 /// messages propres à la bibliothèque.
 ///
 /// **Fin de session** : le récepteur est appelé de façon synchrone, avant que la bibliothèque
@@ -311,13 +313,66 @@ enum Destinataire {
     Logiciel,
 }
 
+/// `GUID_CONSOLE_DISPLAY_STATE` : l'écran de la console allumé (1), éteint (0) ou assombri (2).
+const ECRAN_DE_LA_CONSOLE: windows::core::GUID =
+    windows::core::GUID::from_u128(0x6fe69556_704a_47a0_8f24_c28d936fda47);
+
+/// Ce qu'un `WM_POWERBROADCAST` dit du réveil de Windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Alimentation {
+    Veille,
+    Reprise,
+    Ecran { allume: bool },
+}
+
+/// Lit un `WM_POWERBROADCAST` : `pbt` (son `wParam`), et l'état de l'écran quand c'est un
+/// changement de `GUID_CONSOLE_DISPLAY_STATE` (`None` sinon). Pur.
+fn alimentation(pbt: u32, ecran: Option<u32>) -> Option<Alimentation> {
+    match pbt {
+        PBT_APMSUSPEND => Some(Alimentation::Veille),
+        PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND => Some(Alimentation::Reprise),
+        PBT_POWERSETTINGCHANGE => ecran.map(|e| Alimentation::Ecran { allume: e != 0 }),
+        _ => None,
+    }
+}
+
+/// Transmet un `WM_POWERBROADCAST` à [`crate::reprise`].
+///
+/// # Safety
+/// `lp` est le `lParam` du message reçu à l'instant (pour PBT_POWERSETTINGCHANGE, un
+/// POWERBROADCAST_SETTING que Windows garde valable pendant le message).
+unsafe fn signaler_l_alimentation(wp: usize, lp: isize) {
+    let pbt = wp as u32;
+    let ecran = if pbt == PBT_POWERSETTINGCHANGE && lp != 0 {
+        // SAFETY: voir la fonction ; on ne lit le DWORD de `Data` qu'après avoir vérifié le
+        // GUID et la longueur annoncée.
+        unsafe {
+            let r = lp as *const windows::Win32::System::Power::POWERBROADCAST_SETTING;
+            let ps = std::ptr::addr_of!((*r).PowerSetting).read_unaligned();
+            let long = std::ptr::addr_of!((*r).DataLength).read_unaligned();
+            (ps == ECRAN_DE_LA_CONSOLE && long >= 4)
+                .then(|| std::ptr::addr_of!((*r).Data).cast::<u32>().read_unaligned())
+        }
+    } else {
+        None
+    };
+    match alimentation(pbt, ecran) {
+        Some(Alimentation::Veille) => crate::reprise::veille(),
+        Some(Alimentation::Reprise) => crate::reprise::reveil(),
+        Some(Alimentation::Ecran { allume }) => crate::reprise::ecran(allume),
+        None => {}
+    }
+}
+
 fn destinataire(msg: u32, wp: usize, taskbar_created: u32) -> Destinataire {
     match msg {
         WM_TIMER if wp == MINUTERIE_ICONE => Destinataire::Bibliotheque,
         WM_ICONE | WM_COMMANDE | WM_OUVRIR_PARAMETRES | WM_MENU_DE_SECOURS | WM_COPYDATA | WM_CLOSE
         | WM_DESTROY => Destinataire::Bibliotheque,
         m if m == taskbar_created && m != 0 => Destinataire::Bibliotheque,
-        WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE | WM_DISPLAYCHANGE => Destinataire::LesDeux,
+        WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE | WM_DISPLAYCHANGE | WM_POWERBROADCAST => {
+            Destinataire::LesDeux
+        }
         _ => Destinataire::Logiciel,
     }
 }
@@ -1019,6 +1074,14 @@ extern "system" fn procedure(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESU
                 crate::autres_fenetres::affichage_change();
                 false
             }
+            WM_POWERBROADCAST => {
+                // Veille, reprise, écran allumé ou éteint : le dessin des fenêtres attend la fin
+                // du réveil de Windows (`crate::reprise`).
+                // SAFETY: pour PBT_POWERSETTINGCHANGE, Windows passe dans `lp` un
+                // POWERBROADCAST_SETTING valable pendant ce message (lu par `signaler_l_alimentation`).
+                unsafe { signaler_l_alimentation(wp.0, lp.0) };
+                false
+            }
             WM_ENDSESSION => {
                 if wp.0 != 0 {
                     // La session se ferme : le programme peut être arrêté dès le retour.
@@ -1094,6 +1157,18 @@ fn boucle(
         .map_err(|e| e.to_string())?
     };
     poste.liens().fenetre.store(fenetre.0 as isize, Ordering::Release);
+    // L'écran allumé ou éteint, par WM_POWERBROADCAST (Windows envoie l'état tout de suite,
+    // puis à chaque changement) : pendant un écran éteint, les fenêtres ne dessinent pas
+    // (`crate::reprise`). L'inscription vit autant que la fenêtre. Sans elle (refusée), seules
+    // la veille et la reprise comptent.
+    // SAFETY: fenêtre de ce fil, qui vient d'être créée ; GUID constant.
+    let _ = unsafe {
+        windows::Win32::System::Power::RegisterPowerSettingNotification(
+            HANDLE(fenetre.0),
+            &ECRAN_DE_LA_CONSOLE,
+            DEVICE_NOTIFY_WINDOW_HANDLE,
+        )
+    };
     // Surveillé : sa boucle de messages bat à chaque message ; un message vide (WM_NULL) posté par
     // la surveillance le tire de son attente.
     let h_reveil = fenetre.0 as isize;
@@ -1150,12 +1225,51 @@ mod essais {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
+    /// Veille, reprise et écran : ce que la bibliothèque lit d'un `WM_POWERBROADCAST`.
+    #[test]
+    fn veille_reprise_et_ecran() {
+        assert_eq!(alimentation(PBT_APMSUSPEND, None), Some(Alimentation::Veille));
+        assert_eq!(
+            alimentation(PBT_APMRESUMEAUTOMATIC, None),
+            Some(Alimentation::Reprise)
+        );
+        assert_eq!(
+            alimentation(PBT_APMRESUMESUSPEND, None),
+            Some(Alimentation::Reprise)
+        );
+        assert_eq!(
+            alimentation(PBT_POWERSETTINGCHANGE, Some(0)),
+            Some(Alimentation::Ecran { allume: false })
+        );
+        assert_eq!(
+            alimentation(PBT_POWERSETTINGCHANGE, Some(1)),
+            Some(Alimentation::Ecran { allume: true })
+        );
+        // Assombri : allumé.
+        assert_eq!(
+            alimentation(PBT_POWERSETTINGCHANGE, Some(2)),
+            Some(Alimentation::Ecran { allume: true })
+        );
+        // Un autre réglage, ou un autre événement : rien.
+        assert_eq!(alimentation(PBT_POWERSETTINGCHANGE, None), None);
+        assert_eq!(alimentation(10, None), None);
+    }
+
+    /// Le GUID de l'écran est bien celui de Windows.
+    #[test]
+    fn guid_de_l_ecran() {
+        assert_eq!(
+            ECRAN_DE_LA_CONSOLE,
+            windows::core::GUID::from_u128(0x6fe69556_704a_47a0_8f24_c28d936fda47)
+        );
+    }
+
     /// Les messages de Windows : ceux de la bibliothèque restent à elle ; la fin de session et
     /// les changements de réglages sont vus des deux ; tous les autres (raccourcis globaux,
     /// messages du logiciel) vont au logiciel.
     #[test]
     fn messages_de_windows_au_logiciel() {
-        use windows::Win32::UI::WindowsAndMessaging::{WM_HOTKEY, WM_POWERBROADCAST};
+        use windows::Win32::UI::WindowsAndMessaging::WM_HOTKEY;
         let barre = 0xC123;
         for m in [
             WM_ICONE,
@@ -1174,10 +1288,11 @@ mod essais {
             WM_ENDSESSION,
             WM_SETTINGCHANGE,
             WM_DISPLAYCHANGE,
+            WM_POWERBROADCAST,
         ] {
             assert_eq!(destinataire(m, 0, barre), Destinataire::LesDeux, "{m:#x}");
         }
-        for m in [WM_HOTKEY, WM_POWERBROADCAST, WM_APP + 100] {
+        for m in [WM_HOTKEY, WM_APP + 100] {
             assert_eq!(destinataire(m, 0, barre), Destinataire::Logiciel, "{m:#x}");
         }
         // La minuterie de l'icône est à la bibliothèque ; celles du logiciel, à lui.
