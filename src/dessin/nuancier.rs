@@ -10,7 +10,7 @@
 
 use egui::{Popup, PopupCloseBehavior, Response, Sense, Stroke, Ui, vec2};
 
-use crate::apparence::couleur;
+use crate::dessin::couleur::couleur;
 use crate::dessin::focus;
 use crate::theme::{Palette, Rgb};
 

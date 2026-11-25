@@ -6,19 +6,18 @@
 
 use std::time::Instant;
 
-use egui::{Color32, FontId, TextStyle};
+use egui::{FontId, TextStyle};
 
 use ic_coeur::theme;
 
 use crate::polices::{semibold, titre};
 use crate::theme::{
-    ARRONDI_CARTE, ARRONDI_CONTROLE, ChoixWindows, Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE, TAILLE_TITRE,
+    ARRONDI_CARTE, ARRONDI_CONTROLE, ChoixWindows, Palette, TAILLE_PETIT, TAILLE_TEXTE, TAILLE_TITRE,
 };
 
-/// Une couleur de la palette pour egui.
-pub fn couleur(c: Rgb) -> Color32 {
-    Color32::from_rgb(c.0, c.1, c.2)
-}
+// La conversion d'une couleur du cœur vers egui vit avec le dessin (bloc F), reprise ici à
+// son chemin d'aujourd'hui.
+pub use crate::dessin::couleur::couleur;
 
 /// Les 10 couleurs des pastilles d'appareils du volet (voir [`crate::pastilles`]).
 pub use ic_coeur::theme::couleurs_pastilles;

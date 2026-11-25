@@ -4,7 +4,7 @@
 
 use interface_commune::{icones, verification};
 
-const SOURCES: [(&str, &str); 14] = [
+const SOURCES: [(&str, &str); 19] = [
     ("surface.rs", include_str!("../src/surface.rs")),
     ("menu.rs", include_str!("../src/menu.rs")),
     ("parametres/mod.rs", include_str!("../src/parametres/mod.rs")),
@@ -17,13 +17,36 @@ const SOURCES: [(&str, &str); 14] = [
         include_str!("../src/parametres/fenetre.rs"),
     ),
     ("dessin.rs", include_str!("../src/dessin.rs")),
+    (
+        "dessin/controles/base.rs",
+        include_str!("../src/dessin/controles/base.rs"),
+    ),
+    (
+        "dessin/controles/cartes.rs",
+        include_str!("../src/dessin/controles/cartes.rs"),
+    ),
+    (
+        "dessin/controles/interrupteur.rs",
+        include_str!("../src/dessin/controles/interrupteur.rs"),
+    ),
+    (
+        "dessin/controles/raccourci.rs",
+        include_str!("../src/dessin/controles/raccourci.rs"),
+    ),
     ("fenetres.rs", include_str!("../src/fenetres.rs")),
     ("horloge.rs", include_str!("../src/horloge.rs")),
     ("textes.rs", include_str!("../src/textes.rs")),
     ("autres_fenetres.rs", include_str!("../src/autres_fenetres.rs")),
     ("toutes_faites.rs", include_str!("../src/toutes_faites.rs")),
-    ("briques.rs", include_str!("../src/briques.rs")),
-    ("menu_choix.rs", include_str!("../src/menu_choix.rs")),
+    ("dessin/briques.rs", include_str!("../src/dessin/briques.rs")),
+    (
+        "dessin/briques/appareil.rs",
+        include_str!("../src/dessin/briques/appareil.rs"),
+    ),
+    (
+        "dessin/menu_choix.rs",
+        include_str!("../src/dessin/menu_choix.rs"),
+    ),
     // Les caractères écrits par leur code : espace insécable, points de suspension.
     ("ajoutés", "\u{a0}…›"),
 ];

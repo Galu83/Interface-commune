@@ -8,14 +8,18 @@
 //! - [`ouverture`] : la décision d'un clic, l'anti-rebond, la garde, le clic en dehors ;
 //! - [`secours`] : les pertes de fenêtres, la rafale, la reprise ;
 //! - [`icone`] : l'info-bulle et le délai contre le clignotement ;
-//! - [`menu`] : les lignes du petit menu et ses actions (`Action`, venue du contrat).
+//! - [`menu`] : les lignes du petit menu et ses actions (`Action`, venue du contrat) ;
+//! - [`choix`] : le menu de choix au clavier (bloc F) ;
+//! - [`seuils`] : la barre à seuils, ses limites et ses touches (bloc F).
 
 pub mod aiguilleur;
+pub mod choix;
 pub mod clics;
 pub mod icone;
 pub mod menu;
 pub mod ouverture;
 pub mod secours;
+pub mod seuils;
 mod temps;
 
 pub use temps::Horodatage;

@@ -89,11 +89,11 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-36 | Toutes les briques ont les hauteurs communes du volet de Windows 11. | auto : `briques::hauteurs_communes`, `pastilles::hauteurs` |
-| C-37 | Une brique répond au clic, au clavier et rend son geste au logiciel. | auto : `briques::gestes`, `pastilles::gestes` |
-| C-38 | La brique « appareil » montre une image et un bouton. | auto : `briques::appareil_avec_image_et_bouton` |
-| C-39 | Les pastilles (plan des écrans) gardent les proportions des écrans, centrées dans leur zone, limitées par la largeur, quelle que soit l'origine des coordonnées ; refus d'un plan vide ; rangée quand il le faut ; petite case en couleur seule. | auto : `ic_coeur::placement::plan::plan_*` (6 tests, bloc D : la géométrie dans le cœur), `pastilles::plan_ou_rangee`, `pastilles::plan_petite_case_en_couleur_seule`, `pastilles::plan_dans_le_volet`, `pastilles::plan_ne_deplace_pas_le_texte` |
-| C-40 | Le texte d'une pastille reste au même endroit, et sa lettre est lisible sur son fond. | auto : `pastilles::texte_au_meme_endroit`, `pastilles::plan_ne_deplace_pas_le_texte`, `ic_coeur::theme::essais::lettre_selon_le_fond` |
+| C-36 | Toutes les briques ont les hauteurs communes du volet de Windows 11. | auto : `dessin::briques::hauteurs_communes`, `dessin::pastilles::hauteurs` (bloc F : dans `src/dessin/`) |
+| C-37 | Une brique répond au clic, au clavier et rend son geste au logiciel. | auto : `dessin::briques::gestes`, `dessin::pastilles::gestes` |
+| C-38 | La brique « appareil » montre une image et un bouton. | auto : `dessin::briques::appareil_avec_image_et_bouton` (la brique dans `dessin/briques/appareil.rs`) |
+| C-39 | Les pastilles (plan des écrans) gardent les proportions des écrans, centrées dans leur zone, limitées par la largeur, quelle que soit l'origine des coordonnées ; refus d'un plan vide ; rangée quand il le faut ; petite case en couleur seule. | auto : `ic_coeur::placement::plan::plan_*` (6 tests, bloc D : la géométrie dans le cœur), `dessin::pastilles::{plan_ou_rangee, plan_petite_case_en_couleur_seule, plan_dans_le_volet, plan_ne_deplace_pas_le_texte}` |
+| C-40 | Le texte d'une pastille reste au même endroit, et sa lettre est lisible sur son fond. | auto : `dessin::pastilles::{texte_au_meme_endroit, plan_ne_deplace_pas_le_texte}`, `ic_coeur::theme::essais::lettre_selon_le_fond`, `ic_coeur::theme::marque::{le_logo_si_la_police_l_a_sinon_la_lettre, le_texte_sur_une_zone_est_lisible}` (bloc F) |
 | C-41 | Les briques reçoivent le contexte du logiciel (`briques_avec_contexte`) et un pied (`briques_du_pied`). | auto : `tests/sans_fenetre::volet_borne_et_briques_avec_contexte` |
 
 ## 6. Le petit menu
@@ -104,7 +104,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-43 | Le petit menu prend les mesures des menus de Windows 11. | auto : `tests/sans_fenetre::petit_menu_aux_mesures_communes` |
 | C-44 | Il s'ouvre au point du clic, toujours en entier sur l'écran. | auto : `ic_coeur::placement::essais::petit_menu_au_point`, `ic_coeur::placement::essais::petit_menu_toujours_dans_la_zone` |
 | C-45 | Sans OpenGL (pilote absent ou cassé), le petit menu passe au menu de secours de Windows, avec les mêmes lignes numérotées. | auto : `fenetres::sans_opengl_le_menu_de_secours`, `zone::menu_windows_numerote_les_choix` |
-| C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (7 tests de `lisible`, plus `lisible_ne_change_pas_deux_fois` au hasard), `touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
+| C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (7 tests de `lisible`, plus `lisible_ne_change_pas_deux_fois` au hasard), `dessin::touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
 
 ## 7. La boucle des fenêtres et ses secours
 
@@ -179,19 +179,19 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-93 | Chaque icône commune existe dans les deux polices d'icônes ; un glyphe absent redonne la lettre. | auto : `tests/polices::chaque_icone_existe`, `verification::glyphe_absent_redonne_la_lettre` |
 | C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `ic_coeur::theme::essais_pastilles::*` (4 tests ; avant le bloc C : `tests/palette_pastilles.rs`) |
 | C-95 | Le choix de couleur (carte) : même palette que les pastilles, clic, clavier, colonnes selon la place, « Annuler » remet l'ancienne. | auto : `tests/couleurs::*` (10 tests) |
-| C-96 | Le nuancier : cases de 32 points, un clic donne la couleur, nom lu par les lecteurs d'écran. | auto : `nuancier::*` (4 tests) |
+| C-96 | Le nuancier : cases de 32 points, un clic donne la couleur, nom lu par les lecteurs d'écran. | auto : `dessin::nuancier::*` (4 tests) |
 | C-97 | Tout ce qu'écrit la bibliothèque existe en français et en anglais, rempli dans l'ordre ; la langue change en direct. | auto : `ic_coeur::textes::essais::{deux_langues_completes, les_deux_catalogues_ont_les_memes_champs_et_aucun_vide, remplir_dans_l_ordre, les_modeles_se_remplissent_avec_le_logiciel_fictif}`, `tests/sans_fenetre::la_langue_change_en_direct` |
-| C-98 | Les nombres ont une espace insécable avant leur unité. | auto (un écart connu) : `ic_coeur::textes::essais::{c98_aucune_espace_simple_avant_une_unite, avec_unite_met_l_espace_insecable}`, `seuils::les_nombres_ont_une_espace_insecable`, `tests/comportements::c98_espace_insecable_avant_l_unite` ; les textes sont corrigés (bloc B de la refonte : `conserver_retour` et « 24 h » du journal détaillé) ; **écart connu**, à corriger au bloc F : le pourcentage des appareils du volet (`briques`, « {} % ») |
+| C-98 | Les nombres ont une espace insécable avant leur unité. | auto : `ic_coeur::textes::essais::{c98_aucune_espace_simple_avant_une_unite, avec_unite_met_l_espace_insecable}`, `dessin::seuils::les_nombres_ont_une_espace_insecable`, `tests/comportements::c98_espace_insecable_avant_l_unite`, `dessin::briques::le_pourcentage_a_l_espace_insecable` ; les textes sont corrigés (bloc B de la refonte : `conserver_retour` et « 24 h » du journal détaillé) ; le pourcentage des appareils du volet aussi (bloc F, R2 : `briques::pourcent` passe par `avec_unite`) |
 
 ## 12. Les contrôles communs
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-99 | La roue dentée en haut à droite ; Ctrl + virgule ouvre les Paramètres. | auto : `dessin::roue_en_haut_a_droite_et_ctrl_virgule` |
-| C-100 | L'interrupteur écrit à gauche (texte puis interrupteur). | auto : `dessin::interrupteur_ecrit_a_gauche` |
-| C-101 | Le champ de raccourci saisit une combinaison et l'écrit lisiblement. | auto : `dessin::saisie_d_un_raccourci`, `touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
-| C-102 | Le menu de choix : flèches qui font le tour, lignes grisées sautées, Début/Fin, Entrée, Échap, clic à côté qui ferme ; ouvert sous la case ou au-dessus selon la place, jamais hors de la fenêtre ; largeur bornée ; nom pour le lecteur d'écran. | auto : `menu_choix::*` (15 tests) ; la place du menu, dans le cœur (bloc D) : `ic_coeur::placement::plan::le_menu_*` et `…::trop_haut_des_deux_cotes_le_menu_prend_le_cote_le_plus_grand` (4 tests), `…::rectangle_comme_egui` |
-| C-103 | La barre des seuils : poignées glissées ou au clavier, limites entre leurs voisines, rien ne bouge sans focus. | auto : `seuils::*` (10 tests) |
+| C-99 | La roue dentée en haut à droite ; Ctrl + virgule ouvre les Paramètres. | auto : `dessin::controles::interrupteur::roue_en_haut_a_droite_et_ctrl_virgule` (bloc F) |
+| C-100 | L'interrupteur écrit à gauche (texte puis interrupteur). | auto : `dessin::controles::interrupteur::interrupteur_ecrit_a_gauche` (bloc F) |
+| C-101 | Le champ de raccourci saisit une combinaison et l'écrit lisiblement. | auto : `dessin::controles::raccourci::saisie_d_un_raccourci`, `dessin::touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` (bloc F) |
+| C-102 | Le menu de choix : flèches qui font le tour, lignes grisées sautées, Début/Fin, Entrée, Échap, clic à côté qui ferme ; ouvert sous la case ou au-dessus selon la place, jamais hors de la fenêtre ; largeur bornée ; nom pour le lecteur d'écran. | auto : `dessin::menu_choix::*` (8 tests, le dessin) et, dans le cœur (bloc F), `ic_coeur::gestes::choix::*` (9 tests : les touches, la ligne initiale, le nom pour le lecteur d'écran) ; la place du menu, dans le cœur (bloc D) : `ic_coeur::placement::plan::le_menu_*` et `…::trop_haut_des_deux_cotes_le_menu_prend_le_cote_le_plus_grand` (4 tests), `…::rectangle_comme_egui` |
+| C-103 | La barre des seuils : poignées glissées ou au clavier, limites entre leurs voisines, rien ne bouge sans focus. | auto : `dessin::seuils::*` (6 tests, souris, clavier et dessin) et, dans le cœur (bloc F), `ic_coeur::gestes::seuils::*` (4 tests : bornes, limites qui se touchent, pas du clavier) |
 | C-104 | La mise au point (focus) visible au clavier sur chaque contrôle. | auto : `tests/comportements::c104_le_focus_se_voit` (bouton, bouton accent, bouton icône, interrupteur, ligne de menu ; clair et sombre) |
 
 ## 13. Captures, sonde et journal
@@ -232,9 +232,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
   C-92, C-98, C-104, C-110, C-112, C-113, C-114, C-115) ont reçu leurs essais le 25 nov. 2026
   (filets de la refonte, `tests/comportements.rs`, `tests/polices_windows10.rs`,
   `tests/compatibilite.rs`, `tests/references.rs`).
-- **Écart connu** (la refonte le corrige) : C-98, une espace normale avant « % » dans le
-  pourcentage des appareils du volet (bloc F). Les textes (`conserver_retour` en français et
-  en anglais, « 24 h » du journal détaillé) sont corrigés par le bloc B de la refonte.
+- **Plus aucun écart connu.** C-98 : les textes (`conserver_retour` en français et en anglais,
+  « 24 h » du journal détaillé) sont corrigés par le bloc B de la refonte, le pourcentage des
+  appareils du volet par le bloc F (`dessin::briques::le_pourcentage_a_l_espace_insecable`).
 
 Les deux promesses faites à PowerPeek et KVMSoft sont gardées : **C-114** (l'API ne bouge pas,
 `tests/compatibilite`) et **C-115** (le rendu ne bouge pas, `tests/references`). Une image de

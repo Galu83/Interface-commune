@@ -140,10 +140,15 @@ impl Logiciel for Demo {
         }
     }
 
-    fn dessiner_rapides(&self, ui: &mut egui::Ui, p: &Palette) -> Option<String> {
-        dessin::ligne(ui, p, '\u{E7F4}', p.texte, "Écran seul", Some("Ctrl+Alt+F1"))
-            .clicked()
-            .then(|| "ecran".into())
+    // Le réglage rapide d'avant (`dessiner_rapides`, retiré au bloc F) devient une brique.
+    fn briques(&self) -> Vec<interface_commune::briques::Brique> {
+        vec![interface_commune::briques::Brique::Choix {
+            cle: "ecran".into(),
+            glyphe: Some('\u{E7F4}'),
+            texte: "Écran seul".into(),
+            coche: false,
+            raccourci: Some("Ctrl+Alt+F1".into()),
+        }]
     }
 
     fn actions_menu(&self) -> Vec<menu::Action> {

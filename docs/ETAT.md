@@ -266,7 +266,61 @@
     probables dans `horloge.rs` et `fenetres.rs` ;
   - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
     fenêtres, prévus pour GitHub).
-- **Prochaine étape de la refonte** : intégrer le bloc K dans `refonte` (le bloc C y est déjà), puis le bloc
+- **Refonte, bloc F « Contrôles et traits »** (25 nov. 16:20, branche
+  `claude/bloc-f-controles`, partie de `refonte` à 03f937a, à intégrer par l'Atelier Master ;
+  **rien n'est commité** : tout est indexé, le message est dans `docs/MESSAGE-COMMIT.txt`) :
+  - **le dessin dans `src/dessin/`** (ni Windows, ni eframe, ni `unsafe` : `tests/etages.rs`) :
+    `dessin.rs` (843 lignes) coupé en `dessin/controles/` (`base`, `interrupteur`, `raccourci`,
+    `cartes`) ; `briques`, `pastilles`, `menu_choix`, `seuils`, `nuancier`, `couleurs`, `touches`
+    déplacés dans `src/dessin/` (`git mv`) ; `couleur` (de `Rgb` à egui) dans
+    `dessin/couleur.rs` ; les traits **`Reglages` et `Logiciel`** dans `dessin/traits.rs` ;
+  - **dans le cœur** (calcul pur) : `ic_coeur::gestes::choix` (les touches du menu de choix, sa
+    ligne initiale, le nom pour le lecteur d'écran), `ic_coeur::gestes::seuils` (bornes des
+    poignées, déplacement, pas du clavier : `voulu_au_clavier`), `ic_coeur::theme::marque` (le
+    logo d'une pastille si la police l'a, sinon sa lettre ; le texte lisible sur une zone) ;
+  - **repris aux mêmes chemins** : `briques`, `seuils`, `menu_choix`, `pastilles`, `nuancier`,
+    `couleurs`, `touches` restent des modules publics de la racine qui reprennent `dessin::…`
+    (`pub use`) ; `dessin::*` reprend les contrôles ; `interface_commune::{Logiciel, Reglages}`
+    et `apparence::couleur` aussi. `tests/compatibilite.rs` inchangé ;
+  - **changements d'API du PLAN, §4** : n° 2, `Logiciel::dessiner_rapides` et `largeur_rapides`
+    retirés (la Demo de `tests/sans_fenetre.rs` passe ce contenu en une `Brique::Choix`) ;
+    n° 5, R2 : `briques::pourcent` écrit « 42 % » avec l'espace insécable (`avec_unite`,
+    nouvel essai `le_pourcentage_a_l_espace_insecable`) ; **aucune image de référence ne
+    change** (`references` vert) ; `MIGRATION.md` suit ;
+  - **code propre** (méthode, §1.8) : plus aucune fonction de plus de 80 lignes dans
+    `src/dessin/` (`barre_seuils`, `afficher` du menu de choix, `pastille`, `dessiner_choix`,
+    `brique` et l'appareil découpés) ; aucun fichier du dessin au-dessus de 800 lignes
+    (`menu_choix` 860 → 764, `pastilles` 852 → 636) ; l'appareil dans `briques/appareil.rs` ;
+    les essais des pastilles dans `pastilles/essais.rs` ; chaque fichier a son en-tête `//!` ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 116 essais (101 + 15 : `choix` 9, `seuils` 4, `marque` 2) ; `interface-commune` :
+    145 essais internes, tous les fichiers de `tests/` verts (references aux images identiques,
+    compatibilite, comportements, polices, etages, sans_fenetre…), exemples de documentation ;
+    `fmt`, `clippy -D warnings`, `cargo deny` propres ; contrôle de la règle n° 1 : seulement
+    `.git:1` (le fichier du worktree) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - les anciens modules publics restent à la racine comme modules **minces** qui reprennent
+      `dessin::…` : les logiciels gardent leurs chemins ;
+    - `texte_sur` (cœur, noir à contraste égal) et `couleur_lettre` (blanc à contraste égal)
+      sont gardés tous les deux : chacun sert un dessin qui ne doit pas bouger ;
+    - `voulu_au_clavier` prend la valeur de départ : une glissée puis une flèche dans la même
+      image partent de la valeur glissée (comme avant) ;
+    - `places_valides` et `genre_du_plan` restent dans `pastilles` (petits, liés à egui ; leur
+      passage au cœur n'apporte rien aujourd'hui) ;
+    - l'`assert_eq!` d'entrée de `barre_seuils` (une limite entre deux zones) est gardé tel quel :
+      une faute du logiciel, pas une entrée de l'utilisateur ;
+    - `tests/polices.rs` lit les nouveaux fichiers (`dessin/controles/*`, `dessin/briques/
+      appareil.rs`…) : le contrôle des glyphes couvre toujours tout le dessin ;
+    - les fonctions longues hors du bloc F (`fenetres`, `horloge`, `surface::volet`,
+      `toutes_faites`, `volet`, `parametres`) restent : elles se découpent dans leur bloc ;
+    - un dossier de compilation propre au worktree (`CARGO_TARGET_DIR`), comme au bloc D ;
+  - **À savoir pour l'intégration** : conflits possibles avec `refonte` si elle a bougé dans
+    `src/lib.rs`, `src/surface.rs`, `src/apparence.rs`, `tests/polices.rs`,
+    `tests/sans_fenetre.rs`, `crates/ic-coeur/src/gestes.rs` et `theme.rs`, ou dans un des
+    fichiers déplacés (`briques`, `pastilles`, `menu_choix`, `seuils`…) ;
+  - `fenetres_en_rafale` et `recreation_apres_panique` ont tourné avec la suite complète
+    (fenêtres voilées et hors de l'écran, jamais montrées) : verts.
+- **Prochaine étape de la refonte** : intégrer le bloc F dans `refonte`, puis le bloc
   suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).
