@@ -180,8 +180,59 @@ fn toutes_les_images() -> Vec<(String, Image)> {
             format!("controles-{}", theme(o)),
             capture::dessin(egui::vec2(480.0, 900.0), o, controles),
         );
+        ajouter(
+            format!("cases-debranchees-{}", theme(o)),
+            capture::dessin(egui::vec2(360.0, 200.0), o, cases_debranchees),
+        );
     }
     images
+}
+
+/// Des choix illustrés avec un écran débranché : dans la rangée de cases égales, dans le plan
+/// des écrans, et dans un plan si petit que les cases n'y sont que leur couleur.
+fn cases_debranchees(ui: &mut egui::Ui, p: &interface_commune::Palette) {
+    use interface_commune::briques::{self, Brique, Case};
+    let case = |lettre, rang: usize, place: Option<[i32; 4]>, debranche: bool| Case {
+        lettre: Some(lettre),
+        couleur: Some(couleurs::palette()[rang]),
+        place,
+        debranche,
+        ..Default::default()
+    };
+    let choix = |cle: &str, texte: &str, cases: Vec<Case>| Brique::ChoixIllustre {
+        cle: cle.into(),
+        texte: texte.into(),
+        sous_ligne: Some("L'écran de droite est débranché".into()),
+        illustration: cases,
+        raccourci: None,
+        actif: false,
+        etiquette_active: None,
+    };
+    let briques = vec![
+        choix(
+            "rangee",
+            "Rangée",
+            vec![case('A', 0, None, false), case('B', 3, None, true)],
+        ),
+        choix(
+            "plan",
+            "Plan",
+            vec![
+                case('A', 0, Some([0, 0, 2560, 1440]), false),
+                case('B', 3, Some([2560, 0, 2560, 1440]), true),
+                case('B', 3, Some([2560, 1440, 1920, 1200]), false),
+            ],
+        ),
+        choix(
+            "petit",
+            "Plan, couleurs seules",
+            vec![
+                case('A', 0, Some([0, 0, 3840, 2160]), false),
+                case('B', 3, Some([3840, 0, 800, 480]), true),
+            ],
+        ),
+    ];
+    briques::dessiner(ui, p, &briques);
 }
 
 fn version_prete(l: &Fictif) -> Simple {

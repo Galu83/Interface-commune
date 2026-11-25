@@ -1,5 +1,6 @@
 //! Ce qu'un carré coloré montre (bloc F) : le logo de l'appareil si la police d'icônes l'a,
-//! sinon sa lettre ; et le texte lisible sur la couleur d'une zone. Le dessin vit dans
+//! sinon sa lettre ; l'état d'une case d'écran (allumé, en veille, débranché) ; et le texte
+//! lisible sur la couleur d'une zone. Le dessin vit dans
 //! `interface_commune::pastilles` et `interface_commune::seuils`.
 
 use super::couleurs::{Rgb, contraste};
@@ -17,6 +18,32 @@ pub fn marque(logo: Option<char>, lettre: Option<char>, disponible: impl Fn(char
     logo.filter(|&g| disponible(g))
         .map(Marque::Logo)
         .or_else(|| lettre.map(Marque::Lettre))
+}
+
+/// L'état d'une case d'écran dans un choix illustré : ce que son dessin montre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EtatCase {
+    /// L'écran marche : sa couleur et sa marque.
+    Allume,
+    /// En veille : un fond sombre, un bord en tirets, la lune.
+    Veille,
+    /// Débranché : la case garde sa place, mais toute en pâle ([`OPACITE_DEBRANCHE`]).
+    Debranche,
+}
+
+/// L'opacité d'une case d'écran débranché : tout son dessin (fond, marque, bord, pied).
+pub const OPACITE_DEBRANCHE: f32 = 0.4;
+
+/// L'état d'une case d'après ses deux drapeaux : débranché l'emporte sur la veille (un écran
+/// débranché ne peut pas être en veille).
+pub fn etat_case(veille: bool, debranche: bool) -> EtatCase {
+    if debranche {
+        EtatCase::Debranche
+    } else if veille {
+        EtatCase::Veille
+    } else {
+        EtatCase::Allume
+    }
 }
 
 /// Un texte lisible (noir ou blanc) sur la couleur d'une zone : pour écrire dans une zone ou
@@ -49,6 +76,14 @@ mod essais {
         assert_eq!(marque(None, Some('A'), tout), Some(Marque::Lettre('A')));
         assert_eq!(marque(Some('\u{E7F4}'), None, rien), None);
         assert_eq!(marque(None, None, tout), None);
+    }
+
+    #[test]
+    fn debranche_l_emporte_sur_la_veille() {
+        assert_eq!(etat_case(false, false), EtatCase::Allume);
+        assert_eq!(etat_case(true, false), EtatCase::Veille);
+        assert_eq!(etat_case(false, true), EtatCase::Debranche);
+        assert_eq!(etat_case(true, true), EtatCase::Debranche);
     }
 
     #[test]

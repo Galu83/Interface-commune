@@ -228,6 +228,61 @@ fn gestes() {
     );
 }
 
+/// Les formes dessinées pour un choix illustré de ces cases (rangée, ou plan avec places).
+fn formes_du_choix(cases: Vec<Case>) -> Vec<egui::epaint::ClippedShape> {
+    let ctx = egui::Context::default();
+    ctx.set_fonts(crate::polices::polices_ou_vides());
+    let p = Palette::de(&ChoixWindows::default());
+    let l = vec![Brique::ChoixIllustre {
+        cle: "c".into(),
+        texte: "Choix".into(),
+        sous_ligne: None,
+        illustration: cases,
+        raccourci: None,
+        actif: false,
+        etiquette_active: None,
+    }];
+    let mut formes = Vec::new();
+    for _ in 0..2 {
+        let entree = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 200.0))),
+            ..Default::default()
+        };
+        let mut sortie = ctx.run_ui(entree, |ui| {
+            briques::dessiner(ui, &p, &l);
+        });
+        sortie.textures_delta.clear();
+        formes = sortie.shapes;
+    }
+    formes
+}
+
+/// Un écran à la fois débranché et en veille se dessine comme un écran débranché, dans la
+/// rangée comme dans le plan ; et ce dessin n'est pas celui de la veille.
+#[test]
+fn debranche_l_emporte_sur_la_veille() {
+    let places = [Some([0, 0, 1920, 1080]), Some([1920, 0, 1920, 1080])];
+    // Sans places : la rangée ; avec : le plan des écrans.
+    for place in [[None, None], places] {
+        let choix = |veille: bool, debranche: bool| {
+            let mut b = case_ecran('B');
+            b.veille = veille;
+            b.debranche = debranche;
+            vec![
+                Case {
+                    place: place[0],
+                    ..case_ecran('A')
+                },
+                Case { place: place[1], ..b },
+            ]
+        };
+        let les_deux = formes_du_choix(choix(true, true));
+        assert_eq!(les_deux, formes_du_choix(choix(false, true)), "{place:?}");
+        assert_ne!(les_deux, formes_du_choix(choix(true, false)), "{place:?}");
+        assert_ne!(les_deux, formes_du_choix(choix(false, false)), "{place:?}");
+    }
+}
+
 /// La largeur de l'illustration est fixe : 1 ou 4 cases, le texte est au même endroit.
 #[test]
 fn texte_au_meme_endroit() {

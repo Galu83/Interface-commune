@@ -40,6 +40,12 @@
   14 px, redite du dossier retirée (`docs/MIGRATION.md`). **Pas vérifié** : en vraies fenêtres
   (la relance entre deux vrais processus, le gras du menu à l'écran) ; les essais couvrent le
   calcul des gestes, le menu, l'aiguillage d'une icône, la roue et l'interrupteur sans fenêtre.
+- **Fait sur `correctif/case-debranchee`** (25 nov., pour KVMSoft) : un écran débranché dans
+  un choix illustré (`Case::debranche`) : case pâle (opacité 0,4), bord en tirets, lettre
+  gardée ; l'emporte sur la veille (`docs/MIGRATION.md`, C-117). Deux images de référence
+  nouvelles, aucune autre changée. Reporté dans `refonte` (fusion de `main`, 25 nov.) : la
+  décision (débranché l'emporte sur la veille) et l'opacité dans le cœur
+  (`ic_coeur::theme::{etat_case, OPACITE_DEBRANCHE}`), le dessin dans `src/dessin/pastilles.rs`.
 - **Pas vérifié** : l'affichage dans de vraies fenêtres (interdit pendant les essais
   automatiques). À essayer à la main avec l'exemple (`cargo run --example demo`, petit menu :
   « Ouvrir une fenêtre », « Fenêtre simple », « Fenêtre de lecture », Paramètres).

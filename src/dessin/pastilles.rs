@@ -27,6 +27,8 @@ pub use ic_coeur::theme::{couleur_lettre, couleurs_pastilles};
 const FOND_VEILLE: Rgb = Rgb(0x1E, 0x1E, 0x1E);
 const BORD_VEILLE: Rgb = Rgb(0x9A, 0x9A, 0x9A);
 const LUNE_VEILLE: Rgb = Rgb(0xD0, 0xD0, 0xD0);
+/// Le bord en tirets clair d'une case d'écran débranché (son opacité : [`OPACITE_DEBRANCHE`]).
+const BORD_DEBRANCHE: Rgb = Rgb(0xC8, 0xC8, 0xC8);
 /// Marge à gauche d'une pastille, et espace entre son carré et son nom.
 const PASTILLE_MARGE: f32 = 8.0;
 const PASTILLE_ESPACE: f32 = 8.0;
@@ -65,6 +67,9 @@ pub struct Case {
     pub couleur: Option<Rgb>,
     /// Écran en veille : case sombre, lune, bordure en tirets.
     pub veille: bool,
+    /// Écran débranché : il garde sa place, mais en pâle (opacité 0,4), bord en tirets de
+    /// 1 point, lettre ou logo gardé ; s'il est aussi en veille, débranché l'emporte.
+    pub debranche: bool,
     /// Où est cet écran sur le bureau : `[x, y, largeur, hauteur]` en pixels, dans le repère du
     /// bureau (des valeurs quelconques, négatives permises). Quand toutes les cases d'un choix
     /// ont une place valide (largeur et hauteur > 0), l'illustration est le vrai plan des
@@ -103,6 +108,10 @@ fn places_valides(cases: &[Case]) -> Option<Vec<[i32; 4]>> {
 // Ce qu'un carré montre, le logo ou la lettre : dans le cœur (bloc F), repris ici à son chemin
 // d'aujourd'hui.
 pub use ic_coeur::theme::{Marque, marque};
+
+// L'état d'une case d'écran (débranché l'emporte sur la veille) et l'opacité d'un écran
+// débranché : dans le cœur aussi.
+use ic_coeur::theme::{EtatCase, OPACITE_DEBRANCHE, etat_case};
 
 // ---- Les pastilles --------------------------------------------------------------------
 
@@ -200,10 +209,28 @@ pub(crate) fn carre(
     } else {
         couleur_lettre(fond)
     };
+    marque_au_centre(peintre, rect, logo, lettre, taille, c);
+}
+
+/// Le logo (s'il est dans la police d'icônes) ou la lettre, au centre de `rect`.
+fn marque_au_centre(
+    peintre: &egui::Painter,
+    rect: Rect,
+    logo: Option<char>,
+    lettre: Option<char>,
+    taille: f32,
+    c: Rgb,
+) {
     match marque(logo, lettre, crate::polices::icone_disponible) {
         Some(Marque::Logo(g)) => {
             let t = (taille + 4.0).min(rect.height() - 4.0).max(taille);
-            icone(ui, rect.center(), g, t, c);
+            peintre.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                g,
+                crate::polices::icones(t),
+                couleur(c),
+            );
         }
         Some(Marque::Lettre(l)) => {
             peintre.text(
@@ -388,11 +415,63 @@ fn genre_du_plan(rects: &[Rect]) -> Genre {
     }
 }
 
+/// Le bord en tirets de 1 point d'une case (écran en veille ou débranché).
+fn bord_en_tirets(peintre: &egui::Painter, rect: Rect, c: Rgb) {
+    let (a, b, d, e) = (
+        rect.left_top(),
+        rect.right_top(),
+        rect.right_bottom(),
+        rect.left_bottom(),
+    );
+    peintre.extend(egui::Shape::dashed_line(
+        &[a, b, d, e, a],
+        Stroke::new(1.0, couleur(c)),
+        2.0,
+        2.0,
+    ));
+}
+
+/// Le pied d'un écran de la rangée (pas dans le plan : il tomberait sur l'écran du dessous).
+fn pied(peintre: &egui::Painter, p: &Palette, rect: Rect) {
+    let y = rect.bottom() + 3.0;
+    peintre.line_segment(
+        [pos2(rect.center().x - 5.0, y), pos2(rect.center().x + 5.0, y)],
+        Stroke::new(2.0, couleur(p.texte_desactive)),
+    );
+}
+
+/// Un écran débranché : sa case garde sa place, sa couleur et sa marque, mais toute en pâle
+/// ([`OPACITE_DEBRANCHE`]), avec un bord en tirets clair. Dessiné à la place de la veille.
+fn case_debranchee(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre, arrondi: CornerRadius) {
+    let mut pale = ui.painter().clone();
+    pale.multiply_opacity(OPACITE_DEBRANCHE);
+    let fond = c.couleur.unwrap_or(p.controle);
+    pale.rect_filled(rect, arrondi, couleur(fond));
+    if genre != Genre::PlanCouleur {
+        let teinte = if c.couleur.is_some() {
+            couleur_lettre(fond)
+        } else {
+            p.texte_secondaire
+        };
+        marque_au_centre(&pale, rect, c.logo, c.lettre, TAILLE_PETIT, teinte);
+    }
+    bord_en_tirets(&pale, rect, BORD_DEBRANCHE);
+    if genre == Genre::Rangee {
+        pied(&pale, p, rect);
+    }
+}
+
 fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
     let arrondi = CornerRadius::same(if genre == Genre::Rangee { 3 } else { 2 });
+    let etat = etat_case(c.veille, c.debranche);
+    if etat == EtatCase::Debranche {
+        case_debranchee(ui, p, rect, c, genre, arrondi);
+        return;
+    }
+    let veille = etat == EtatCase::Veille;
     if genre == Genre::PlanCouleur {
         // Seulement la couleur : le fond de la case, sans lettre ni lune.
-        if c.veille {
+        if veille {
             ui.painter().rect_filled(rect, arrondi, couleur(FOND_VEILLE));
             ui.painter().rect_stroke(
                 rect,
@@ -413,20 +492,9 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
         }
         return;
     }
-    if c.veille {
+    if veille {
         ui.painter().rect_filled(rect, arrondi, couleur(FOND_VEILLE));
-        let (a, b, d, e) = (
-            rect.left_top(),
-            rect.right_top(),
-            rect.right_bottom(),
-            rect.left_bottom(),
-        );
-        ui.painter().extend(egui::Shape::dashed_line(
-            &[a, b, d, e, a],
-            Stroke::new(1.0, couleur(BORD_VEILLE)),
-            2.0,
-            2.0,
-        ));
+        bord_en_tirets(ui.painter(), rect, BORD_VEILLE);
         icone(ui, rect.center(), icones::LUNE, 12.0, LUNE_VEILLE);
     } else if let Some(f) = c.couleur {
         carre(ui, p, rect, c.lettre, c.logo, f, false, TAILLE_PETIT);
@@ -452,13 +520,8 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
             None => {}
         }
     }
-    // Le pied de l'écran (pas dans le plan : il tomberait sur l'écran du dessous).
     if genre == Genre::Rangee {
-        let y = rect.bottom() + 3.0;
-        ui.painter().line_segment(
-            [pos2(rect.center().x - 5.0, y), pos2(rect.center().x + 5.0, y)],
-            Stroke::new(2.0, couleur(p.texte_desactive)),
-        );
+        pied(ui.painter(), p, rect);
     }
 }
 

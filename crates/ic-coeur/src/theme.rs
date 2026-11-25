@@ -7,7 +7,8 @@
 //! - la taille du texte et les arrondis ([`TAILLE_TEXTE`], [`ARRONDI_CARTE`]…) ;
 //! - les mesures du volet, du petit menu et des Paramètres ([`mesures`]) ;
 //! - les glyphes des icônes communes ([`icones`]) ; ce qu'un carré coloré montre, logo ou
-//!   lettre ([`marque`]), et le texte lisible sur une zone ([`texte_sur`]) ;
+//!   lettre ([`marque`]), l'état d'une case d'écran, où débranché l'emporte sur la veille
+//!   ([`etat_case`]), et le texte lisible sur une zone ([`texte_sur`]) ;
 //! - l'animation d'ouverture et de fermeture, et sa courbe ([`ouverture`], [`fermeture`],
 //!   [`avancer`]) ;
 //! - **suivre Windows** : relire le clair ou sombre et l'accent toutes les 2 s, et changer la
@@ -40,7 +41,7 @@ pub use animation::{
 };
 pub use couleurs::{ChoixWindows, Palette, Rgb, contraste, couleur_lettre, couleurs_pastilles};
 pub use formes::couverture;
-pub use marque::{Marque, marque, texte_sur};
+pub use marque::{EtatCase, Marque, OPACITE_DEBRANCHE, etat_case, marque, texte_sur};
 pub use relecture::{RELECTURE, faut_relire, impose, relu};
 pub use tailles::{
     ARRONDI_CARTE, ARRONDI_CONTROLE, HAUTEUR_LIGNE, TAILLE_EXPLICATION, TAILLE_PETIT, TAILLE_SECTION,
