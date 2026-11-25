@@ -268,7 +268,7 @@ fn la_carte_pose_la_question() {
     for t in [
         "Conserver ces modifications ?",
         "« Mode d'affichage » modifié.",
-        "Retour au réglage d'avant dans 15 s",
+        "Retour au réglage d'avant dans 15\u{a0}s",
         "Conserver",
         "Revenir",
     ] {
@@ -282,7 +282,7 @@ fn la_carte_pose_la_question() {
     let v = b.calme(&mut s, &en);
     for t in [
         "Keep these changes?",
-        "Going back to the previous setting in 15 s",
+        "Going back to the previous setting in 15\u{a0}s",
         "Keep",
         "Revert",
     ] {

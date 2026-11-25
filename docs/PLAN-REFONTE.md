@@ -137,7 +137,7 @@ compatibilité à l'appui) :
 | 1 | Les éléments publics qu'aucun des quatre ne prend (213, `ANALYSE.md` §1.2) deviennent internes (`pub(crate)`) ou disparaissent | une API plus petite à garder ; le relevé est **refait au moment de la bascule** sur le code des quatre | rien | rien | rien | rien |
 | 2 | Les méthodes `Logiciel::dessiner_rapides` et `Logiciel::largeur_rapides` sont retirées | aucun logiciel ne les écrit (relevé du 25 nov. dans le code des quatre) ; leur place dans le volet est prise par les briques | rien (ne les écrit pas) | rien (ne les écrit pas) | rien (ne les écrit pas) | sans objet (pas de `Logiciel`) |
 | 3 | La constante `theme::HAUTEUR_LIGNE` est retirée | aucun logiciel ne la prend ; une seule mesure de ligne reste (`mesures`) | rien | rien | rien | rien |
-| 4 | Le texte `conserver_retour` (français et anglais) prend l'espace insécable (C-98) | règle de l'unité, sans exception à la bascule | rien à écrire ; le texte affiché change d'une espace | idem | idem | idem |
+| 4 | Le texte `conserver_retour` (français et anglais) prend l'espace insécable (C-98), ainsi que « 24 h » dans `journal_detaille_explication` (trouvé au bloc B) | règle de l'unité, sans exception à la bascule | rien à écrire ; le texte affiché change d'une espace | idem | idem | idem |
 | 5 | `briques::pourcent` écrit `42 %` avec l'espace insécable (C-98) | idem | rien à écrire ; si un test du logiciel compare ce texte, y mettre `\u{A0}` | idem | idem | sans objet |
 
 Le doublon interne de `effets_d_animation` (dans `parametres`) disparaît au profit de
@@ -174,7 +174,7 @@ avec la liste des images qu'il touche :
 
 | # | Écart | Décidé par | Images touchées |
 |---|---|---|---|
-| R1 | C-98 : l'espace insécable dans `conserver_retour` | `ORGANIGRAMME.md`, bloc B (règle sans exception) | la carte « Conserver ces modifications ? », si l'espace change la coupure (aucune image de référence ne la montre aujourd'hui) |
+| R1 | C-98 : l'espace insécable dans `conserver_retour` | `ORGANIGRAMME.md`, bloc B (règle sans exception) | la carte « Conserver ces modifications ? » (`parametres-conserver-clair`), si l'espace change la coupure ; « 24 h » : la carte du journal détaillé (page Général, si le logiciel la montre). Fait au bloc B (25 nov.) : `references` passe, aucune image ne change (même coupure, écart sous la tolérance) |
 | R2 | C-98 : l'espace insécable dans `briques::pourcent` | idem | `volet-*` (la ligne de la souris inventée, à 42 %), si un pixel bouge |
 
 Tout autre écart, même d'un pixel au-delà de la tolérance (`ECART_PERMIS` = 6 par canal, au plus

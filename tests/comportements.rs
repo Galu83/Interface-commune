@@ -296,51 +296,47 @@ fn c90_le_theme_de_windows_est_relu() {
 }
 
 /// C-98 : les nombres ont une espace insécable avant leur unité. Gardé ici pour les seuils et
-/// les textes de la bibliothèque ; les écarts connus sont listés (à corriger par la refonte).
+/// les textes de la bibliothèque, vus du dehors ; l'essai complet est dans le cœur
+/// (`ic_coeur::textes`, `c98_aucune_espace_simple_avant_une_unite`).
 #[test]
 fn c98_espace_insecable_avant_l_unite() {
     let o = seuils::Options::default();
     assert_eq!(o.unite, "%");
-    // Tous les textes, dans les deux langues : un nombre (« {} ») suivi d'une espace normale
-    // puis d'une unité. Les écarts connus d'aujourd'hui sont listés : la refonte les corrige
-    // (docs/PLAN-REFONTE.md) et les retire d'ici. Un autre écart, hors des textes : le
-    // pourcentage des appareils du volet (`briques`, fonction privée), vu sur les images.
-    const ECARTS_CONNUS: &[&str] = &[
-        "Retour au réglage d'avant dans {} s",
-        "Going back to the previous setting in {} s",
-    ];
+    // Tous les textes, dans les deux langues : un nombre (« {} » ou un chiffre) suivi d'une
+    // espace normale puis d'une unité. Plus aucun écart connu dans les textes : le bloc B de la
+    // refonte a corrigé `conserver_retour` (R1, `docs/PLAN-REFONTE.md` §5) et « 24 h » du
+    // journal détaillé. Reste, hors des textes : le pourcentage des appareils du volet
+    // (`briques`, fonction privée, R2), corrigé au bloc F.
     const UNITES: &[&str] = &["s", "%", "ms", "px", "Mo", "Ko", "Go", "min", "h", "j"];
     let mut trouves = Vec::new();
     for t in [&textes::FRANCAIS, &textes::ANGLAIS] {
         let tout = format!("{t:#?}");
         for ligne in tout.lines() {
-            for (i, _) in ligne.match_indices("{} ") {
-                let suite = &ligne[i + 3..];
-                let mot: String = suite
+            for (i, _) in ligne.match_indices(' ') {
+                let avant = &ligne[..i];
+                let nombre = avant.ends_with("{}") || avant.ends_with(|c: char| c.is_ascii_digit());
+                let mot: String = ligne[i + 1..]
                     .chars()
                     .take_while(|c| c.is_alphanumeric() || *c == '%')
                     .collect();
-                if UNITES.contains(&mot.as_str()) {
+                if nombre && UNITES.contains(&mot.as_str()) {
                     trouves.push(ligne.trim().to_string());
                 }
             }
         }
     }
-    let nouveaux: Vec<_> = trouves
-        .iter()
-        .filter(|l| !ECARTS_CONNUS.iter().any(|e| l.contains(e)))
-        .collect();
     assert!(
-        nouveaux.is_empty(),
-        "espace normale avant une unité : {nouveaux:#?}"
+        trouves.is_empty(),
+        "espace normale avant une unité : {trouves:#?}"
     );
-    // Un écart connu corrigé doit sortir de la liste.
-    for e in ECARTS_CONNUS {
-        assert!(
-            trouves.iter().any(|l| l.contains(e)),
-            "« {e} » est corrigé : retirez-le des écarts connus"
-        );
-    }
+    assert_eq!(
+        textes::remplir(textes::FRANCAIS.conserver_retour, &["15"]),
+        "Retour au réglage d'avant dans 15\u{a0}s"
+    );
+    assert_eq!(
+        textes::remplir(textes::ANGLAIS.conserver_retour, &["15"]),
+        "Going back to the previous setting in 15\u{a0}s"
+    );
 }
 
 /// C-104 : la mise au point (focus du clavier) est visible sur chaque contrôle commun.

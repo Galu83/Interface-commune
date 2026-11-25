@@ -12,8 +12,14 @@ name = "ic_coeur"
 
 # Aucune dépendance, et il n'y en aura pas (ORGANIGRAMME.md, §10) : le cœur reçoit des faits
 # (un clic, une taille d'écran, l'instant) et rend des décisions. `tests/etages.rs` (à la racine
-# du dépôt) échoue si une ligne apparaît sous une section de dépendances de ce fichier.
+# du dépôt) échoue si une ligne apparaît sous `[dependencies]` (ou sous une autre section
+# de dépendances que celle des essais).
 [dependencies]
+
+[dev-dependencies]
+# Les essais seulement (bloc 0 : permis au cœur, jamais egui ni Windows) : `lisible` relue
+# ne change pas (bloc B), sur des raccourcis tirés au hasard.
+proptest = { version = "1", default-features = false, features = ["std"] }
 
 [lints.rust]
 # Aucun `unsafe` dans le cœur (aussi écrit `#![forbid(unsafe_code)]` dans `src/lib.rs`).

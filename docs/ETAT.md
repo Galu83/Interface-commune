@@ -104,8 +104,45 @@
   - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
     fenêtres, prévus pour GitHub ; le bloc A ne touche pas aux fenêtres). Les traits `Reglages`
     et `Logiciel` restent à la racine (bloc F).
-- **Prochaine étape de la refonte** : intégrer les blocs 0 et A dans `refonte`, puis B
-  « Textes », C « Thème, mesures » ou K « Guichet » (`docs/PLAN-REFONTE.md`, §2 ; une seule voie
-  à la fois).
+- **Refonte, bloc B « Textes »** (25 nov. 07:35, branche `claude/bloc-b-textes`, partie de
+  `refonte` après le bloc A, à intégrer par l'Atelier Master) :
+  - dans **`ic_coeur::textes`** : le catalogue (`Langue`, `Textes`, `FRANCAIS`, `ANGLAIS`,
+    `Textes::de`, `remplir`, fichier `textes/catalogue.rs`), `lisible` (`textes/raccourcis.rs`),
+    l'espace insécable (C-98 : `INSECABLE`, `avec_unite`, servie aux seuils) et `insecables`
+    (la typographie française du dessin) ;
+  - **repris aux mêmes chemins** par `pub use` : `interface_commune::textes::…`,
+    `interface_commune::{Langue, Textes}`, `touches::lisible`, `dessin::insecables` ; aucun
+    changement d'API ; `tests/compatibilite.rs` inchangé ; l'essai de `touches` qui passe par
+    egui reste dans `src/touches.rs` ;
+  - **R1 fait** : `conserver_retour` prend l'espace insécable, en français et en anglais ;
+    **aucune image de référence ne change** (`parametres-conserver-clair` montre la carte :
+    même coupure, `references` vert) ; `tests/conserver.rs` attend `15\u{a0}s` ;
+  - **essais dans le cœur** (`crates/ic-coeur/src/textes/essais.rs`, logiciel inventé
+    « Fictif ») : les deux catalogues ont les mêmes 74 champs (lus sans liste à tenir), aucun
+    vide ; les modèles se remplissent ; C-98 sans aucune espace simple avant une unité (le
+    détecteur est lui-même essayé sur des fautes posées exprès) ; `avec_unite`, `insecables` ;
+    les essais de `lisible`, et `lisible` ne change pas deux fois (au hasard, proptest) ;
+  - `tests/comportements.rs` (C-98) : plus d'écart connu dans les textes ; `COMPORTEMENTS.md`
+    (C-46, C-97, C-98) suit ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 27 essais et 1 exemple de documentation ; `interface-commune` : 193 essais
+    internes (202 moins les 9 partis dans le cœur), tous les fichiers de `tests/` verts
+    (references aux images identiques, conserver, comportements, compatibilite, polices,
+    polices_windows10, etages, sans_fenetre…), exemples de documentation ; `fmt`,
+    `clippy -D warnings`, `cargo deny` propres ; contrôle de la règle n° 1 : seulement `.git:1`
+    (le fichier du worktree) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - `dessin::insecables` part aussi dans le cœur (du texte pur ; l'organigramme la mettait
+      au bloc F), reprise à son chemin ;
+    - « 24 h » de `journal_detaille_explication` prend aussi l'espace insécable (même règle,
+      trouvé par le nouvel essai ; ajouté au PLAN §4, ligne 4) ; aucune image ne change ;
+    - `proptest` en dépendance **d'essai** du cœur (permis par le bloc 0) ;
+    - `INSECABLE` et `avec_unite` sont nouveaux dans le cœur mais **pas repris à la racine** :
+      l'API de `interface-commune` ne bouge pas ;
+    - R2 (`briques::pourcent`, « 42 % ») reste au bloc F, comme prévu ;
+  - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
+    fenêtres, prévus pour GitHub ; le bloc B ne touche pas aux fenêtres).
+- **Prochaine étape de la refonte** : intégrer les blocs 0, A et B dans `refonte`, puis C
+  « Thème, mesures » ou K « Guichet » (`docs/PLAN-REFONTE.md`, §2 ; une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).

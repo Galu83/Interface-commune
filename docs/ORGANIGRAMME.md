@@ -575,7 +575,7 @@ compatibilité) ; l'intérieur est réécrit.
 | racine : traits `Reglages`, `Logiciel` | (dans 446) | F | `src/dessin/traits.rs`, à la racine | chemin et méthodes gardés ; `dessiner_rapides` et `largeur_rapides` retirés (§4 du plan) |
 | racine : `Instantane`, `Page`, `Valeur`, `Langue`, `Textes`, `Palette`, `Rgb` | — | A, B, C | `ic-coeur`, repris à la racine | chemin gardé |
 | `cles` | (dans 446) | A | `ic-coeur` | chemin gardé |
-| `textes` | 422 | B | `ic-coeur` | chemin gardé ; deux textes corrigés (C-98) |
+| `textes` | 422 | B | `ic-coeur` | chemin gardé ; `conserver_retour` et « 24 h » du journal détaillé corrigés (C-98), dans les deux langues (fait au bloc B) |
 | `touches` | 301 | B (lisible), F (touches d'egui) | `ic-coeur` + `src/dessin/touches.rs` | chemin gardé |
 | `theme` (dont `Surface`, `ChoixWindows`, `ARRONDI_*`, `TAILLE_*`) | 414 | C | `ic-coeur` | chemin gardé ; `ARRONDI_*` (`u8`) et `TAILLE_*` (`f32`) gardés avec leur type et leur valeur (KVMSoft les reprend dans ses dessins) ; `HAUTEUR_LIGNE` retirée (aucun logiciel) |
 | `mesures` | 100 | C | `ic-coeur` | chemin gardé |
@@ -588,7 +588,7 @@ compatibilité) ; l'intérieur est réécrit.
 | `parametres::modele` | 879 | E | `ic-coeur` | chemin gardé |
 | `parametres` (`Parametres`, `Parametres::dessiner`, `Parametres::titre_fenetre`, `Contexte`, `TAILLE`) | 1 390 | H (+ E : présentation de la mise à jour) | `src/dessin/parametres/`, un fichier par page | chemin gardé |
 | `parametres::fenetre` (`ouvrir_dans_boucle`, `PageVoulue`, `ouverture`, `choisir_dossier`, `icone_fenetre`) | 340 | J | `src/bords/fenetres/parametres.rs`, repris à ce chemin | chemin gardé |
-| `dessin` (`focus`, `icone`, `bouton_icone`, `interrupteur_ecrit`, `insecables`, `Genre`…) | 859 | F | `src/dessin/controles/` | chemin gardé |
+| `dessin` (`focus`, `icone`, `bouton_icone`, `interrupteur_ecrit`, `insecables`, `Genre`…) | 859 | F ; `insecables` : B | `src/dessin/controles/` ; `insecables` (texte pur) dans `ic-coeur` depuis le bloc B | chemin gardé |
 | `briques` (`Brique`, `Case`, `Pastille`…) | 780 | F | `src/dessin/briques/` | chemin gardé ; `pourcent` corrigé (C-98) |
 | `pastilles` (`marque`, `Marque`, `couleur_lettre`, `plan_des_cases`) | 1 005 | F (dessin), D (plan) | `src/dessin/pastilles/` + `ic-coeur` | chemin et signatures gardés (enveloppe) |
 | `menu_choix` (`MenuChoix`, `placer`) | 922 | F (dessin), D (place, touches) | `src/dessin/menu_choix/` + `ic-coeur` | chemin et signatures gardés (enveloppe) |
