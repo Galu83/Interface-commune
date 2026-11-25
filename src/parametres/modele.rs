@@ -9,33 +9,8 @@ use std::time::{Duration, Instant};
 use crate::icones;
 use crate::textes::Textes;
 
-/// Une page de la navigation.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Page {
-    /// La clé de la page (`--parametres <clé>`) : minuscules, sans espace.
-    pub cle: String,
-    pub titre: String,
-    pub icone: char,
-    /// Des mots de plus pour « Rechercher un paramètre » (les titres de ses cartes…).
-    pub mots: Vec<String>,
-}
-
-impl Page {
-    pub fn new(cle: &str, titre: &str, icone: char) -> Page {
-        Page {
-            cle: cle.into(),
-            titre: titre.into(),
-            icone,
-            mots: Vec::new(),
-        }
-    }
-
-    /// Ajoute des mots pour la recherche.
-    pub fn avec_mots(mut self, mots: &[&str]) -> Page {
-        self.mots.extend(mots.iter().map(|m| (*m).to_string()));
-        self
-    }
-}
+// Le contrat (bloc A), repris du cœur à ce chemin.
+pub use ic_coeur::contrat::{Instantane, Page, Valeur};
 
 /// Les clés des pages communes.
 pub const ACCUEIL: &str = "accueil";
@@ -175,46 +150,8 @@ pub fn section_trouvee(tape: &str, titre: &str, mots: &[&str]) -> bool {
     tapes.all(|m| texte.contains(m))
 }
 
-/// La valeur d'un réglage, telle que la bulle « Annuler » la rend au logiciel.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Valeur {
-    Booleen(bool),
-    Nombre(f64),
-    Texte(String),
-}
-
 /// Un changement d'un groupe : la clé, la valeur d'avant, celle d'après.
 pub type Changement = (String, Valeur, Valeur);
-
-/// L'état d'un **brouillon entier** de réglages, pris avant un changement et rendu au logiciel
-/// par « Annuler » ([`crate::Reglages::instantane`], [`crate::Reglages::remettre`]). Le
-/// logiciel y met ce qu'il veut (souvent une copie de ses réglages) et le relit par
-/// [`Instantane::get`].
-#[derive(Clone)]
-pub struct Instantane(std::sync::Arc<dyn std::any::Any + Send + Sync>);
-
-impl Instantane {
-    pub fn new<T: std::any::Any + Send + Sync>(valeur: T) -> Instantane {
-        Instantane(std::sync::Arc::new(valeur))
-    }
-
-    /// Ce que le logiciel y a mis, s'il est de ce type.
-    pub fn get<T: std::any::Any>(&self) -> Option<&T> {
-        self.0.downcast_ref()
-    }
-}
-
-impl std::fmt::Debug for Instantane {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Instantane(..)")
-    }
-}
-
-impl PartialEq for Instantane {
-    fn eq(&self, autre: &Instantane) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &autre.0)
-    }
-}
 
 /// La bulle « Annuler » reste ce temps après un changement.
 pub const DUREE_ANNULER: Duration = Duration::from_secs(6);

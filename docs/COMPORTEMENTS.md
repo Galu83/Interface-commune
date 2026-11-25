@@ -155,7 +155,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-79 | Taille et place de la fenêtre retenues d'une ouverture à l'autre, toujours en entier sur un écran ; retenues aussi 1 s après un déplacement ; jamais celles d'une fenêtre réduite ou agrandie. | auto : `place::place_des_parametres`, `place::place_retenue_*` (3 tests), `place::trop_grand_rapetisse`, `place::toujours_dans_la_zone`, `place::valeurs_absurdes`, `tests/comportements::c79_place_des_parametres` (ouverture et fermeture) ; le suivi 1 s après un déplacement demande une vraie fenêtre : GitHub |
 | C-80 | La colonne de navigation s'élargit pour un long nom de page. | auto : `tests/comportements::c80_la_navigation_s_elargit` |
 | C-81 | Les choix illustrés (images sous les choix) sont alignés. | auto : `tests/sans_fenetre::choix_illustres_alignes` |
-| C-82 | Les Paramètres s'utilisent seuls, sans l'icône ni le volet (trait `Reglages`), y compris en anglais. | auto : `tests/sans_fenetre::parametres_seuls_en_anglais` ; Chat PDC s'en sert |
+| C-82 | Les Paramètres s'utilisent seuls, sans l'icône ni le volet (trait `Reglages`), y compris en anglais. | auto : `tests/sans_fenetre::parametres_seuls_en_anglais` ; le contrat seul, dans le cœur : `ic_coeur::contrat::essais::*` ; Chat PDC s'en sert |
 | C-83 | La carte d'information reste dans la largeur donnée et n'est pas plus haute qu'il faut. | auto : `tests/carte_info::*` |
 | C-84 | Coins arrondis et barre de titre sombre par Windows ; aucune animation à nous dans les Paramètres. | manuel |
 
