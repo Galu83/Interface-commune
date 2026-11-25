@@ -1,10 +1,14 @@
 //! Le thème suivi en direct (règles : interface Windows 11, point 1) : le mode clair ou
 //! sombre et l'accent de Windows, relus toutes les 2 secondes (quelques valeurs du registre,
-//! rien de lent), appliqués à egui dès qu'ils changent.
+//! rien de lent), appliqués à egui dès qu'ils changent. Quand relire, et ce qui change,
+//! se décide dans le cœur (`ic_coeur::theme`, bloc C) ; ici, lire Windows et donner les
+//! couleurs à egui.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use egui::{Color32, FontId, TextStyle};
+
+use ic_coeur::theme;
 
 use crate::polices::{semibold, titre};
 use crate::theme::{
@@ -17,9 +21,7 @@ pub fn couleur(c: Rgb) -> Color32 {
 }
 
 /// Les 10 couleurs des pastilles d'appareils du volet (voir [`crate::pastilles`]).
-pub fn couleurs_pastilles() -> [Rgb; 10] {
-    crate::pastilles::couleurs_pastilles()
-}
+pub use ic_coeur::theme::couleurs_pastilles;
 
 /// Ce que Windows a choisi (sous Windows) ; ailleurs, le clair et l'accent par défaut.
 pub fn choix_windows() -> ChoixWindows {
@@ -44,7 +46,7 @@ pub struct Apparence {
 }
 
 /// Le thème est relu dans Windows à cet intervalle.
-pub const RELECTURE: Duration = Duration::from_secs(2);
+pub use ic_coeur::theme::RELECTURE;
 
 impl Apparence {
     pub fn new(force: Option<bool>) -> Apparence {
@@ -52,10 +54,8 @@ impl Apparence {
     }
 
     /// Avec un choix donné (essais, captures).
-    pub fn de(mut choix: ChoixWindows, force: Option<bool>) -> Apparence {
-        if let Some(f) = force {
-            choix.sombre = f;
-        }
+    pub fn de(choix: ChoixWindows, force: Option<bool>) -> Apparence {
+        let choix = theme::impose(choix, force);
         Apparence {
             palette: Palette::de(&choix),
             choix,
@@ -67,7 +67,7 @@ impl Apparence {
     /// Relit Windows si 2 s ont passé ; `true` si le thème a changé (déjà appliqué).
     pub fn suivre(&mut self, ctx: &egui::Context) -> bool {
         ctx.request_repaint_after(RELECTURE);
-        if self.lu_a.elapsed() < RELECTURE {
+        if !theme::faut_relire(self.lu_a.elapsed()) {
             return false;
         }
         self.relire(ctx)
@@ -76,15 +76,11 @@ impl Apparence {
     /// Relit Windows tout de suite ; `true` si le thème a changé (déjà appliqué).
     pub fn relire(&mut self, ctx: &egui::Context) -> bool {
         self.lu_a = Instant::now();
-        let mut choix = choix_windows();
-        if let Some(f) = self.force {
-            choix.sombre = f;
-        }
-        if choix == self.choix {
+        let Some((choix, palette)) = theme::relu(&self.choix, choix_windows(), self.force) else {
             return false;
-        }
+        };
         self.choix = choix;
-        self.palette = Palette::de(&self.choix);
+        self.palette = palette;
         self.appliquer(ctx);
         true
     }

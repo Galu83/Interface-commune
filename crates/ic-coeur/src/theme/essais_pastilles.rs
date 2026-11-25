@@ -3,8 +3,7 @@
 //! six premiers rangs inchangés. L'écart ΔE2000 est écrit ici, en Rust seul, et contrôlé sur
 //! les paires de référence publiées par Sharma, Wu et Dalal (2005).
 
-use interface_commune::pastilles::{couleur_lettre, couleurs_pastilles};
-use interface_commune::theme::{ChoixWindows, Palette, Rgb, contraste};
+use super::{ChoixWindows, Palette, Rgb, contraste, couleur_lettre, couleurs_pastilles};
 
 /// L'écart le plus petit permis entre deux couleurs de la palette (ΔE2000).
 const ECART_MIN: f64 = 12.0;

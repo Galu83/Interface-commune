@@ -15,11 +15,13 @@ use crate::mesures::{
     PASTILLE_HAUTEUR, PASTILLE_LARGEUR, VOLET_LIGNE, VOLET_SECTION,
 };
 use crate::polices::semibold;
-use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE, contraste};
+use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE};
 use crate::touches;
 
-const BLANC: Rgb = Rgb(255, 255, 255);
-const NOIR: Rgb = Rgb(0, 0, 0);
+/// La lettre lisible sur un fond, et les 10 couleurs des pastilles : écrites dans le cœur
+/// (`ic_coeur::theme`, bloc C), reprises ici à leurs chemins.
+pub use ic_coeur::theme::{couleur_lettre, couleurs_pastilles};
+
 /// Le fond d'une case d'écran en veille (sombre dans les deux modes : un écran éteint).
 const FOND_VEILLE: Rgb = Rgb(0x1E, 0x1E, 0x1E);
 const BORD_VEILLE: Rgb = Rgb(0x9A, 0x9A, 0x9A);
@@ -145,16 +147,6 @@ pub fn marque(logo: Option<char>, lettre: Option<char>, disponible: impl Fn(char
     match logo {
         Some(g) if disponible(g) => Some(Marque::Logo(g)),
         _ => lettre.map(Marque::Lettre),
-    }
-}
-
-/// La lettre lisible sur ce fond : blanche, ou noire si le fond est clair (contraste
-/// calculé, le plus fort des deux).
-pub fn couleur_lettre(fond: Rgb) -> Rgb {
-    if contraste(fond, BLANC) >= contraste(fond, NOIR) {
-        BLANC
-    } else {
-        NOIR
     }
 }
 
@@ -394,27 +386,6 @@ pub fn dessiner_pastilles(
 }
 
 // ---- Le choix illustré ----------------------------------------------------------------
-
-/// Les 10 couleurs des pastilles et des cases : lisibles en clair comme en sombre (3 contre
-/// 1 au moins avec le fond des deux modes, lettre à 4,5 contre 1), sans vert, orange, rouge
-/// ni bleu d'accent, qui disent un état ou l'accent de Windows, et à un écart ΔE2000 d'au
-/// moins 12 l'une de l'autre (contrôlé par `tests/palette_pastilles.rs`). Un logiciel prend la
-/// suivante pour chaque appareil. Les 6 premières ne bougent jamais : un rang déjà enregistré
-/// garde sa couleur ; les suivantes s'ajoutent derrière.
-pub fn couleurs_pastilles() -> [Rgb; 10] {
-    [
-        Rgb::hex(0x7B57C9), // violet
-        Rgb::hex(0xB03A9C), // magenta
-        Rgb::hex(0x1D7F86), // sarcelle foncé
-        Rgb::hex(0x94604F), // brun
-        Rgb::hex(0x667A94), // ardoise
-        Rgb::hex(0x857A2A), // olive
-        Rgb::hex(0x3865F3), // indigo
-        Rgb::hex(0xC0416B), // framboise
-        Rgb::hex(0x8E679E), // prune
-        Rgb::hex(0x7C6D61), // taupe
-    ]
-}
 
 /// La largeur qu'il faut à un choix illustré : l'illustration, puis la plus large de ses deux
 /// lignes (texte et raccourci ; sous-ligne et étiquette).
@@ -940,15 +911,6 @@ mod essais {
         image(ctx, vec![egui::Event::PointerMoved(pos)]);
         image(ctx, vec![bouton(true)]);
         image(ctx, vec![bouton(false)]).0
-    }
-
-    /// La lettre est blanche sur un fond foncé, noire sur un fond clair.
-    #[test]
-    fn lettre_selon_le_fond() {
-        assert_eq!(couleur_lettre(Rgb(0x30, 0x20, 0x70)), BLANC);
-        assert_eq!(couleur_lettre(Rgb(0xF0, 0xE0, 0x90)), NOIR);
-        assert_eq!(couleur_lettre(NOIR), BLANC);
-        assert_eq!(couleur_lettre(BLANC), NOIR);
     }
 
     /// 3 pastilles : 2 colonnes, donc 2 rangées ; le choix illustré a sa hauteur propre.

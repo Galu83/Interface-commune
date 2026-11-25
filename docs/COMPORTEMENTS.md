@@ -78,7 +78,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-27 | Le volet se place contre l'icône, du côté de la barre des tâches (bas, haut, gauche, droite, barre masquée), toujours en entier sur l'écran. | auto : `place::barre_en_bas`, `place::les_autres_cotes`, `place::barre_masquee`, `place::contre_l_icone`, `place::contre_l_icone_toujours_dans_la_zone`, `place::placement_du_volet` |
 | C-28 | Un clic hors du volet le ferme ; un clic dedans ne le ferme pas. | auto : `fenetres::clic_dedans_ou_dehors`, `fenetres::appuis_de_souris` |
 | C-29 | Un deuxième clic sur l'icône tout de suite après l'ouverture n'est pas pris pour une fermeture (garde des premiers instants, anti-rebond de 400 ms). | auto : `fenetres::garde_des_premiers_instants` |
-| C-30 | Animation d'ouverture : fondu de 83 ms parti de 50 %, à sa place ; fermeture en fondu de 83 ms ; aucune animation si Windows les a coupées. | auto : `theme::courbe_rapide_puis_ralentie`, `theme::durees_de_windows`, `theme::ouverture_vive`, `theme::sans_effets_aucune_animation`, `volet::un_retard_ne_fait_pas_sauter_l_animation` |
+| C-30 | Animation d'ouverture : fondu de 83 ms parti de 50 %, à sa place ; fermeture en fondu de 83 ms ; aucune animation si Windows les a coupées. | auto : `ic_coeur::theme::essais::courbe_rapide_puis_ralentie`, `…::durees_de_windows`, `…::ouverture_vive`, `…::sans_effets_aucune_animation`, `…::un_retard_ne_fait_pas_sauter_l_animation` (bloc C : dans le cœur) |
 | C-31 | La première image montrée est déjà dessinée (pas de fenêtre vide ou noire au premier clic) ; la fenêtre reste voilée tant qu'elle n'est pas vraiment montrée. | auto : `volet::premiere_image_montree_deja_visible`, `volet::voilee_sauf_montree_pour_de_vrai` |
 | C-32 | Les fenêtres n'attendent pas la synchronisation verticale (le clic ne patiente pas derrière l'écran). | auto : `volet::fenetres_sans_synchronisation_verticale` |
 | C-33 | Dans le volet, les flèches du clavier se comportent comme Tab (d'une brique à l'autre). | auto : `volet::les_fleches_deviennent_tab` |
@@ -93,7 +93,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-37 | Une brique répond au clic, au clavier et rend son geste au logiciel. | auto : `briques::gestes`, `pastilles::gestes` |
 | C-38 | La brique « appareil » montre une image et un bouton. | auto : `briques::appareil_avec_image_et_bouton` |
 | C-39 | Les pastilles (plan des écrans) gardent les proportions des écrans, centrées dans leur zone, limitées par la largeur, quelle que soit l'origine des coordonnées ; refus d'un plan vide ; rangée quand il le faut ; petite case en couleur seule. | auto : `pastilles::plan_*` (10 tests) |
-| C-40 | Le texte d'une pastille reste au même endroit, et sa lettre est lisible sur son fond. | auto : `pastilles::texte_au_meme_endroit`, `pastilles::plan_ne_deplace_pas_le_texte`, `pastilles::lettre_selon_le_fond` |
+| C-40 | Le texte d'une pastille reste au même endroit, et sa lettre est lisible sur son fond. | auto : `pastilles::texte_au_meme_endroit`, `pastilles::plan_ne_deplace_pas_le_texte`, `ic_coeur::theme::essais::lettre_selon_le_fond` |
 | C-41 | Les briques reçoivent le contexte du logiciel (`briques_avec_contexte`) et un pied (`briques_du_pied`). | auto : `tests/sans_fenetre::volet_borne_et_briques_avec_contexte` |
 
 ## 6. Le petit menu
@@ -173,11 +173,11 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto : `theme::la_palette_de_windows_est_suivie`, `tests/comportements::c90_le_theme_de_windows_est_relu` |
-| C-91 | Les contrastes des couleurs du thème sont suffisants. | auto : `theme::contrastes_suffisants` |
+| C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto : `ic_coeur::theme::essais::la_palette_de_windows_est_suivie`, `…::accent_par_defaut_et_accent_seul`, `…::relecture_toutes_les_deux_secondes`, `…::le_theme_de_windows_est_suivi`, `…::un_theme_impose_l_emporte` (horloge inventée), `tests/comportements::c90_le_theme_de_windows_est_relu` |
+| C-91 | Les contrastes des couleurs du thème sont suffisants. | auto : `ic_coeur::theme::essais::contrastes_suffisants` |
 | C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `verification::*`, `tests/polices_windows10::c92_repli_des_polices_de_windows_10` |
 | C-93 | Chaque icône commune existe dans les deux polices d'icônes ; un glyphe absent redonne la lettre. | auto : `tests/polices::chaque_icone_existe`, `verification::glyphe_absent_redonne_la_lettre` |
-| C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `tests/palette_pastilles::*` (4 tests) |
+| C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `ic_coeur::theme::essais_pastilles::*` (4 tests ; avant le bloc C : `tests/palette_pastilles.rs`) |
 | C-95 | Le choix de couleur (carte) : même palette que les pastilles, clic, clavier, colonnes selon la place, « Annuler » remet l'ancienne. | auto : `tests/couleurs::*` (10 tests) |
 | C-96 | Le nuancier : cases de 32 points, un clic donne la couleur, nom lu par les lecteurs d'écran. | auto : `nuancier::*` (4 tests) |
 | C-97 | Tout ce qu'écrit la bibliothèque existe en français et en anglais, rempli dans l'ordre ; la langue change en direct. | auto : `ic_coeur::textes::essais::{deux_langues_completes, les_deux_catalogues_ont_les_memes_champs_et_aucun_vide, remplir_dans_l_ordre, les_modeles_se_remplissent_avec_le_logiciel_fictif}`, `tests/sans_fenetre::la_langue_change_en_direct` |

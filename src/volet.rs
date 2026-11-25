@@ -21,6 +21,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use ic_coeur::theme::avancer;
+
 use eframe::egui::{self, FontDefinitions, Key, ViewportCommand};
 
 use crate::Logiciel;
@@ -888,17 +890,8 @@ impl Volet<'_> {
     }
 }
 
-/// Le plus long pas de l'animation d'une image à la suivante : une image d'un écran à 50 Hz.
-/// Une image en retard (écran qui fait attendre) avance l'animation d'un pas seulement :
-/// l'ouverture se joue toujours en entier, jamais d'un coup à la fin.
-const PAS_MAX: Duration = Duration::from_millis(20);
 /// Une image de l'ouverture plus longue que ce temps est notée au journal.
 const BLOQUEE: Duration = Duration::from_millis(100);
-
-/// L'animation jouée après une image de plus, arrivée `ecart` après la précédente.
-fn avancer(anime: Duration, ecart: Duration) -> Duration {
-    anime + ecart.min(PAS_MAX)
-}
 
 fn quoi(s: Surface) -> &'static str {
     match s {
@@ -1231,24 +1224,6 @@ mod essais {
             debut: maintenant,
             puis: None,
         }));
-    }
-
-    /// Après un retard de l'écran (une image échangée 300 ms trop tard), l'animation ne saute
-    /// pas à la fin : elle n'avance que d'un pas, et se joue ensuite en entier.
-    #[test]
-    fn un_retard_ne_fait_pas_sauter_l_animation() {
-        let retard = avancer(Duration::ZERO, Duration::from_millis(300));
-        assert_eq!(retard, PAS_MAX);
-        let ms = u32::try_from(retard.as_millis()).unwrap_or(u32::MAX);
-        assert!(!theme::ouverture(ms, true).finie);
-        // Des images régulières à 60 Hz : finie en 5 ou 6 images, comme prévu.
-        let mut anime = Duration::ZERO;
-        let mut images = 0;
-        while !theme::ouverture(u32::try_from(anime.as_millis()).unwrap_or(u32::MAX), true).finie {
-            anime = avancer(anime, Duration::from_micros(16_667));
-            images += 1;
-        }
-        assert!((5..=6).contains(&images), "{images}");
     }
 
     /// Prête avant d'être montrée : le voile se lève à la fin de la dernière image de mise en
