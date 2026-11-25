@@ -104,7 +104,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-43 | Le petit menu prend les mesures des menus de Windows 11. | auto : `tests/sans_fenetre::petit_menu_aux_mesures_communes` |
 | C-44 | Il s'ouvre au point du clic, toujours en entier sur l'écran. | auto : `place::petit_menu_au_point`, `place::petit_menu_toujours_dans_la_zone` |
 | C-45 | Sans OpenGL (pilote absent ou cassé), le petit menu passe au menu de secours de Windows, avec les mêmes lignes numérotées. | auto : `fenetres::sans_opengl_le_menu_de_secours`, `zone::menu_windows_numerote_les_choix` |
-| C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `touches::*` (8 tests) |
+| C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (7 tests de `lisible`, plus `lisible_ne_change_pas_deux_fois` au hasard), `touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
 
 ## 7. La boucle des fenêtres et ses secours
 
@@ -180,8 +180,8 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `tests/palette_pastilles::*` (4 tests) |
 | C-95 | Le choix de couleur (carte) : même palette que les pastilles, clic, clavier, colonnes selon la place, « Annuler » remet l'ancienne. | auto : `tests/couleurs::*` (10 tests) |
 | C-96 | Le nuancier : cases de 32 points, un clic donne la couleur, nom lu par les lecteurs d'écran. | auto : `nuancier::*` (4 tests) |
-| C-97 | Tout ce qu'écrit la bibliothèque existe en français et en anglais, rempli dans l'ordre ; la langue change en direct. | auto : `textes::deux_langues_completes`, `textes::remplir_dans_l_ordre`, `tests/sans_fenetre::la_langue_change_en_direct` |
-| C-98 | Les nombres ont une espace insécable avant leur unité. | auto (avec écarts connus) : `seuils::les_nombres_ont_une_espace_insecable`, `tests/comportements::c98_espace_insecable_avant_l_unite` ; **écarts connus**, à corriger par la refonte : `conserver_retour` (« {} s », français et anglais) et le pourcentage des appareils du volet (`briques`, « {} % ») |
+| C-97 | Tout ce qu'écrit la bibliothèque existe en français et en anglais, rempli dans l'ordre ; la langue change en direct. | auto : `ic_coeur::textes::essais::{deux_langues_completes, les_deux_catalogues_ont_les_memes_champs_et_aucun_vide, remplir_dans_l_ordre, les_modeles_se_remplissent_avec_le_logiciel_fictif}`, `tests/sans_fenetre::la_langue_change_en_direct` |
+| C-98 | Les nombres ont une espace insécable avant leur unité. | auto (un écart connu) : `ic_coeur::textes::essais::{c98_aucune_espace_simple_avant_une_unite, avec_unite_met_l_espace_insecable}`, `seuils::les_nombres_ont_une_espace_insecable`, `tests/comportements::c98_espace_insecable_avant_l_unite` ; les textes sont corrigés (bloc B de la refonte : `conserver_retour` et « 24 h » du journal détaillé) ; **écart connu**, à corriger au bloc F : le pourcentage des appareils du volet (`briques`, « {} % ») |
 
 ## 12. Les contrôles communs
 
@@ -232,9 +232,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
   C-92, C-98, C-104, C-110, C-112, C-113, C-114, C-115) ont reçu leurs essais le 25 nov. 2026
   (filets de la refonte, `tests/comportements.rs`, `tests/polices_windows10.rs`,
   `tests/compatibilite.rs`, `tests/references.rs`).
-- **Écarts connus** (un essai les liste, la refonte les corrige) : C-98, une espace normale
-  avant « s » dans `conserver_retour` (français et anglais) et avant « % » dans le
-  pourcentage des appareils du volet.
+- **Écart connu** (la refonte le corrige) : C-98, une espace normale avant « % » dans le
+  pourcentage des appareils du volet (bloc F). Les textes (`conserver_retour` en français et
+  en anglais, « 24 h » du journal détaillé) sont corrigés par le bloc B de la refonte.
 
 Les deux promesses faites à PowerPeek et KVMSoft sont gardées : **C-114** (l'API ne bouge pas,
 `tests/compatibilite`) et **C-115** (le rendu ne bouge pas, `tests/references`). Une image de

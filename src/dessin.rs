@@ -635,25 +635,9 @@ pub fn bandeau(ui: &mut Ui, p: &Palette, c: Rgb, glyphe: char, texte: &str, bout
     clic
 }
 
-/// Pour un texte qui passe à la ligne : les espaces collées aux guillemets et devant « : ; ! ? »
-/// deviennent insécables, comme en typographie française (jamais un « » » seul en début de
-/// ligne).
-pub fn insecables(texte: &str) -> String {
-    const INSECABLE: char = '\u{a0}';
-    let mut s = String::with_capacity(texte.len());
-    let mut car = texte.chars().peekable();
-    let mut avant: Option<char> = None;
-    while let Some(c) = car.next() {
-        let colle = c == ' '
-            && (avant == Some('«')
-                || car
-                    .peek()
-                    .is_some_and(|n| matches!(n, '»' | ':' | ';' | '!' | '?')));
-        s.push(if colle { INSECABLE } else { c });
-        avant = Some(c);
-    }
-    s
-}
+// Les espaces insécables de la typographie française (« Coupé : … ») : du texte pur, dans le
+// cœur depuis le bloc B de la refonte, repris ici à son chemin d'aujourd'hui.
+pub use ic_coeur::textes::insecables;
 
 /// La place de l'icône d'un état, devant son texte (points).
 pub const ETAT_ICONE: f32 = 18.0;

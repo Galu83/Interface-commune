@@ -96,11 +96,7 @@ pub fn deplacer(seuils: &mut [u8], i: usize, voulu: i32, ecart: u8, max: u8) -> 
 
 /// Le nombre écrit au-dessus d'une poignée, avec son unité (espace insécable avant l'unité).
 fn texte_valeur(v: u8, unite: &str) -> String {
-    if unite.is_empty() {
-        v.to_string()
-    } else {
-        format!("{v}\u{a0}{unite}")
-    }
+    ic_coeur::textes::avec_unite(v, unite)
 }
 
 /// Le pas demandé par les touches de cette image (en négatif vers la gauche), et si on veut
