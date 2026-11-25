@@ -220,6 +220,52 @@
     - comportement inchangé : capacité de 64, réveil à chaque demande même boîte pleine ;
   - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
     fenêtres, prévus pour GitHub).
+- **Refonte, bloc D « Gestes, placement, secours »** (25 nov. 15:40, branche
+  `claude/bloc-d-gestes`, partie de `refonte` à 10b19d3, à intégrer par l'Atelier Master) :
+  - dans **`ic_coeur::gestes`** (calcul pur, l'instant arrive par le trait `Horodatage`, jamais
+    lu dans le cœur) : `clics` (le geste reconnu et sa suite), `aiguilleur` (**l'aiguilleur
+    unique** : `SuiviDesIcones` et `ordre`, pris par l'icône seule, `horloge`, et par la zone,
+    `zone::Aiguilleur`), `ouverture` (décision d'un clic, anti-rebond, garde, clic en dehors,
+    `juste_fermee`), `secours` (pertes de fenêtres, rafale, `decider_la_reprise`), `icone`
+    (info-bulle, copie dans le tampon de Windows, délai contre le clignotement), `menu` (lignes
+    du petit menu et **`Action`, venue de la bibliothèque comme le bloc A l'avait décidé**) ;
+  - dans **`ic_coeur::placement`** : tout le placement de `place.rs` (volet, petit menu,
+    Paramètres, écrans, changement d'échelle ; essais dans `placement/essais.rs`) et
+    `placement/plan.rs` : `Rectangle` (même calcul qu'egui, essai `rectangle_comme_egui`), le
+    plan des écrans des pastilles et la place du menu de choix ;
+  - **repris aux mêmes chemins** par `pub use` (`clics`, `menu`, `place`, `fenetres`, `zone`,
+    `horloge`, `pastilles`, `menu_choix`) ; les appels à Windows et les fils restent dans la
+    bibliothèque ; aucun changement d'API ; `tests/compatibilite.rs` inchangé ; aucune image de
+    référence ne change ; version 0.1.0 ;
+  - **essais** : 46 essais venus de la bibliothèque avec toutes leurs vérifications (horloges
+    inventées en `Duration`), 11 nouveaux dans le cœur (aiguilleur ×4, nom des gestes pour la
+    sonde, copie dans le tampon, `juste_fermee`, secours ×3, `rectangle_comme_egui`) et 1 dans la
+    bibliothèque (`place::rectangles_egui_et_coeur`, l'aller-retour egui ↔ cœur) ;
+    `COMPORTEMENTS.md` et `CARTE.md` suivent ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 101 essais (44 + 57) ; `interface-commune` : 146 essais internes (191 − 46 + 1),
+    tous les fichiers de `tests/` verts (references aux images identiques, compatibilite,
+    comportements, etages…), exemples de documentation ; `fmt`, `clippy -D warnings`,
+    `cargo deny` propres ; contrôle de la règle n° 1 : seulement `.git:1` (le fichier du
+    worktree) ; les fichiers touchés de plus de 800 lignes l'étaient déjà et ont tous
+    rapetissé (`fenetres` 1633 → 1258, `zone` 1617 → 1584, `horloge` 1404 → 1268, `pastilles`
+    967 → 852, `menu_choix` 922 → 860) ; aucune fonction nouvelle de plus de 80 lignes ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - **C-07 corrigé** : `copier` ne coupe plus un emoji (deux unités UTF-16) en deux dans le
+      tampon de Windows (essai `copie_dans_le_tampon_de_windows`) ;
+    - `decider_la_reprise` reçoit l'horloge à lire seulement si besoin (même comportement) ;
+      `juste_fermee` lit maintenant l'instant à chaque appel (différence négligeable) ;
+    - `ATTENTE_FERMETURE` et `attendre_la_fin` restent dans `fenetres.rs` (des fils) ; la
+      décision « bloqué » de la sonde reste au bloc O ;
+    - le plan des écrans et la place du menu de choix partent dans le cœur avec un
+      `Rectangle` à lui, converti au bord (`place::vers_le_coeur`, `vers_egui`) ;
+    - un dossier de compilation propre au worktree (`CARGO_TARGET_DIR`) : le dossier partagé
+      avec les autres worktrees faisait prendre un vieux `ic-coeur` à Cargo ;
+  - **À savoir pour l'intégration** : `refonte` a avancé depuis 10b19d3 (d1b48ad, reprise
+    après la veille : `src/reprise.rs`, `horloge.rs`, `fenetres.rs`) ; des conflits sont
+    probables dans `horloge.rs` et `fenetres.rs` ;
+  - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
+    fenêtres, prévus pour GitHub).
 - **Prochaine étape de la refonte** : intégrer le bloc K dans `refonte` (le bloc C y est déjà), puis le bloc
   suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek

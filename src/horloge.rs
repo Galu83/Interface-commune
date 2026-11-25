@@ -55,12 +55,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{HSTRING, PCWSTR};
 
 use crate::Logiciel;
-use crate::clics::{Clics, Suite, evenement, suite};
+use crate::clics::{Clics, evenement};
 use crate::fenetres::{self, Aiguillage, Demande, Liens, Ouvreur, Reception};
 use crate::menu::{self, Choix};
 use crate::place::Rect;
 use crate::systeme::{choix_windows, hwnd, reveiller, temps_double_clic};
 use crate::theme::Surface;
+use ic_coeur::gestes::aiguilleur::{Ordre, fermer_avant_la_fenetre_principale, ordre, point_de_secours};
 
 /// Clic sur l'icône.
 const WM_ICONE: u32 = WM_APP + 1;
@@ -73,14 +74,10 @@ const WM_MENU_DE_SECOURS: u32 = WM_APP + 6;
 const ID_ICONE: u32 = 1;
 /// La minuterie qui redessine l'icône quand un changement arrive trop tôt.
 const MINUTERIE_ICONE: usize = 0x1C0E;
-/// Au plus un changement d'icône par seconde (contre le clignotement).
-pub const DELAI_ICONE: Duration = Duration::from_secs(1);
-
-/// Le temps à attendre avant de changer l'icône ; `None` : tout de suite.
-fn attente_icone(derniere: Option<Instant>, maintenant: Instant) -> Option<Duration> {
-    let passe = maintenant.checked_duration_since(derniere?)?;
-    DELAI_ICONE.checked_sub(passe).filter(|d| !d.is_zero())
-}
+// Au plus un changement d'icône par seconde (contre le clignotement) : calcul pur, dans le
+// cœur (bloc D), repris ici à son chemin d'avant.
+pub use ic_coeur::gestes::icone::DELAI_ICONE;
+use ic_coeur::gestes::icone::attente_icone;
 /// Un clic sur une notification (`NIN_BALLOONUSERCLICK`).
 const NIN_BALLOONUSERCLICK: u32 = 0x405;
 
@@ -798,30 +795,24 @@ impl Principal {
 
     fn geste(&mut self, e: crate::clics::Evenement, ancre: [i32; 2]) {
         crate::sonde::etape("geste sur l'icône");
-        crate::sonde::clic(match e {
-            crate::clics::Evenement::Selection => "gauche",
-            crate::clics::Evenement::Clavier => "clavier",
-            crate::clics::Evenement::MenuContextuel => "droit",
-            crate::clics::Evenement::DoubleClic => "double",
-            crate::clics::Evenement::Relache => "relâché",
-        });
+        crate::sonde::clic(e.nom());
         let clic = Instant::now();
         let g = self.clics.recevoir(e, clic, temps_double_clic());
-        match suite(g, self.logiciel.fenetre_principale()) {
-            Suite::Rien => {}
-            Suite::Volet => self.ouvrir(Surface::Volet, None, clic),
-            Suite::Menu => self.ouvrir(Surface::Menu, Some(ancre), clic),
+        // Le même ordre que pour les icônes d'une zone (`zone::Aiguilleur`).
+        match ordre(g, self.logiciel.fenetre_principale(), ancre) {
+            Ordre::Rien => {}
+            Ordre::Surface { surface, ancre } => self.ouvrir(surface, ancre, clic),
             // Double-clic : le volet ouvert par le premier clic lit la demande des
             // Paramètres, se cache, puis laisse la place.
-            Suite::Parametres => self.ouvrir_parametres(None),
-            Suite::FenetrePrincipale => self.ouvrir_fenetre_principale(),
+            Ordre::Parametres => self.ouvrir_parametres(None),
+            Ordre::FenetrePrincipale => self.ouvrir_fenetre_principale(),
         }
     }
 
     /// La fenêtre principale du logiciel : le volet ou le petit menu ouvert par le premier
     /// clic d'un double-clic se ferme, pour lui laisser la place.
     fn ouvrir_fenetre_principale(&self) {
-        if matches!(self.liens().ouvert(), fenetres::Ouvert::Surface(_)) {
+        if fermer_avant_la_fenetre_principale(self.liens().ouvert()) {
             self.liens().fermer_la_fenetre();
         }
         self.logiciel.ouvrir_fenetre_principale();
@@ -855,7 +846,7 @@ impl Principal {
                             .into(),
                     );
                 }
-                let [x, y] = ancre.unwrap_or([icone[0], icone[1]]);
+                let [x, y] = point_de_secours(ancre, icone);
                 self.menu_de_secours(x, y);
             }
         }
@@ -1387,18 +1378,5 @@ mod essais {
         ));
         drop(premier);
         assert!(instance_unique_avec(&nom, &Reveil::Rien).is_ok());
-    }
-
-    /// Au plus un changement d'icône par seconde : le suivant attend la fin du délai.
-    #[test]
-    fn icone_contre_le_clignotement() {
-        let t = Instant::now();
-        assert_eq!(attente_icone(None, t), None);
-        assert_eq!(
-            attente_icone(Some(t), t + Duration::from_millis(300)),
-            Some(Duration::from_millis(700))
-        );
-        assert_eq!(attente_icone(Some(t), t + DELAI_ICONE), None);
-        assert_eq!(attente_icone(Some(t), t + Duration::from_secs(5)), None);
     }
 }

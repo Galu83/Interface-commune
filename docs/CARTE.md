@@ -4,6 +4,8 @@
 |---|---|
 | `Cargo.toml` | l'espace de travail de la refonte : deux crates, `interface-commune` (ici, celle que prennent les logiciels) et `crates/ic-coeur` |
 | `crates/ic-coeur/` | le cœur pur de la refonte (sans egui, sans Windows, sans `unsafe`) : modules vides, remplis bloc par bloc (`docs/PLAN-REFONTE.md`) |
+| `crates/ic-coeur/src/gestes/` | les gestes et les secours en calcul pur (bloc D) : `clics` (geste reconnu et sa suite), `aiguilleur` (suivi par icône et ordre unique, pour l'icône seule et pour la zone), `ouverture` (décision d'un clic, anti-rebond, garde, clic en dehors), `secours` (pertes de fenêtres, rafale, reprise), `icone` (info-bulle, copie dans le tampon de Windows, délai contre le clignotement), `menu` (lignes et `Action` du petit menu) ; l'instant arrive par le trait `Horodatage` |
+| `crates/ic-coeur/src/placement/` | le placement en calcul pur (bloc D) : volet contre la barre des tâches, petit menu, Paramètres, écrans et changement d'échelle (essais dans `placement/essais.rs`) ; `plan.rs` : `Rectangle` (même calcul qu'egui), le plan des écrans des pastilles, la place du menu de choix |
 | `tests/etages.rs` | les étages : le cœur ne dépend de rien et n'appelle ni egui, ni Windows, ni le système ; le dessin n'appelle pas Windows ; `unsafe` seulement dans les bords |
 | `src/lib.rs` | les traits `Reglages` (les Paramètres) et `Logiciel` (l'icône, le volet, le menu), `Identite`, `Etat`, `Communs`, les clés communes |
 | `src/textes.rs` | les mots écrits par la bibliothèque, en français et en anglais |
@@ -17,15 +19,15 @@
 | `src/reprise.rs` | le dessin des fenêtres attend la fin d'un réveil de Windows (veille, écran éteint, 2 s après la reprise) ; lu avant toute image OpenGL |
 | `src/briques.rs`, `mesures.rs` | les briques du volet ; les mesures communes du volet, du menu et des Paramètres (écrites dans `ic_coeur::theme::mesures`, reprises dans `mesures.rs`) |
 | `src/toutes_faites.rs` | la fenêtre simple et la fenêtre de lecture |
-| `src/menu.rs` | l'ordre du petit menu |
+| `src/menu.rs` | l'ordre du petit menu (repris de `ic_coeur::gestes::menu`) |
 | `src/parametres/` | les Paramètres : modèle (pages, Annuler, « Conserver ces modifications ? »), dessin, fenêtre |
 | `src/nuancier.rs` | le nuancier : pastille de couleur, grille, bouton qui ouvre la grille (choisir une couleur sans taper de code) |
 | `src/couleurs.rs` | les couleurs dans les Paramètres, aux couleurs du volet : `pastille_de_carte` (la pastille d'un appareil dans une carte), `choisir_couleur` (rangée de pastilles rondes : flèches, Entrée ou Espace, contour de focus ; sur des lignes égales si elle ne tient pas, `colonnes`), `carte_couleur` (la carte, avec « Annuler » en option), `palette()` = `apparence::couleurs_pastilles()` (10 couleurs, les 6 premiers rangs inchangés) |
 | `src/seuils.rs` | la barre à seuils : une barre de 0 à 100 coupée en zones colorées, dont on règle les limites en glissant les poignées (ou au clavier) |
 | `src/dessin.rs`, `icones.rs` | cartes, interrupteurs, bandeau, boutons, champ de raccourci ; les icônes communes (écrites dans `ic_coeur::theme::icones`, reprises dans `icones.rs`) |
-| `src/place.rs`, `clics.rs`, `systeme.rs` | placement près de la barre des tâches, clics de l'icône, appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme) |
+| `src/place.rs`, `clics.rs`, `systeme.rs` | placement et clics de l'icône (repris de `ic_coeur::placement` et `ic_coeur::gestes::clics` ; `place.rs` convertit aussi les rectangles egui ↔ cœur), appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme) |
 | `src/capture.rs` | captures PNG du volet, du petit menu et des Paramètres pour la documentation, sans fenêtre |
-| `src/menu_choix.rs` | le menu flottant de choix (logique pure : touches, placement, nom pour le lecteur d'écran ; puis le dessin dans une `Area`) |
+| `src/menu_choix.rs` | le menu flottant de choix (logique pure : touches, nom pour le lecteur d'écran ; puis le dessin dans une `Area`) |
 | `src/verification.rs` | contrôles des polices, pour les tests des logiciels |
 | `tests/` | volet, menu et Paramètres sans fenêtre ; polices ; avis de licence à jour ; les couleurs des pastilles (ΔE2000 d'au moins 12, lisibles, rangs gardés) sont contrôlées dans le cœur, `crates/ic-coeur/src/theme/essais_pastilles.rs` |
 | `docs/LICENCES.md` | avis MIT des crates publiées sans fichier de licence (egui…) |

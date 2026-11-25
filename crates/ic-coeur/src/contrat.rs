@@ -9,9 +9,8 @@
 //! - les traits `Reglages` et `Logiciel` : leurs méthodes dessinent (egui), ils restent dans
 //!   `interface-commune` (bloc F) ;
 //! - `menu::Action` : sa fonction `Action::ouvrir_le_journal` prend les textes (`Textes`,
-//!   bloc B) et une icône commune (`icones`, bloc C). Rust interdit d'écrire cette fonction
-//!   dans une autre crate que celle du type : `Action` rejoint le cœur avec `menu`, au bloc D,
-//!   quand les textes et les icônes y sont (`docs/ETAT.md`).
+//!   bloc B) et une icône commune (`icones`, bloc C). Elle vit avec le petit menu, dans
+//!   [`crate::gestes::menu`] (bloc D), et non ici.
 
 use std::any::Any;
 use std::fmt;
