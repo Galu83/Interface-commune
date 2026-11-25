@@ -40,15 +40,15 @@ use crate::mesures::{
     MENU_LIGNE, MENU_MARGE, PASTILLE_HAUTEUR, PASTILLE_LARGEUR,
 };
 use crate::pastilles::{Marque, couleur_lettre, marque};
+use crate::place::{vers_egui, vers_le_coeur};
 use crate::polices::{icone_disponible, semibold};
 use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE};
 
 /// Hauteur d'une ligne qui a un sous-texte.
 pub const LIGNE_DOUBLE: f32 = 48.0;
-/// Le vide entre la case qui ouvre le menu et le menu.
-pub const ECART_ANCRE: f32 = 4.0;
-/// Le vide gardé entre le menu et le bord de la fenêtre.
-pub const MARGE_FENETRE: f32 = 4.0;
+// Le vide entre la case et le menu, et entre le menu et le bord de la fenêtre : avec la
+// place du menu, du calcul pur, dans le cœur (bloc D).
+pub use ic_coeur::placement::plan::{ECART_ANCRE, MARGE_FENETRE};
 /// Marge à gauche d'une ligne, et espace entre le carré coloré et le texte.
 const MARGE_GAUCHE: f32 = 8.0;
 const ESPACE_CARRE: f32 = 10.0;
@@ -194,30 +194,15 @@ pub fn ligne_initiale(lignes: &[Ligne]) -> Option<usize> {
 
 /// Où poser un menu de `taille` pour la case `ancre`, dans `fenetre` : **sous la case** s'il y
 /// a la place, sinon **au-dessus**, sinon du côté qui en a le plus (la hauteur est alors
-/// réduite, le menu défile). Aligné sur le bord gauche de la case, ramené à gauche s'il
-/// dépasse à droite ; jamais hors de la fenêtre (marge [`MARGE_FENETRE`]).
+/// réduite, le menu défile) ; jamais hors de la fenêtre. Calcul pur, dans le cœur
+/// ([`ic_coeur::placement::plan::placer_le_menu`], bloc D) et testé là.
 pub fn placer(ancre: Rect, taille: Vec2, fenetre: Rect) -> Rect {
-    let zone = fenetre.shrink(MARGE_FENETRE);
-    let largeur = taille.x.min(zone.width()).max(0.0);
-    let dessous = (zone.bottom() - ancre.bottom() - ECART_ANCRE).max(0.0);
-    let dessus = (ancre.top() - zone.top() - ECART_ANCRE).max(0.0);
-    let (en_dessous, hauteur) = if taille.y <= dessous {
-        (true, taille.y)
-    } else if taille.y <= dessus {
-        (false, taille.y)
-    } else if dessous >= dessus {
-        (true, dessous.min(zone.height()))
-    } else {
-        (false, dessus.min(zone.height()))
-    };
-    let haut = if en_dessous {
-        ancre.bottom() + ECART_ANCRE
-    } else {
-        ancre.top() - ECART_ANCRE - hauteur
-    };
-    let gauche = ancre.left().min(zone.right() - largeur).max(zone.left());
-    let haut = haut.min(zone.bottom() - hauteur).max(zone.top());
-    Rect::from_min_size(pos2(gauche, haut), vec2(largeur, hauteur))
+    let place = ic_coeur::placement::plan::placer_le_menu(
+        vers_le_coeur(ancre),
+        [taille.x, taille.y],
+        vers_le_coeur(fenetre),
+    );
+    vers_egui(place)
 }
 
 /// La hauteur du menu : ses lignes, leurs écarts et ses marges.
@@ -701,54 +686,6 @@ mod essais {
         l[2].grise = true;
         assert_eq!(ligne_initiale(&l), None);
         assert_eq!(ligne_initiale(&[]), None);
-    }
-
-    fn fenetre() -> Rect {
-        Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 300.0))
-    }
-
-    #[test]
-    fn le_menu_s_ouvre_sous_la_case_s_il_y_a_la_place() {
-        let ancre = Rect::from_min_size(pos2(20.0, 20.0), vec2(100.0, 30.0));
-        let r = placer(ancre, vec2(200.0, 100.0), fenetre());
-        assert_eq!(r.min, pos2(20.0, 50.0 + ECART_ANCRE));
-        assert_eq!(r.size(), vec2(200.0, 100.0));
-    }
-
-    #[test]
-    fn le_menu_passe_au_dessus_quand_le_dessous_est_trop_juste() {
-        let ancre = Rect::from_min_size(pos2(20.0, 240.0), vec2(100.0, 30.0));
-        let r = placer(ancre, vec2(200.0, 120.0), fenetre());
-        assert_eq!(r.bottom(), 240.0 - ECART_ANCRE);
-        assert_eq!(r.height(), 120.0);
-    }
-
-    #[test]
-    fn le_menu_ne_sort_jamais_de_la_fenetre() {
-        let zone = fenetre().shrink(MARGE_FENETRE);
-        // À droite, en bas, en haut, à gauche ; petit et grand menu.
-        for (x, y) in [
-            (380.0, 20.0),
-            (380.0, 280.0),
-            (-30.0, 150.0),
-            (200.0, 0.0),
-            (0.0, 295.0),
-        ] {
-            let ancre = Rect::from_min_size(pos2(x, y), vec2(60.0, 24.0));
-            for taille in [vec2(120.0, 60.0), vec2(260.0, 200.0), vec2(500.0, 900.0)] {
-                let r = placer(ancre, taille, fenetre());
-                assert!(zone.contains_rect(r), "{ancre:?} {taille:?} -> {r:?}");
-            }
-        }
-    }
-
-    #[test]
-    fn trop_haut_des_deux_cotes_le_menu_prend_le_cote_le_plus_grand() {
-        let ancre = Rect::from_min_size(pos2(20.0, 200.0), vec2(100.0, 30.0));
-        let r = placer(ancre, vec2(200.0, 400.0), fenetre());
-        // Plus de place au-dessus (≈192) qu'au-dessous (≈62) : au-dessus, réduit.
-        assert!(r.bottom() <= ancre.top());
-        assert!(r.height() < 400.0 && r.height() > 100.0, "{r:?}");
     }
 
     #[test]

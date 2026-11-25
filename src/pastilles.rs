@@ -14,6 +14,7 @@ use crate::mesures::{
     ILLUSTRE_LARGEUR, ILLUSTRE_LIGNE, LIGNE_ARRONDI, LIGNE_ECART, LIGNE_ICONE, LIGNE_MARGE_DROITE,
     PASTILLE_HAUTEUR, PASTILLE_LARGEUR, VOLET_LIGNE, VOLET_SECTION,
 };
+use crate::place::{vers_egui, vers_le_coeur};
 use crate::polices::semibold;
 use crate::theme::{Palette, Rgb, TAILLE_PETIT, TAILLE_TEXTE};
 use crate::touches;
@@ -78,48 +79,13 @@ const PLAN_CASE_H_MIN: f32 = 12.0;
 const PLAN_MARGE_V: f32 = 4.0;
 
 /// Le plan des écrans : chaque place (`[x, y, largeur, hauteur]` en pixels du bureau, valeurs
-/// quelconques) devient un rectangle dans `zone`. L'ensemble est mis à l'échelle (le plus petit
-/// des deux rapports : les proportions sont gardées) et centré dans `zone` ; chaque case est
-/// réduite de 1 point de chaque côté, pour que deux écrans collés ne se touchent pas.
-/// Une place sans surface (largeur ou hauteur ≤ 0), une liste vide ou une zone sans surface :
-/// une liste vide.
+/// quelconques) devient un rectangle dans `zone`, proportions gardées, centré, chaque case
+/// réduite de 1 point de chaque côté. Calcul pur, dans le cœur
+/// ([`ic_coeur::placement::plan::plan_des_cases`], bloc D) et testé là.
 pub fn plan_des_cases(places: &[[i32; 4]], zone: Rect) -> Vec<Rect> {
-    if places.is_empty()
-        || places.iter().any(|p| p[2] <= 0 || p[3] <= 0)
-        || zone.width() <= 0.0
-        || zone.height() <= 0.0
-    {
-        return Vec::new();
-    }
-    // L'enveloppe de tous les écrans (en f64 : des pixels de bureau, sans dépassement).
-    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for p in places {
-        let (x, y) = (f64::from(p[0]), f64::from(p[1]));
-        x0 = x0.min(x);
-        y0 = y0.min(y);
-        x1 = x1.max(x + f64::from(p[2]));
-        y1 = y1.max(y + f64::from(p[3]));
-    }
-    let (largeur, hauteur) = (x1 - x0, y1 - y0);
-    let echelle = (f64::from(zone.width()) / largeur).min(f64::from(zone.height()) / hauteur);
-    let decalage_x = f64::from(zone.center().x) - largeur * echelle / 2.0;
-    let decalage_y = f64::from(zone.center().y) - hauteur * echelle / 2.0;
-    places
-        .iter()
-        .map(|p| {
-            let gauche = decalage_x + (f64::from(p[0]) - x0) * echelle;
-            let haut = decalage_y + (f64::from(p[1]) - y0) * echelle;
-            let droite = gauche + f64::from(p[2]) * echelle;
-            let bas = haut + f64::from(p[3]) * echelle;
-            // Réduit de 1 point de chaque côté, sans jamais inverser la case.
-            let (cx, cy) = ((gauche + droite) / 2.0, (haut + bas) / 2.0);
-            let demi_l = ((droite - gauche) / 2.0 - 1.0).max(0.0);
-            let demi_h = ((bas - haut) / 2.0 - 1.0).max(0.0);
-            Rect::from_min_max(
-                pos2((cx - demi_l) as f32, (cy - demi_h) as f32),
-                pos2((cx + demi_l) as f32, (cy + demi_h) as f32),
-            )
-        })
+    ic_coeur::placement::plan::plan_des_cases(places, vers_le_coeur(zone))
+        .into_iter()
+        .map(vers_egui)
         .collect()
 }
 
@@ -691,88 +657,6 @@ mod essais {
 
     fn proche(a: f32, b: f32) -> bool {
         (a - b).abs() < 0.01
-    }
-
-    /// Le plan garde les proportions : un seul facteur d'échelle pour la largeur et la hauteur.
-    #[test]
-    fn plan_garde_les_proportions() {
-        let r = plan_des_cases(&cas_proprietaire(), zone());
-        assert_eq!(r.len(), 3);
-        // Les deux grands écrans : même taille, 16/9 (à 2 points de réduction près).
-        assert!(proche(r[0].width(), r[1].width()));
-        assert!(proche(r[0].height(), r[1].height()));
-        assert!(proche((r[0].width() + 2.0) / (r[0].height() + 2.0), 16.0 / 9.0));
-        // L'écran intégré : 1920×1200 = 16/10, plus petit, aligné à gauche de l'écran du dessus.
-        assert!(proche((r[2].width() + 2.0) / (r[2].height() + 2.0), 16.0 / 10.0));
-        assert!(r[2].width() < r[1].width() && r[2].height() < r[1].height());
-        assert!(proche(r[2].left(), r[1].left()));
-        // Il est sous l'écran du dessus, avec 2 points de vide.
-        assert!(proche(r[2].top() - r[1].bottom(), 2.0));
-        // Le portable est collé à droite du fixe : 2 points de vide.
-        assert!(proche(r[1].left() - r[0].right(), 2.0));
-    }
-
-    /// L'ensemble est centré dans la zone, et tient dedans (hauteur limitante ici).
-    #[test]
-    fn plan_centre_dans_la_zone() {
-        let r = plan_des_cases(&cas_proprietaire(), zone());
-        let tout = r.iter().fold(r[0], |a, b| a.union(*b));
-        // Le vide de 1 point de chaque côté est symétrique : le centre est celui de la zone.
-        assert!(proche(tout.center().x, zone().center().x), "{tout:?}");
-        assert!(proche(tout.center().y, zone().center().y), "{tout:?}");
-        assert!(zone().contains_rect(tout));
-        // Ici la hauteur limite : l'ensemble la remplit (au vide de 1 point près).
-        assert!(proche(tout.height() + 2.0, zone().height()), "{tout:?}");
-        assert!(tout.width() + 2.0 < zone().width());
-    }
-
-    /// La largeur peut limiter aussi : deux écrans côte à côte, dans une zone basse et large.
-    #[test]
-    fn plan_limite_par_la_largeur() {
-        let r = plan_des_cases(&[[0, 0, 2000, 500], [2000, 0, 2000, 500]], zone());
-        let tout = r[0].union(r[1]);
-        assert!(proche(tout.width() + 2.0, zone().width()), "{tout:?}");
-        assert!(tout.height() + 2.0 < zone().height());
-        assert!(proche(tout.center().y, zone().center().y));
-    }
-
-    /// Des coordonnées négatives et un décalage quelconque donnent le même plan.
-    #[test]
-    fn plan_independant_de_l_origine() {
-        let a = plan_des_cases(&cas_proprietaire(), zone());
-        let decale: Vec<[i32; 4]> = cas_proprietaire()
-            .iter()
-            .map(|p| [p[0] - 7000, p[1] - 3000, p[2], p[3]])
-            .collect();
-        let b = plan_des_cases(&decale, zone());
-        for (x, y) in a.iter().zip(&b) {
-            assert!(
-                proche(x.left(), y.left()) && proche(x.top(), y.top()),
-                "{x:?} {y:?}"
-            );
-            assert!(proche(x.width(), y.width()) && proche(x.height(), y.height()));
-        }
-    }
-
-    /// Un seul écran remplit la zone en hauteur ; deux écrans collés ne se touchent pas.
-    #[test]
-    fn plan_un_ecran_et_ecrans_colles() {
-        let r = plan_des_cases(&[[-1920, 0, 1920, 1080]], zone());
-        assert_eq!(r.len(), 1);
-        assert!(proche(r[0].center().x, zone().center().x));
-        assert!(proche(r[0].height() + 2.0, zone().height()));
-        let d = plan_des_cases(&[[0, 0, 1920, 1080], [1920, 0, 1920, 1080]], zone());
-        assert!(d[1].left() - d[0].right() >= 2.0 - 0.01);
-        assert!(!d[0].intersects(d[1]));
-    }
-
-    /// Une place sans surface, une liste vide ou une zone vide : rien à dessiner.
-    #[test]
-    fn plan_refuse_le_vide() {
-        assert!(plan_des_cases(&[], zone()).is_empty());
-        assert!(plan_des_cases(&[[0, 0, 0, 100]], zone()).is_empty());
-        assert!(plan_des_cases(&[[0, 0, 100, 100], [100, 0, 100, -5]], zone()).is_empty());
-        assert!(plan_des_cases(&[[0, 0, 100, 100]], Rect::NOTHING).is_empty());
     }
 
     /// Le plan ne sert que si TOUTES les cases ont une place valide.

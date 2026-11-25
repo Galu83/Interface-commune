@@ -80,20 +80,22 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use crate::Logiciel;
-use crate::clics::{self, Suite};
+use crate::clics;
 use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, envoyer_le_clic};
 use crate::horloge::{Niveau, Secours};
 use crate::place::Rect;
-use crate::theme::Surface;
+use ic_coeur::gestes::aiguilleur::{
+    Ordre, SuiviDesIcones, fermer_avant_la_fenetre_principale, ordre, point_de_secours,
+};
 
 /// Le premier message de rappel des icônes : chaque icône a le sien (`PREMIER_MESSAGE + n`),
 /// ce qui dit sans erreur de quelle icône vient un geste.
 const PREMIER_MESSAGE: u32 = WM_APP + 0x200;
-/// Le nombre d'icônes à la fois (largement assez : la zone de notification n'en montre pas
-/// autant).
-pub const ICONES_MAX: usize = 256;
-/// Caractères d'une info-bulle gardés par Windows (127 et le zéro final).
-pub const INFOBULLE_MAX: usize = 127;
+// Le nombre d'icônes à la fois, l'info-bulle et sa copie dans le tampon de Windows : calcul
+// pur, dans le cœur (bloc D), repris ici à leurs chemins d'avant.
+pub use ic_coeur::gestes::aiguilleur::ICONES_MAX;
+pub(crate) use ic_coeur::gestes::icone::copier;
+pub use ic_coeur::gestes::icone::{INFOBULLE_MAX, raccourcir};
 
 // ---------------------------------------------------------------------------------------
 // Calcul pur
@@ -253,15 +255,6 @@ pub fn guid_stable(graine: &str, programme: &str, icone: &str) -> u128 {
     g
 }
 
-/// Le texte raccourci à `max` caractères, « … » compris.
-pub fn raccourcir(texte: &str, max: usize) -> String {
-    if texte.chars().count() <= max {
-        texte.to_string()
-    } else {
-        texte.chars().take(max.saturating_sub(1)).collect::<String>() + "…"
-    }
-}
-
 /// Ajoute une icône à la zone, même si elle y est déjà. `ajout` : `NIM_ADD` ; `modif` :
 /// `NIM_MODIFY` avec les mêmes données ; `version` : `NIM_SETVERSION` (version 4).
 ///
@@ -280,19 +273,6 @@ pub(crate) fn ajouter_avec_repli(
         true
     } else {
         false
-    }
-}
-
-/// Copie un texte dans un tampon fixe de Windows, coupé pour garder son zéro final.
-pub(crate) fn copier(dest: &mut [u16], texte: &str) {
-    let mut n = 0;
-    for (d, c) in dest.iter_mut().zip(texte.encode_utf16()) {
-        *d = c;
-        n += 1;
-    }
-    let fin = n.min(dest.len().saturating_sub(1));
-    if let Some(d) = dest.get_mut(fin) {
-        *d = 0;
     }
 }
 
@@ -941,12 +921,13 @@ pub enum SuiteDuGeste {
 }
 
 /// L'aiguillage des gestes des icônes d'une zone vers le fil des fenêtres commun, sans
-/// Windows ni fenêtre (testé) : un suivi des clics par icône (`clics::Clics` : double-clic,
-/// Entrée en double…), puis [`fenetres::envoyer_le_clic`]. [`FenetresCommunes`] en tient un.
+/// Windows ni fenêtre (testé) : le suivi des clics par icône et l'ordre qui en découle, les
+/// mêmes que pour l'icône unique (`ic_coeur::gestes::aiguilleur`), puis
+/// [`fenetres::envoyer_le_clic`]. [`FenetresCommunes`] en tient un.
 pub struct Aiguilleur {
     liens: Arc<Liens>,
     demandes: Demandes,
-    clics: BTreeMap<String, clics::Clics>,
+    clics: SuiviDesIcones<Instant>,
     /// Le logiciel, pour sa fenêtre principale (`Logiciel::fenetre_principale`) ; sans lui,
     /// le double-clic ouvre les Paramètres et le clic gauche le volet.
     logiciel: Option<Arc<dyn Logiciel>>,
@@ -957,7 +938,7 @@ impl Aiguilleur {
         Aiguilleur {
             liens,
             demandes,
-            clics: BTreeMap::new(),
+            clics: SuiviDesIcones::default(),
             logiciel: None,
         }
     }
@@ -977,24 +958,19 @@ impl Aiguilleur {
         let Some(g) = e.message.geste() else {
             return SuiteDuGeste::Rien;
         };
-        if self.clics.len() >= ICONES_MAX && !self.clics.contains_key(&e.icone) {
-            // Des icônes retirées depuis longtemps : leur suivi est oublié.
-            self.clics.clear();
-        }
-        let suivi = self.clics.entry(e.icone.clone()).or_default();
-        let g = suivi.recevoir(g, maintenant, double);
+        let g = self.clics.recevoir(&e.icone, g, maintenant, double);
         let principale = self.logiciel.as_ref().and_then(|l| l.fenetre_principale());
-        let (surface, ancre) = match clics::suite(g, principale) {
-            Suite::Rien => return SuiteDuGeste::Rien,
-            Suite::Parametres => {
+        let (surface, ancre) = match ordre(g, principale, e.ancre) {
+            Ordre::Rien => return SuiteDuGeste::Rien,
+            Ordre::Parametres => {
                 // Double-clic : le volet ouvert par le premier clic lit la demande des
                 // Paramètres, se cache, puis leur laisse la place.
                 self.liens.montrer_page(&self.demandes, None);
                 return SuiteDuGeste::Rien;
             }
-            Suite::FenetrePrincipale => {
+            Ordre::FenetrePrincipale => {
                 // Le volet ou le petit menu ouvert par le premier clic lui laisse la place.
-                if matches!(self.liens.ouvert(), fenetres::Ouvert::Surface(_)) {
+                if fermer_avant_la_fenetre_principale(self.liens.ouvert()) {
                     self.liens.fermer_la_fenetre();
                 }
                 if let Some(l) = &self.logiciel {
@@ -1002,8 +978,7 @@ impl Aiguilleur {
                 }
                 return SuiteDuGeste::Rien;
             }
-            Suite::Volet => (Surface::Volet, None),
-            Suite::Menu => (Surface::Menu, Some(e.ancre)),
+            Ordre::Surface { surface, ancre } => (surface, ancre),
         };
         match envoyer_le_clic(&self.liens, &self.demandes, surface, e.rect, ancre, maintenant) {
             Aiguillage::Rien => SuiteDuGeste::Rien,
@@ -1014,7 +989,7 @@ impl Aiguilleur {
             }
             Aiguillage::Secours => SuiteDuGeste::Secours {
                 icone: e.icone.clone(),
-                point: ancre.unwrap_or([e.rect[0], e.rect[1]]),
+                point: point_de_secours(ancre, e.rect),
             },
         }
     }
@@ -1157,6 +1132,7 @@ impl Drop for FenetresCommunes {
 mod essais {
     #![allow(clippy::unwrap_used)]
     use super::*;
+    use crate::theme::Surface;
 
     /// Chaque message de Windows qui compte, et lui seul.
     #[test]
@@ -1207,16 +1183,6 @@ mod essais {
         assert_eq!((a >> 62) & 0x3, 2, "variante");
         // Figé : un changement ferait oublier à Windows les icônes montrées.
         assert_eq!(a, 0xc70b_4318_db8d_4747_8c46_ffab_623b_aed8);
-    }
-
-    #[test]
-    fn info_bulle_raccourcie() {
-        assert_eq!(raccourcir("Souris", 10), "Souris");
-        assert_eq!(raccourcir("Souris MX Master", 8), "Souris …");
-        assert_eq!(
-            raccourcir(&"é".repeat(200), INFOBULLE_MAX).chars().count(),
-            INFOBULLE_MAX
-        );
     }
 
     /// Les numéros donnés à Windows suivent l'ordre des lignes, sous-menus compris ; les

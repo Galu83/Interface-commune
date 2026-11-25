@@ -34,13 +34,13 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-01 | Clic gauche sur l'icône : le volet s'ouvre ; clic droit : le petit menu ; double-clic : les Paramètres. | auto : `clics::clic_gauche_droit_et_clavier`, `clics::double_clic_les_parametres` |
-| C-02 | Au clavier (Entrée, Espace, touche menu sur l'icône sélectionnée), mêmes suites qu'à la souris. | auto : `clics::clic_gauche_droit_et_clavier` |
-| C-03 | Si le logiciel a une fenêtre principale, le double-clic l'ouvre au lieu des Paramètres. | auto : `clics::suite_selon_la_fenetre_principale`, `zone::double_clic_la_fenetre_principale` |
-| C-04 | Les messages de Windows sur l'icône (clics, clavier, info-bulle) sont lus de la même façon par l'icône seule (`horloge`) et par la zone à plusieurs icônes (`zone`). | auto : `horloge::messages_de_windows_au_logiciel`, `zone::messages_de_l_icone`, `zone::gestes_pour_les_clics_communs`, `zone::gestes_par_les_mecanismes_communs` |
-| C-05 | L'icône ne clignote pas quand son image change (même image : rien n'est renvoyé à Windows). | auto : `horloge::icone_contre_le_clignotement` |
+| C-01 | Clic gauche sur l'icône : le volet s'ouvre ; clic droit : le petit menu ; double-clic : les Paramètres. | auto : `ic_coeur::gestes::clics::clic_gauche_droit_et_clavier`, `ic_coeur::gestes::clics::double_clic_les_parametres` |
+| C-02 | Au clavier (Entrée, Espace, touche menu sur l'icône sélectionnée), mêmes suites qu'à la souris. | auto : `ic_coeur::gestes::clics::clic_gauche_droit_et_clavier` |
+| C-03 | Si le logiciel a une fenêtre principale, le double-clic l'ouvre au lieu des Paramètres. | auto : `ic_coeur::gestes::clics::suite_selon_la_fenetre_principale`, `zone::double_clic_la_fenetre_principale` |
+| C-04 | Les messages de Windows sur l'icône (clics, clavier, info-bulle) sont lus de la même façon par l'icône seule (`horloge`) et par la zone à plusieurs icônes (`zone`). | auto : `horloge::messages_de_windows_au_logiciel`, `zone::messages_de_l_icone`, `zone::gestes_pour_les_clics_communs`, `zone::gestes_par_les_mecanismes_communs` ; l'aiguillage unique des deux, dans le cœur (bloc D) : `ic_coeur::gestes::aiguilleur::*` (4 tests), `ic_coeur::gestes::clics::nom_des_gestes_pour_la_sonde` |
+| C-05 | L'icône ne clignote pas quand son image change (même image : rien n'est renvoyé à Windows). | auto : `ic_coeur::gestes::icone::icone_contre_le_clignotement` (bloc D : dans le cœur, horloge inventée) |
 | C-06 | L'icône revient toute seule si l'Explorateur de Windows redémarre. | manuel |
-| C-07 | L'info-bulle trop longue est raccourcie à la limite de Windows, sans couper un caractère. | auto : `zone::info_bulle_raccourcie` |
+| C-07 | L'info-bulle trop longue est raccourcie à la limite de Windows, sans couper un caractère. | auto : `ic_coeur::gestes::icone::info_bulle_raccourcie`, `ic_coeur::gestes::icone::copie_dans_le_tampon_de_windows` (bloc D : un emoji n'est plus coupé en deux dans le tampon de Windows) |
 | C-08 | Une icône de la zone garde le même identifiant d'un lancement à l'autre (GUID tiré du nom), et deux noms donnent deux identifiants. | auto : `zone::guid_stable_et_unique` |
 | C-09 | Si Windows refuse d'ajouter l'icône (elle existe déjà), la bibliothèque la modifie à la place. | auto : `zone::ajout_avec_repli_sur_la_modification` |
 | C-10 | L'image de l'icône se fait depuis des pixels RVBA du logiciel. | auto : `zone::image_depuis_rvba` |
@@ -75,15 +75,15 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-24 | Un titre long ne chevauche jamais la roue dentée. | auto : `tests/sans_fenetre::titre_long_ne_chevauche_pas_la_roue` |
 | C-25 | Rien n'est coupé : la largeur suit les textes, jusqu'à une largeur maximale ; au-delà, les phrases passent à la ligne. | auto : `tests/sans_fenetre::volet_borne_grandit_avec_son_contenu`, `tests/comportements::c25_un_long_texte_passe_a_la_ligne` |
 | C-26 | Volet de hauteur bornée : l'en-tête et l'état restent en place, les briques défilent, le pied reste fixe et la barre de défilement est visible. | auto : `tests/sans_fenetre::volet_borne_pied_fixe_et_barre_visible`, `tests/sans_fenetre::volet_borne_et_briques_avec_contexte` |
-| C-27 | Le volet se place contre l'icône, du côté de la barre des tâches (bas, haut, gauche, droite, barre masquée), toujours en entier sur l'écran. | auto : `place::barre_en_bas`, `place::les_autres_cotes`, `place::barre_masquee`, `place::contre_l_icone`, `place::contre_l_icone_toujours_dans_la_zone`, `place::placement_du_volet` |
-| C-28 | Un clic hors du volet le ferme ; un clic dedans ne le ferme pas. | auto : `fenetres::clic_dedans_ou_dehors`, `fenetres::appuis_de_souris` |
-| C-29 | Un deuxième clic sur l'icône tout de suite après l'ouverture n'est pas pris pour une fermeture (garde des premiers instants, anti-rebond de 400 ms). | auto : `fenetres::garde_des_premiers_instants` |
+| C-27 | Le volet se place contre l'icône, du côté de la barre des tâches (bas, haut, gauche, droite, barre masquée), toujours en entier sur l'écran. | auto : `ic_coeur::placement::essais::barre_en_bas`, `ic_coeur::placement::essais::les_autres_cotes`, `ic_coeur::placement::essais::barre_masquee`, `ic_coeur::placement::essais::contre_l_icone`, `ic_coeur::placement::essais::contre_l_icone_toujours_dans_la_zone`, `ic_coeur::placement::essais::placement_du_volet` |
+| C-28 | Un clic hors du volet le ferme ; un clic dedans ne le ferme pas. | auto : `ic_coeur::gestes::ouverture::clic_dedans_ou_dehors`, `…::appuis_de_souris`, `…::juste_fermee_par_le_clic` (bloc D : dans le cœur) |
+| C-29 | Un deuxième clic sur l'icône tout de suite après l'ouverture n'est pas pris pour une fermeture (garde des premiers instants, anti-rebond de 400 ms). | auto : `ic_coeur::gestes::ouverture::garde_des_premiers_instants` (bloc D : dans le cœur) |
 | C-30 | Animation d'ouverture : fondu de 83 ms parti de 50 %, à sa place ; fermeture en fondu de 83 ms ; aucune animation si Windows les a coupées. | auto : `ic_coeur::theme::essais::courbe_rapide_puis_ralentie`, `…::durees_de_windows`, `…::ouverture_vive`, `…::sans_effets_aucune_animation`, `…::un_retard_ne_fait_pas_sauter_l_animation` (bloc C : dans le cœur) |
 | C-31 | La première image montrée est déjà dessinée (pas de fenêtre vide ou noire au premier clic) ; la fenêtre reste voilée tant qu'elle n'est pas vraiment montrée. | auto : `volet::premiere_image_montree_deja_visible`, `volet::voilee_sauf_montree_pour_de_vrai` |
 | C-32 | Les fenêtres n'attendent pas la synchronisation verticale (le clic ne patiente pas derrière l'écran). | auto : `volet::fenetres_sans_synchronisation_verticale` |
 | C-33 | Dans le volet, les flèches du clavier se comportent comme Tab (d'une brique à l'autre). | auto : `volet::les_fleches_deviennent_tab` |
 | C-34 | Le logiciel peut observer l'ouverture et la fermeture du volet sans fenêtre (veilleur public). | auto : `volet::veilleur_public_sans_fenetre` |
-| C-35 | Le temps d'ouverture du volet est écrit au journal. | auto : `fenetres::temps_d_ouverture_au_journal` |
+| C-35 | Le temps d'ouverture du volet est écrit au journal. | auto : `ic_coeur::gestes::ouverture::temps_d_ouverture_au_journal` (bloc D : dans le cœur) |
 
 ## 5. Les briques du volet
 
@@ -92,7 +92,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-36 | Toutes les briques ont les hauteurs communes du volet de Windows 11. | auto : `briques::hauteurs_communes`, `pastilles::hauteurs` |
 | C-37 | Une brique répond au clic, au clavier et rend son geste au logiciel. | auto : `briques::gestes`, `pastilles::gestes` |
 | C-38 | La brique « appareil » montre une image et un bouton. | auto : `briques::appareil_avec_image_et_bouton` |
-| C-39 | Les pastilles (plan des écrans) gardent les proportions des écrans, centrées dans leur zone, limitées par la largeur, quelle que soit l'origine des coordonnées ; refus d'un plan vide ; rangée quand il le faut ; petite case en couleur seule. | auto : `pastilles::plan_*` (10 tests) |
+| C-39 | Les pastilles (plan des écrans) gardent les proportions des écrans, centrées dans leur zone, limitées par la largeur, quelle que soit l'origine des coordonnées ; refus d'un plan vide ; rangée quand il le faut ; petite case en couleur seule. | auto : `ic_coeur::placement::plan::plan_*` (6 tests, bloc D : la géométrie dans le cœur), `pastilles::plan_ou_rangee`, `pastilles::plan_petite_case_en_couleur_seule`, `pastilles::plan_dans_le_volet`, `pastilles::plan_ne_deplace_pas_le_texte` |
 | C-40 | Le texte d'une pastille reste au même endroit, et sa lettre est lisible sur son fond. | auto : `pastilles::texte_au_meme_endroit`, `pastilles::plan_ne_deplace_pas_le_texte`, `ic_coeur::theme::essais::lettre_selon_le_fond` |
 | C-41 | Les briques reçoivent le contexte du logiciel (`briques_avec_contexte`) et un pied (`briques_du_pied`). | auto : `tests/sans_fenetre::volet_borne_et_briques_avec_contexte` |
 
@@ -100,9 +100,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-42 | Toujours le même ordre : actions du logiciel (la sienne « Ouvrir » en tête), Paramètres (E713), Rechercher une mise à jour (E895), lignes en plus (Ouvrir le journal…), Quitter. | auto : `menu::ordre_du_petit_menu`, `menu::ouvrir_le_logiciel_en_tete` |
+| C-42 | Toujours le même ordre : actions du logiciel (la sienne « Ouvrir » en tête), Paramètres (E713), Rechercher une mise à jour (E895), lignes en plus (Ouvrir le journal…), Quitter. | auto : `ic_coeur::gestes::menu::ordre_du_petit_menu`, `ic_coeur::gestes::menu::ouvrir_le_logiciel_en_tete` |
 | C-43 | Le petit menu prend les mesures des menus de Windows 11. | auto : `tests/sans_fenetre::petit_menu_aux_mesures_communes` |
-| C-44 | Il s'ouvre au point du clic, toujours en entier sur l'écran. | auto : `place::petit_menu_au_point`, `place::petit_menu_toujours_dans_la_zone` |
+| C-44 | Il s'ouvre au point du clic, toujours en entier sur l'écran. | auto : `ic_coeur::placement::essais::petit_menu_au_point`, `ic_coeur::placement::essais::petit_menu_toujours_dans_la_zone` |
 | C-45 | Sans OpenGL (pilote absent ou cassé), le petit menu passe au menu de secours de Windows, avec les mêmes lignes numérotées. | auto : `fenetres::sans_opengl_le_menu_de_secours`, `zone::menu_windows_numerote_les_choix` |
 | C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (7 tests de `lisible`, plus `lisible_ne_change_pas_deux_fois` au hasard), `touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
 
@@ -111,9 +111,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | N° | Comportement | Essai |
 |---|---|---|
 | C-47 | Le volet, le petit menu, les Paramètres et les fenêtres du logiciel sont dessinés par une seule boucle ; on peut les ouvrir depuis n'importe quel fil. | auto : `fenetres::suite_des_demandes`, `fenetres::parametres_ouverts_dans_la_boucle`, `autres_fenetres::plusieurs_fenetres_et_croix` ; dans la boucle du logiciel (façon 2, vue du dehors) : `compatibilite::powerpeek::les_parametres_s_ouvrent_dans_la_boucle_sans_fenetre` |
-| C-48 | Un clic sur l'icône pendant que les Paramètres sont ouverts fait ce qu'il doit (volet devant, puis retour). | auto : `fenetres::clic_avec_les_parametres_ouverts`, `fenetres::surface_devant_les_parametres_puis_retour` |
+| C-48 | Un clic sur l'icône pendant que les Paramètres sont ouverts fait ce qu'il doit (volet devant, puis retour). | auto : `ic_coeur::gestes::ouverture::clic_avec_les_parametres_ouverts`, `fenetres::surface_devant_les_parametres_puis_retour` |
 | C-49 | La fenêtre principale perdue (fermée par Windows, plantage d'egui) est refaite, et le clic qui l'a révélé ouvre quand même. | auto : `fenetres::fenetre_perdue_recreee_et_le_clic_ouvre_quand_meme` |
-| C-50 | Après 3 pertes en 60 s, la bibliothèque arrête de refaire la fenêtre et passe au menu de secours ; elle réessaie au clic suivant. | auto : `fenetres::pertes_en_rafale_menu_de_secours_puis_recreee_au_clic_suivant`, `fenetres::supervision_rafale_puis_reprise_au_clic_suivant`, `fenetres::supervision_reprise_apres_rafale`, `fenetres::supervision_pertes_espacees_toujours_recreees`, `fenetres::supervision_echec_premier_tour_ou_passager` ; vue du dehors, avec une horloge inventée : `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
+| C-50 | Après 3 pertes en 60 s, la bibliothèque arrête de refaire la fenêtre et passe au menu de secours ; elle réessaie au clic suivant. | auto : `fenetres::pertes_en_rafale_menu_de_secours_puis_recreee_au_clic_suivant`, `fenetres::supervision_rafale_puis_reprise_au_clic_suivant`, `fenetres::supervision_reprise_apres_rafale`, `fenetres::supervision_pertes_espacees_toujours_recreees`, `fenetres::supervision_echec_premier_tour_ou_passager`, `ic_coeur::gestes::secours::pertes_sur_la_derniere_rafale`, `…::reprise_selon_la_perte`, `…::phrases_des_pertes` (bloc D : la décision dans le cœur) ; vue du dehors, avec une horloge inventée : `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
 | C-51 | Si le fil des fenêtres s'arrête, le petit menu passe au menu de secours. | auto : `fenetres::fil_des_fenetres_arrete_menu_de_secours` |
 | C-52 | Quitter arrête la boucle proprement ; rien n'est préparé après « Quitter ». | auto : `fenetres::supervision_quitter`, `fenetres::rien_n_est_prepare_apres_quitter`, `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
 | C-53 | Une fenêtre perdue par une panique est refaite sur le même fil. | auto, GitHub : `tests/recreation_apres_panique` |
@@ -132,7 +132,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-61 | Une fenêtre peut être créée cachée, puis montrée plus tard ; un contenu pas prêt garde sa fenêtre cachée. | auto : `autres_fenetres::creation_differee_jamais_montree_puis_reveillee`, `autres_fenetres::un_contenu_pas_pret_garde_sa_fenetre_cachee`, `autres_fenetres::attendre_ou_dessiner` |
 | C-62 | Une panique dans le contenu d'une fenêtre ne tue pas les autres. | auto : `autres_fenetres::panique_du_contenu_suit_son_cours` |
 | C-63 | Une fenêtre peut en ouvrir une autre ; une fenêtre peut être ouverte et fermée dans la même image ; recréée après destruction. | auto : `autres_fenetres::un_contenu_ouvre_une_autre_fenetre`, `autres_fenetres::deuxieme_fenetre_ouverte_puis_fermee_dans_la_meme_boucle`, `autres_fenetres::creation_apres_destruction` |
-| C-64 | Une fenêtre glissée d'un écran à l'autre d'échelle différente (125 %, 150 %) suit la souris sans sauter ni revenir. | auto (calcul) : `place::glisser_vers_l_ecran_du_haut`, `place::glisser_vers_le_portable`, `place::changement_d_echelle_*` ; manuel pour le vrai glisser (`echelle`) |
+| C-64 | Une fenêtre glissée d'un écran à l'autre d'échelle différente (125 %, 150 %) suit la souris sans sauter ni revenir. | auto (calcul) : `ic_coeur::placement::essais::glisser_vers_l_ecran_du_haut`, `ic_coeur::placement::essais::glisser_vers_le_portable`, `ic_coeur::placement::essais::changement_d_echelle_*` ; manuel pour le vrai glisser (`echelle`) |
 
 ## 9. Les Paramètres
 
@@ -152,7 +152,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-76 | Page Mise à jour : recherches, dossier automatique ; une seule icône selon l'état ; titre et couleurs selon l'état, dans les deux langues ; ligne grise avec la version et la dernière recherche ; pas de redite du dossier. | auto : `tests/sans_fenetre::mise_a_jour_recherches_et_dossier_automatique`, `parametres::*` (5 tests du fichier) |
 | C-77 | Page À propos : licences, crédits, groupe. | auto : `tests/sans_fenetre::a_propos_licences_credits_et_groupe` |
 | C-78 | Bandeau « Redémarrer maintenant » quand un réglage le demande. | auto : `tests/comportements::c78_bandeau_redemarrer` ; dessin : images de référence (`tests/references`) |
-| C-79 | Taille et place de la fenêtre retenues d'une ouverture à l'autre, toujours en entier sur un écran ; retenues aussi 1 s après un déplacement ; jamais celles d'une fenêtre réduite ou agrandie. | auto : `place::place_des_parametres`, `place::place_retenue_*` (3 tests), `place::trop_grand_rapetisse`, `place::toujours_dans_la_zone`, `place::valeurs_absurdes`, `tests/comportements::c79_place_des_parametres` (ouverture et fermeture) ; le suivi 1 s après un déplacement demande une vraie fenêtre : GitHub |
+| C-79 | Taille et place de la fenêtre retenues d'une ouverture à l'autre, toujours en entier sur un écran ; retenues aussi 1 s après un déplacement ; jamais celles d'une fenêtre réduite ou agrandie. | auto : `ic_coeur::placement::essais::place_des_parametres`, `ic_coeur::placement::essais::place_retenue_*` (3 tests), `ic_coeur::placement::essais::trop_grand_rapetisse`, `ic_coeur::placement::essais::toujours_dans_la_zone`, `ic_coeur::placement::essais::valeurs_absurdes`, `tests/comportements::c79_place_des_parametres` (ouverture et fermeture) ; le suivi 1 s après un déplacement demande une vraie fenêtre : GitHub |
 | C-80 | La colonne de navigation s'élargit pour un long nom de page. | auto : `tests/comportements::c80_la_navigation_s_elargit` |
 | C-81 | Les choix illustrés (images sous les choix) sont alignés. | auto : `tests/sans_fenetre::choix_illustres_alignes` |
 | C-82 | Les Paramètres s'utilisent seuls, sans l'icône ni le volet (trait `Reglages`), y compris en anglais. | auto : `tests/sans_fenetre::parametres_seuls_en_anglais` ; le contrat seul, dans le cœur : `ic_coeur::contrat::essais::*` ; Chat PDC s'en sert |
@@ -190,7 +190,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-99 | La roue dentée en haut à droite ; Ctrl + virgule ouvre les Paramètres. | auto : `dessin::roue_en_haut_a_droite_et_ctrl_virgule` |
 | C-100 | L'interrupteur écrit à gauche (texte puis interrupteur). | auto : `dessin::interrupteur_ecrit_a_gauche` |
 | C-101 | Le champ de raccourci saisit une combinaison et l'écrit lisiblement. | auto : `dessin::saisie_d_un_raccourci`, `touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
-| C-102 | Le menu de choix : flèches qui font le tour, lignes grisées sautées, Début/Fin, Entrée, Échap, clic à côté qui ferme ; ouvert sous la case ou au-dessus selon la place, jamais hors de la fenêtre ; largeur bornée ; nom pour le lecteur d'écran. | auto : `menu_choix::*` (19 tests) |
+| C-102 | Le menu de choix : flèches qui font le tour, lignes grisées sautées, Début/Fin, Entrée, Échap, clic à côté qui ferme ; ouvert sous la case ou au-dessus selon la place, jamais hors de la fenêtre ; largeur bornée ; nom pour le lecteur d'écran. | auto : `menu_choix::*` (15 tests) ; la place du menu, dans le cœur (bloc D) : `ic_coeur::placement::plan::le_menu_*` et `…::trop_haut_des_deux_cotes_le_menu_prend_le_cote_le_plus_grand` (4 tests), `…::rectangle_comme_egui` |
 | C-103 | La barre des seuils : poignées glissées ou au clavier, limites entre leurs voisines, rien ne bouge sans focus. | auto : `seuils::*` (10 tests) |
 | C-104 | La mise au point (focus) visible au clavier sur chaque contrôle. | auto : `tests/comportements::c104_le_focus_se_voit` (bouton, bouton accent, bouton icône, interrupteur, ligne de menu ; clair et sombre) |
 
@@ -210,7 +210,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | N° | Comportement | Essai |
 |---|---|---|
 | C-111 | Un disque réseau ou redirigé n'est jamais pris pour un disque local ; la réponse est rapide. | auto : `systeme::chemins_reseau_reconnus`, `systeme::redirection_jamais_locale`, `systeme::disque_local_repond_vite` |
-| C-112 | L'écran autour d'un point, la position de la souris, les effets d'animation de Windows. | auto : `place::ecran_d_un_rectangle`, `place::ecran_a_gauche_en_4k`, `tests/comportements::c112_ce_que_la_bibliotheque_lit_dans_windows` |
+| C-112 | L'écran autour d'un point, la position de la souris, les effets d'animation de Windows. | auto : `ic_coeur::placement::essais::ecran_d_un_rectangle`, `ic_coeur::placement::essais::ecran_a_gauche_en_4k`, `tests/comportements::c112_ce_que_la_bibliotheque_lit_dans_windows` |
 | C-113 | Le réglage d'échelle (DPI) du processus est posé au démarrage. | auto : `tests/comportements::c113_reglage_d_echelle_par_ecran` |
 
 ## 15. Promesses de l'API
