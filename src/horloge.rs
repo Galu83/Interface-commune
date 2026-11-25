@@ -127,21 +127,8 @@ impl Drop for Unique {
     }
 }
 
-/// Ce que fait un second lancement, quand le logiciel tourne déjà : il ne fait rien d'autre
-/// que le dire à l'instance en cours (et s'arrête).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum Reveil {
-    /// Ouvre l'instance en cours (le comportement de [`instance_unique`]) : sa fenêtre
-    /// principale s'il en a une (`Logiciel::fenetre_principale`), sinon ses Paramètres.
-    #[default]
-    Parametres,
-    /// Rien du tout : un démarrage automatique en double, par exemple.
-    Rien,
-    /// Transmet ces arguments (`--choisir=2`…) à l'instance en cours, qui les reçoit par
-    /// [`Horloge::recevoir_arguments`]. Au plus [`ARGUMENTS_MAX`] arguments, de
-    /// [`ARGUMENTS_OCTETS_MAX`] octets en tout.
-    Arguments(Vec<String>),
-}
+// Le contrat (bloc A), repris du cœur à ce chemin.
+pub use ic_coeur::contrat::{Niveau, Reveil};
 
 /// Le nombre d'arguments qu'un second lancement peut transmettre.
 pub const ARGUMENTS_MAX: usize = 16;
@@ -346,15 +333,6 @@ fn destinataire(msg: u32, wp: usize, taskbar_created: u32) -> Destinataire {
         WM_QUERYENDSESSION | WM_ENDSESSION | WM_SETTINGCHANGE | WM_DISPLAYCHANGE => Destinataire::LesDeux,
         _ => Destinataire::Logiciel,
     }
-}
-
-/// Le niveau d'une notification : son icône dans la bulle de Windows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Niveau {
-    #[default]
-    Information,
-    Avertissement,
-    Erreur,
 }
 
 /// Ce que fait un clic sur une notification.

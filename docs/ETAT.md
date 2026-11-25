@@ -78,7 +78,34 @@
   - **Pas vérifié** : la CI elle-même (rien n'est envoyé sur GitHub par cette session ; les
     Actions étaient bloquées par la limite de dépense). Les fichiers de plus de 800 lignes
     d'aujourd'hui (`volet`, `fenetres`, `horloge`…) restent : ils se découpent dans leur bloc.
-- **Prochaine étape de la refonte** : intégrer le bloc 0 dans `refonte`, puis le bloc A
-  « Contrat » (`docs/PLAN-REFONTE.md`, §2).
+- **Refonte, bloc A « Contrat »** (25 nov. 06:30, branche `claude/bloc-a-contrat`, partie de
+  `refonte` après le bloc 0, à intégrer par l'Atelier Master) :
+  - dans **`ic_coeur::contrat`** : `Identite` (et `logo_rvba`), `FaireLogo`, `Etat`,
+    `GenreEtat`, `EtatMiseAJour`, `Credit`, `Communs`, `cles`, `FenetrePrincipale`, `Page`,
+    `Valeur`, `Instantane`, `Reveil`, `Niveau` : mêmes champs, mêmes valeurs, même code ;
+  - **repris aux mêmes chemins** par `pub use` : `interface_commune::{Identite, …, cles}`,
+    `parametres::modele::{Page, Valeur, Instantane}` (et `interface_commune::Page`…),
+    `horloge::{Reveil, Niveau}` ; aucun changement d'API ; `tests/compatibilite.rs` inchangé ;
+  - **essais dans le cœur** (`crates/ic-coeur/src/contrat/essais.rs`, 11 essais, logiciel
+    inventé « Fictif ») : logo et icône en RVBA, image de la mauvaise taille refusée, défauts
+    des pages communes (C-82, avec F et H), valeurs des clés figées, `Page`, `Instantane`,
+    `Valeur`, `Reveil::Rien` et le défaut `Reveil::Parametres` (le verrou et la transmission
+    restent au bloc N) ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 11/11 ; `interface-commune` : 202 essais internes et tous les fichiers de
+    `tests/` verts (compatibilite, comportements, references aux images identiques, polices,
+    polices_windows10, etages, sans_fenetre…) ; `fmt`, `clippy -D warnings`, `cargo deny`
+    propres ; contrôle de la règle n° 1 : seulement `.git:1` (le fichier du worktree) ;
+  - **Décision prise seule** (à relire par l'Atelier Master) : **`menu::Action` reste dans
+    `interface-commune`** jusqu'au bloc D. Sa méthode publique `Action::ouvrir_le_journal(&Textes)`
+    (documentée dans `MIGRATION.md`) demande `Textes` (bloc B) et `icones::JOURNAL` (bloc C) ;
+    Rust interdit d'ajouter une méthode à un type d'une autre crate, la déplacer seule casserait
+    cette signature. Elle part dans le cœur avec `menu` (bloc D, après B et C).
+  - **Pas lancés sur le PC** : `fenetres_en_rafale` et `recreation_apres_panique` (vraies
+    fenêtres, prévus pour GitHub ; le bloc A ne touche pas aux fenêtres). Les traits `Reglages`
+    et `Logiciel` restent à la racine (bloc F).
+- **Prochaine étape de la refonte** : intégrer les blocs 0 et A dans `refonte`, puis B
+  « Textes », C « Thème, mesures » ou K « Guichet » (`docs/PLAN-REFONTE.md`, §2 ; une seule voie
+  à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).
