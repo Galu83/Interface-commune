@@ -530,6 +530,17 @@ Exemple et captures sans fenêtre : `cargo run --example volet_pastilles -- <dos
   petit des deux rapports, proportions gardées, centré, chaque case réduite de 1 point de chaque côté).
 - L'exemple `volet_pastilles` montre un plan de 3 écrans (« Trois écrans »).
 
+### Un écran débranché dans un choix illustré (branche `correctif/case-debranchee`, pour tous ceux qui utilisent `Case`)
+
+- **`Case` reçoit `debranche: bool`** (faux par défaut). **À faire dans chaque `Case { … }` qui
+  n'a pas `..Default::default()` : ajouter `debranche: false`.**
+- Un écran débranché garde sa place (dans la rangée comme dans le plan des écrans) : sa case
+  garde sa couleur et sa lettre (ou son logo), mais toute en pâle (opacité 0,4), avec un bord en
+  tirets clair de 1 point ; dans la rangée, son pied pâlit aussi. S'il est aussi en veille,
+  débranché l'emporte. Rien ne change pour les autres cases (images de référence inchangées).
+- L'exemple `volet_pastilles` le montre (« Portable seul ») ; images de référence
+  `cases-debranchees-clair` et `cases-debranchees-sombre`.
+
 ## Les couleurs dans les Paramètres : `couleurs` (branche `couleurs-parametres`, pour tous, en option)
 
 Nouveau module `couleurs`, **rien d'existant ne change** (`nuancier::pastille` garde son

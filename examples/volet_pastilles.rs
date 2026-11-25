@@ -1,7 +1,8 @@
 //! Le volet d'un partage de clavier et de souris inventé : une rangée d'ordinateurs en
 //! pastilles et des choix illustrés (une case par écran). Sans aucune fenêtre : des captures
 //! PNG en clair et en sombre, avec 2 puis 4 ordinateurs, dans le dossier donné. Le choix
-//! « Trois écrans » montre le vrai plan des écrans (`Case::place`).
+//! « Trois écrans » montre le vrai plan des écrans (`Case::place`) ; « Portable seul », un
+//! écran débranché (`Case::debranche`), en pâle à sa place.
 //!
 //! `cargo run --example volet_pastilles [dossier]` (Windows : il faut les polices Segoe).
 
@@ -130,6 +131,21 @@ impl Logiciel for Partage {
                 vec![
                     sur_le_bureau(0, [0, 0, 2560, 1440]),
                     sur_le_bureau(1, [2560, 0, 2560, 1440]),
+                    sur_le_bureau(1, [2560, 1440, 1920, 1200]),
+                ],
+            ),
+            choix(
+                "debranche",
+                "Portable seul",
+                "L'écran de droite est débranché",
+                "Ctrl+Alt+Maj+F6",
+                false,
+                vec![
+                    sur_le_bureau(0, [0, 0, 2560, 1440]),
+                    Case {
+                        debranche: true,
+                        ..sur_le_bureau(1, [2560, 0, 2560, 1440])
+                    },
                     sur_le_bureau(1, [2560, 1440, 1920, 1200]),
                 ],
             ),

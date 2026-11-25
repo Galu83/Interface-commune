@@ -94,6 +94,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-38 | La brique « appareil » montre une image et un bouton. | auto : `briques::appareil_avec_image_et_bouton` |
 | C-39 | Les pastilles (plan des écrans) gardent les proportions des écrans, centrées dans leur zone, limitées par la largeur, quelle que soit l'origine des coordonnées ; refus d'un plan vide ; rangée quand il le faut ; petite case en couleur seule. | auto : `pastilles::plan_*` (10 tests) |
 | C-40 | Le texte d'une pastille reste au même endroit, et sa lettre est lisible sur son fond. | auto : `pastilles::texte_au_meme_endroit`, `pastilles::plan_ne_deplace_pas_le_texte`, `pastilles::lettre_selon_le_fond` |
+| C-117 | Un écran débranché garde sa place dans le choix illustré (rangée ou plan), en pâle (opacité 0,4) avec un bord en tirets, lettre gardée ; débranché l'emporte sur la veille. | auto : `pastilles::debranche_l_emporte_sur_la_veille`, `tests/references` (`cases-debranchees-*`) |
 | C-41 | Les briques reçoivent le contexte du logiciel (`briques_avec_contexte`) et un pied (`briques_du_pied`). | auto : `tests/sans_fenetre::volet_borne_et_briques_avec_contexte` |
 
 ## 6. Le petit menu
@@ -218,13 +219,13 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | N° | Comportement | Essai |
 |---|---|---|
 | C-114 | Un logiciel compile en changeant seulement le `rev` de la bibliothèque dans son `Cargo.toml` (tant qu'aucun changement n'est annoncé dans `MIGRATION.md`). | auto : `tests/compatibilite` (un module par logiciel : ses imports, ses méthodes de traits, ses signatures) |
-| C-115 | Le rendu ne change pas sans être annoncé : volet, petit menu, Paramètres gardent leurs mesures (`mesures`). | auto : `tests/references` (32 images comparées, à 6 près par couleur et 1 pixel sur 5 000 ; sautées si les polices du PC diffèrent de celles des références) |
+| C-115 | Le rendu ne change pas sans être annoncé : volet, petit menu, Paramètres gardent leurs mesures (`mesures`). | auto : `tests/references` (34 images comparées, à 6 près par couleur et 1 pixel sur 5 000 ; sautées si les polices du PC diffèrent de celles des références) |
 | C-116 | Les licences des dépendances sont à jour dans l'avis MIT. | auto : `tests/licences::avis_mit_a_jour` |
 
 ## Bilan
 
-- **116 comportements** relevés.
-- **110 vérifiés par un test automatique** qui tourne sur le PC (C-64 en partie à la main ;
+- **117 comportements** relevés.
+- **111 vérifiés par un test automatique** qui tourne sur le PC (C-64 en partie à la main ;
   C-17 et C-79 en partie, le reste sur GitHub).
 - **4 vérifiés seulement sur GitHub** (vraies fenêtres ou faux clics).
 - **2 vérifiés seulement à la main** (C-06, C-84).

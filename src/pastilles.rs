@@ -24,6 +24,9 @@ const NOIR: Rgb = Rgb(0, 0, 0);
 const FOND_VEILLE: Rgb = Rgb(0x1E, 0x1E, 0x1E);
 const BORD_VEILLE: Rgb = Rgb(0x9A, 0x9A, 0x9A);
 const LUNE_VEILLE: Rgb = Rgb(0xD0, 0xD0, 0xD0);
+/// Une case d'écran débranché : toute la case en pâle (opacité 0,4), bord en tirets clair.
+const OPACITE_DEBRANCHE: f32 = 0.4;
+const BORD_DEBRANCHE: Rgb = Rgb(0xC8, 0xC8, 0xC8);
 /// Marge à gauche d'une pastille, et espace entre son carré et son nom.
 const PASTILLE_MARGE: f32 = 8.0;
 const PASTILLE_ESPACE: f32 = 8.0;
@@ -62,6 +65,9 @@ pub struct Case {
     pub couleur: Option<Rgb>,
     /// Écran en veille : case sombre, lune, bordure en tirets.
     pub veille: bool,
+    /// Écran débranché : il garde sa place, mais en pâle (opacité 0,4), bord en tirets de
+    /// 1 point, lettre ou logo gardé ; s'il est aussi en veille, débranché l'emporte.
+    pub debranche: bool,
     /// Où est cet écran sur le bureau : `[x, y, largeur, hauteur]` en pixels, dans le repère du
     /// bureau (des valeurs quelconques, négatives permises). Quand toutes les cases d'un choix
     /// ont une place valide (largeur et hauteur > 0), l'illustration est le vrai plan des
@@ -254,10 +260,28 @@ pub(crate) fn carre(
     } else {
         couleur_lettre(fond)
     };
+    marque_au_centre(peintre, rect, logo, lettre, taille, c);
+}
+
+/// Le logo (s'il est dans la police d'icônes) ou la lettre, au centre de `rect`.
+fn marque_au_centre(
+    peintre: &egui::Painter,
+    rect: Rect,
+    logo: Option<char>,
+    lettre: Option<char>,
+    taille: f32,
+    c: Rgb,
+) {
     match marque(logo, lettre, crate::polices::icone_disponible) {
         Some(Marque::Logo(g)) => {
             let t = (taille + 4.0).min(rect.height() - 4.0).max(taille);
-            icone(ui, rect.center(), g, t, c);
+            peintre.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                g,
+                crate::polices::icones(t),
+                couleur(c),
+            );
         }
         Some(Marque::Lettre(l)) => {
             peintre.text(
@@ -458,8 +482,59 @@ fn genre_du_plan(rects: &[Rect]) -> Genre {
     }
 }
 
+/// Le bord en tirets de 1 point d'une case (écran en veille ou débranché).
+fn bord_en_tirets(peintre: &egui::Painter, rect: Rect, c: Rgb) {
+    let (a, b, d, e) = (
+        rect.left_top(),
+        rect.right_top(),
+        rect.right_bottom(),
+        rect.left_bottom(),
+    );
+    peintre.extend(egui::Shape::dashed_line(
+        &[a, b, d, e, a],
+        Stroke::new(1.0, couleur(c)),
+        2.0,
+        2.0,
+    ));
+}
+
+/// Le pied d'un écran de la rangée (pas dans le plan : il tomberait sur l'écran du dessous).
+fn pied(peintre: &egui::Painter, p: &Palette, rect: Rect) {
+    let y = rect.bottom() + 3.0;
+    peintre.line_segment(
+        [pos2(rect.center().x - 5.0, y), pos2(rect.center().x + 5.0, y)],
+        Stroke::new(2.0, couleur(p.texte_desactive)),
+    );
+}
+
+/// Un écran débranché : sa case garde sa place, sa couleur et sa marque, mais toute en pâle
+/// ([`OPACITE_DEBRANCHE`]), avec un bord en tirets clair. Dessiné à la place de la veille.
+fn case_debranchee(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre, arrondi: CornerRadius) {
+    let mut pale = ui.painter().clone();
+    pale.multiply_opacity(OPACITE_DEBRANCHE);
+    let fond = c.couleur.unwrap_or(p.controle);
+    pale.rect_filled(rect, arrondi, couleur(fond));
+    if genre != Genre::PlanCouleur {
+        let teinte = if c.couleur.is_some() {
+            couleur_lettre(fond)
+        } else {
+            p.texte_secondaire
+        };
+        marque_au_centre(&pale, rect, c.logo, c.lettre, TAILLE_PETIT, teinte);
+    }
+    bord_en_tirets(&pale, rect, BORD_DEBRANCHE);
+    if genre == Genre::Rangee {
+        pied(&pale, p, rect);
+    }
+}
+
 fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
     let arrondi = CornerRadius::same(if genre == Genre::Rangee { 3 } else { 2 });
+    if c.debranche {
+        // Débranché l'emporte sur la veille.
+        case_debranchee(ui, p, rect, c, genre, arrondi);
+        return;
+    }
     if genre == Genre::PlanCouleur {
         // Seulement la couleur : le fond de la case, sans lettre ni lune.
         if c.veille {
@@ -485,18 +560,7 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
     }
     if c.veille {
         ui.painter().rect_filled(rect, arrondi, couleur(FOND_VEILLE));
-        let (a, b, d, e) = (
-            rect.left_top(),
-            rect.right_top(),
-            rect.right_bottom(),
-            rect.left_bottom(),
-        );
-        ui.painter().extend(egui::Shape::dashed_line(
-            &[a, b, d, e, a],
-            Stroke::new(1.0, couleur(BORD_VEILLE)),
-            2.0,
-            2.0,
-        ));
+        bord_en_tirets(ui.painter(), rect, BORD_VEILLE);
         icone(ui, rect.center(), icones::LUNE, 12.0, LUNE_VEILLE);
     } else if let Some(f) = c.couleur {
         carre(ui, p, rect, c.lettre, c.logo, f, false, TAILLE_PETIT);
@@ -522,13 +586,8 @@ fn case(ui: &Ui, p: &Palette, rect: Rect, c: &Case, genre: Genre) {
             None => {}
         }
     }
-    // Le pied de l'écran (pas dans le plan : il tomberait sur l'écran du dessous).
     if genre == Genre::Rangee {
-        let y = rect.bottom() + 3.0;
-        ui.painter().line_segment(
-            [pos2(rect.center().x - 5.0, y), pos2(rect.center().x + 5.0, y)],
-            Stroke::new(2.0, couleur(p.texte_desactive)),
-        );
+        pied(ui.painter(), p, rect);
     }
 }
 
@@ -988,6 +1047,61 @@ mod essais {
             clic(&ctx, pos2(200.0, y_choix)),
             Some(Geste::Action("bureau".into()))
         );
+    }
+
+    /// Les formes dessinées pour un choix illustré de ces cases (rangée, ou plan avec places).
+    fn formes_du_choix(cases: Vec<Case>) -> Vec<egui::epaint::ClippedShape> {
+        let ctx = egui::Context::default();
+        ctx.set_fonts(crate::polices::polices_ou_vides());
+        let p = Palette::de(&ChoixWindows::default());
+        let l = vec![Brique::ChoixIllustre {
+            cle: "c".into(),
+            texte: "Choix".into(),
+            sous_ligne: None,
+            illustration: cases,
+            raccourci: None,
+            actif: false,
+            etiquette_active: None,
+        }];
+        let mut formes = Vec::new();
+        for _ in 0..2 {
+            let entree = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 200.0))),
+                ..Default::default()
+            };
+            let mut sortie = ctx.run_ui(entree, |ui| {
+                briques::dessiner(ui, &p, &l);
+            });
+            sortie.textures_delta.clear();
+            formes = sortie.shapes;
+        }
+        formes
+    }
+
+    /// Un écran à la fois débranché et en veille se dessine comme un écran débranché, dans la
+    /// rangée comme dans le plan ; et ce dessin n'est pas celui de la veille.
+    #[test]
+    fn debranche_l_emporte_sur_la_veille() {
+        let places = [Some([0, 0, 1920, 1080]), Some([1920, 0, 1920, 1080])];
+        // Sans places : la rangée ; avec : le plan des écrans.
+        for place in [[None, None], places] {
+            let choix = |veille: bool, debranche: bool| {
+                let mut b = case_ecran('B');
+                b.veille = veille;
+                b.debranche = debranche;
+                vec![
+                    Case {
+                        place: place[0],
+                        ..case_ecran('A')
+                    },
+                    Case { place: place[1], ..b },
+                ]
+            };
+            let les_deux = formes_du_choix(choix(true, true));
+            assert_eq!(les_deux, formes_du_choix(choix(false, true)), "{place:?}");
+            assert_ne!(les_deux, formes_du_choix(choix(true, false)), "{place:?}");
+            assert_ne!(les_deux, formes_du_choix(choix(false, false)), "{place:?}");
+        }
     }
 
     /// La largeur de l'illustration est fixe : 1 ou 4 cases, le texte est au même endroit.
