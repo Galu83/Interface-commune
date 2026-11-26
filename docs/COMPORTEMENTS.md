@@ -105,7 +105,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-43 | Le petit menu prend les mesures des menus de Windows 11. | auto : `tests/sans_fenetre::petit_menu_aux_mesures_communes` |
 | C-44 | Il s'ouvre au point du clic, toujours en entier sur l'écran. | auto : `ic_coeur::placement::essais::petit_menu_au_point`, `ic_coeur::placement::essais::petit_menu_toujours_dans_la_zone` |
 | C-45 | Sans OpenGL (pilote absent ou cassé), le petit menu passe au menu de secours de Windows, avec les mêmes lignes numérotées. | auto : `bords::fenetres::essais::sans_opengl_le_menu_de_secours`, `bords::icone::zone::essais::menu_windows_numerote_les_choix` (le même menu de secours pour l'icône seule, bloc M) |
-| C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (7 tests de `lisible`, plus `lisible_ne_change_pas_deux_fois` au hasard), `dessin::touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
+| C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (8 tests de `lisible`, dont `lisible_symboles_separes_d_une_espace`, plus `lisible_ne_change_pas_deux_fois` au hasard, qui rejoue d'abord le cas gardé dans `crates/ic-coeur/proptest-regressions/`), `dessin::touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
 
 ## 7. La boucle des fenêtres et ses secours
 

@@ -137,11 +137,12 @@ pub fn lisible(raccourci: &str) -> String {
     let mut modificateurs: Vec<Modificateur> = Vec::new();
     let mut touches: Vec<String> = Vec::new();
     for morceau in corps.split('+').map(str::trim).filter(|m| !m.is_empty()) {
-        // Des symboles collés (« ⌃⇧K ») : on les détache un à un.
+        // Des symboles collés (« ⌃⇧K ») ou séparés d'une espace (« ⌃ ⇧ K ») : on les détache
+        // un à un. Sans sauter l'espace, « ⌃ ⌃ » donnait « Ctrl+⌃ », relu en « Ctrl ».
         let mut reste = morceau;
         while let Some(m) = reste.chars().next().and_then(Modificateur::de_symbole) {
             modificateurs.push(m);
-            reste = &reste[reste.chars().next().map_or(0, char::len_utf8)..];
+            reste = reste[reste.chars().next().map_or(0, char::len_utf8)..].trim_start();
         }
         let reste = reste.trim();
         if reste.is_empty() {
