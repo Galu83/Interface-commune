@@ -4,7 +4,7 @@
 
 use interface_commune::{icones, verification};
 
-const SOURCES: [(&str, &str); 22] = [
+const SOURCES: [(&str, &str); 35] = [
     ("dessin/surface.rs", include_str!("../src/dessin/surface.rs")),
     ("dessin/volet.rs", include_str!("../src/dessin/volet.rs")),
     (
@@ -55,6 +55,58 @@ const SOURCES: [(&str, &str); 22] = [
     (
         "dessin/menu_choix.rs",
         include_str!("../src/dessin/menu_choix.rs"),
+    ),
+    (
+        "dessin/parametres.rs",
+        include_str!("../src/dessin/parametres.rs"),
+    ),
+    (
+        "dessin/parametres/a_propos.rs",
+        include_str!("../src/dessin/parametres/a_propos.rs"),
+    ),
+    (
+        "dessin/parametres/bulles.rs",
+        include_str!("../src/dessin/parametres/bulles.rs"),
+    ),
+    (
+        "dessin/parametres/contexte.rs",
+        include_str!("../src/dessin/parametres/contexte.rs"),
+    ),
+    (
+        "dessin/parametres/general.rs",
+        include_str!("../src/dessin/parametres/general.rs"),
+    ),
+    (
+        "dessin/parametres/gestes.rs",
+        include_str!("../src/dessin/parametres/gestes.rs"),
+    ),
+    (
+        "dessin/parametres/mise_a_jour.rs",
+        include_str!("../src/dessin/parametres/mise_a_jour.rs"),
+    ),
+    (
+        "dessin/parametres/navigation.rs",
+        include_str!("../src/dessin/parametres/navigation.rs"),
+    ),
+    (
+        "dessin/toutes_faites.rs",
+        include_str!("../src/dessin/toutes_faites.rs"),
+    ),
+    (
+        "dessin/toutes_faites/essais.rs",
+        include_str!("../src/dessin/toutes_faites/essais.rs"),
+    ),
+    (
+        "dessin/toutes_faites/lecture.rs",
+        include_str!("../src/dessin/toutes_faites/lecture.rs"),
+    ),
+    (
+        "dessin/toutes_faites/prete.rs",
+        include_str!("../src/dessin/toutes_faites/prete.rs"),
+    ),
+    (
+        "dessin/toutes_faites/simple.rs",
+        include_str!("../src/dessin/toutes_faites/simple.rs"),
     ),
     // Les caractères écrits par leur code : espace insécable, points de suspension.
     ("ajoutés", "\u{a0}…›"),

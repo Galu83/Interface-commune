@@ -422,7 +422,63 @@
     `src/parametres/`, `crates/ic-coeur/src/parametres.rs`, `docs/COMPORTEMENTS.md` ou
     `docs/CARTE.md` ; le dossier de compilation `target-bloc-e/` reste hors de l'index ;
   - **sous-agents** : aucun.
-- **Prochaine étape de la refonte** : blocs G et E intégrés (26 nov.) ; ensuite le bloc H, puis le bloc
+- **Refonte, bloc H « Paramètres (dessin) et fenêtres toutes faites »** (26 nov. 07:35, branche
+  `refonte-bloc-h-parametres`, partie de `refonte` à 61c66d4, à intégrer par l'Atelier Master ;
+  **rien n'est commité** : tout est indexé, le message est dans `MESSAGE-COMMIT.txt`, à la
+  racine, hors de l'index) :
+  - **le dessin des Paramètres dans `src/dessin/`** : `src/parametres/mod.rs` déplacé
+    (`git mv`) en `dessin/parametres.rs` (l'état gardé, `new`, `aller_a`, `suivre`, la mise en
+    page navigation et page), puis découpé en un fichier par partie : `navigation` (en-tête,
+    logo, recherche, liste des pages), `contexte` (le `Contexte` donné aux pages du logiciel),
+    `gestes` (ce qui est rendu au logiciel), `bulles` (la bulle « Annuler », la carte
+    « Conserver ? », le bandeau « Redémarrer »), `general`, `mise_a_jour`, `a_propos` ; le
+    squelette dessine d'après l'état que tient le cœur (bloc E) et ne décide rien ;
+  - **les fenêtres toutes faites dans `src/dessin/toutes_faites/`** : `simple.rs` (la fenêtre
+    simple, son dessin découpé en en-tête, nouveautés, état, champ, choix, boutons),
+    `prete.rs` (« <Logiciel> x.y.z est prête »), `lecture.rs` (la fenêtre de lecture : mots,
+    surlignage, clic) ; elles se servent des contrôles du bloc F ; `src/toutes_faites.rs`
+    (1 299 → 357 lignes) ne garde que les fenêtres de la boucle (poignée, rappel, ouverture) ;
+  - **repris aux mêmes chemins** : `src/parametres/mod.rs` est un module mince (70 lignes) qui
+    reprend `Parametres` et `Contexte` du dessin ; `Parametres::dessiner` garde sa signature, un
+    logiciel peut l'appeler dans sa propre boucle ; `toutes_faites` reprend tout le dessin
+    (`pub use`) ; `tests/compatibilite.rs` inchangé ; **aucun changement d'API**, version
+    0.1.0 ; **aucune image de référence ne change** (`references` vert : une image par page
+    commune et par état de Mise à jour, la fenêtre simple et « est prête », clair et sombre) ;
+    fichiers partagés avec N et O (`src/lib.rs`, `Cargo.toml`, `crates/ic-coeur/src/lib.rs`) : aucune ligne changée ; `src/bords/` non plus ;
+  - **essais** : les essais des fenêtres toutes faites passent avec leur dessin (sans fenêtre) ;
+    nouveau : `tests/comportements::c68_la_recherche_ouvre_la_section` (le dessin ouvre la
+    section trouvée par la recherche, pas `aller_a` seul, et une nouvelle ouverture repart
+    repliée) ; `tests/polices.rs` lit les 13 nouveaux fichiers ; `COMPORTEMENTS.md` (C-68,
+    C-84 à C-89) et `CARTE.md` suivent ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`) : `ic-coeur` 159 essais
+    et 1 exemple ; `interface-commune` 129 essais internes, `carte_info`, `compatibilite`,
+    `comportements` (13), `conserver`, `couleurs`, `entrees_fabriquees`, `etages`, `licences`,
+    `polices`, `polices_windows10`, `references`, `sans_fenetre`, `zone_affichage` verts,
+    8 exemples de documentation ; `fmt`, `clippy -D warnings`, `cargo deny` propres ; aucun
+    fichier de plus de 800 lignes ni fonction de plus de 80 lignes dans ce qui a changé
+    (la plus longue : `dessiner_lecture`, 74) ; contrôle de la règle n° 1 (`--dossier .`) :
+    seulement `.git:1` (le fichier du worktree, jamais envoyé) ;
+  - **une erreur de ma part** : une fois, au milieu du bloc, j'ai lancé tous les essais de
+    `interface-commune`, donc aussi `premiere_creation`, `recreation_apres_panique` et
+    `fenetres_en_rafale`, qui créent de vraies fenêtres (masquées ou hors de l'écran, jamais
+    montrées) ; ensuite, je les ai laissés de côté. Ils restent à faire tourner sur GitHub ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - H-1 : le dessin ne lit pas Windows. Le module mince `crate::parametres` lit les « effets
+      d'animation » (`systeme::effets_d_animation`) une fois par image et appelle
+      `dessiner_avec` ; avant, ils étaient lus une fois par section repliable : même
+      comportement. Au bloc J, la boucle pourra donner la valeur elle-même ;
+    - H-2 : les aides des essais des fenêtres toutes faites sont partagées dans
+      `dessin/toutes_faites/essais.rs` (une image sans fenêtre, un clic, Entrée, une fenêtre
+      simple inventée) ; l'essai de la boucle (C-89) reste dans `src/toutes_faites.rs` ;
+    - H-3 : un dossier de compilation à part sous `%LOCALAPPDATA%`, hors de la copie ;
+  - **Reste pour J** : la fenêtre des Paramètres (`src/parametres/fenetre.rs`) et les fenêtres
+    de la boucle (`src/toutes_faites.rs` : `ouvrir_simple`, `ouvrir_lecture`) partent dans les
+    bords ;
+  - **À savoir pour l'intégration** : `refonte` a bougé depuis le départ (bloc N, c9c0394) dans
+    `docs/ETAT.md`, `docs/CARTE.md`, `docs/COMPORTEMENTS.md`, `src/bords/` et `src/horloge.rs` :
+    conflits possibles seulement dans les trois documents ;
+  - **sous-agents** : aucun.
+- **Prochaine étape de la refonte** : blocs G et E intégrés (26 nov.) ; bloc H prêt à intégrer (26 nov.) ; ensuite le bloc
   suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek
   (`docs/MIGRATION.md`).

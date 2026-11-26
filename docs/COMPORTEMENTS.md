@@ -142,7 +142,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-65 | Fenêtre « Paramètres de <logiciel> » : en-tête avec le vrai logo, le nom et « Version x.y.z » ; navigation à gauche (lignes de 38 points) ; dessin de PowerPeek. | auto : `tests/sans_fenetre::entete_et_navigation_comme_powerpeek`, `tests/sans_fenetre::parametres_sans_fenetre` |
 | C-66 | Ordre des pages : celles du logiciel, puis Général, Mise à jour, À propos. | auto : `ic_coeur::parametres::essais::ordre_des_pages` |
 | C-67 | Une page arrivée après l'ouverture apparaît dans la navigation. | auto : `tests/sans_fenetre::pages_arrivees_apres_l_ouverture`, `ic_coeur::parametres::essais::page_gardee_quand_les_pages_changent` |
-| C-68 | Recherche dès 7 pages, sans tenir compte des accents ; elle ouvre la section trouvée. | auto : `ic_coeur::parametres::essais::recherche_sans_accents`, `ic_coeur::parametres::essais::section_ouverte_par_la_recherche`, `ic_coeur::parametres::essais::recherche_montree_a_partir_de_sept_pages` |
+| C-68 | Recherche dès 7 pages, sans tenir compte des accents ; elle ouvre la section trouvée. | auto : `ic_coeur::parametres::essais::recherche_sans_accents`, `ic_coeur::parametres::essais::section_ouverte_par_la_recherche`, `ic_coeur::parametres::essais::recherche_montree_a_partir_de_sept_pages`, `tests/comportements::c68_la_recherche_ouvre_la_section` (le dessin) |
 | C-69 | Point d'alerte dans la navigation quand une page le demande. | auto : `tests/sans_fenetre::point_d_alerte_dans_la_navigation` |
 | C-70 | Effet immédiat : un réglage change tout de suite ; la bulle « Annuler » reste 6 s, puis le changement est gardé ; deux changements de suite gardent l'« avant » du premier. | auto : `ic_coeur::parametres::essais_gestes::effet_immediat_et_annuler`, `ic_coeur::parametres::essais_gestes::la_bulle_disparait_apres_six_secondes`, `ic_coeur::parametres::essais_gestes::envois_d_un_changement_et_d_annuler`, `ic_coeur::parametres::essais_gestes::deux_changements_gardent_l_avant_du_premier`, `tests/sans_fenetre::effet_immediat_et_annuler_vers_le_logiciel` |
 | C-71 | « Conserver ces changements ? » : compte à rebours ; Entrée, Échap, clic, délai écoulé et fermeture des Paramètres font revenir ou garder comme il faut. | auto : `tests/conserver::*` (8 tests), `ic_coeur::parametres::essais_gestes::conserver_*`, `ic_coeur::parametres::essais_gestes::revenir_rend_la_valeur_d_avant`, `ic_coeur::parametres::essais_gestes::delai_ecoule_retour_automatique`, `ic_coeur::parametres::essais_gestes::changer_a_confirmer_pendant_et_apres_le_delai`, `ic_coeur::parametres::essais_gestes::groupe_a_confirmer`, `ic_coeur::parametres::essais_gestes::echu_rend_le_brouillon_d_abord`, `ic_coeur::parametres::essais_gestes::retour_en_envois` |
@@ -158,16 +158,16 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-81 | Les choix illustrés (images sous les choix) sont alignés. | auto : `tests/sans_fenetre::choix_illustres_alignes` |
 | C-82 | Les Paramètres s'utilisent seuls, sans l'icône ni le volet (trait `Reglages`), y compris en anglais. | auto : `tests/sans_fenetre::parametres_seuls_en_anglais` ; le contrat seul, dans le cœur : `ic_coeur::contrat::essais::*` ; Chat PDC s'en sert |
 | C-83 | La carte d'information reste dans la largeur donnée et n'est pas plus haute qu'il faut. | auto : `tests/carte_info::*` |
-| C-84 | Coins arrondis et barre de titre sombre par Windows ; aucune animation à nous dans les Paramètres. | manuel |
+| C-84 | Coins arrondis et barre de titre sombre par Windows ; aucune animation à nous dans les Paramètres. | manuel (les « effets d'animation » de Windows sont lus par le module mince `parametres` et donnés au dessin : H-1) |
 
 ## 10. Les fenêtres toutes faites (`toutes_faites`)
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-85 | La fenêtre simple : texte, barre d'avancement, champ, choix, boutons, confirmation. | auto : `toutes_faites::boutons_champ_choix_et_confirmation` |
-| C-86 | Sa hauteur suit le contenu. | auto : `toutes_faites::la_hauteur_suit_le_contenu` |
-| C-87 | La fenêtre « version prête » (mise à jour) toute faite. | auto : `toutes_faites::version_prete_toute_faite` |
-| C-88 | La fenêtre de lecture : le mot lu est surligné et suivi ; un clic entre deux mots ou sur un mot le rend au logiciel. | auto : `toutes_faites::mots_et_clic_entre_deux_mots`, `toutes_faites::mot_surligne_suivi_et_clique` |
+| C-85 | La fenêtre simple : texte, barre d'avancement, champ, choix, boutons, confirmation. | auto : `dessin::toutes_faites::simple::boutons_champ_choix_et_confirmation` |
+| C-86 | Sa hauteur suit le contenu. | auto : `dessin::toutes_faites::simple::la_hauteur_suit_le_contenu` |
+| C-87 | La fenêtre « version prête » (mise à jour) toute faite. | auto : `dessin::toutes_faites::prete::version_prete_toute_faite` |
+| C-88 | La fenêtre de lecture : le mot lu est surligné et suivi ; un clic entre deux mots ou sur un mot le rend au logiciel. | auto : `dessin::toutes_faites::lecture::mots_et_clic_entre_deux_mots`, `dessin::toutes_faites::lecture::mot_surligne_suivi_et_clique` |
 | C-89 | Ces fenêtres tournent dans la boucle commune. | auto : `toutes_faites::fenetres_toutes_faites_dans_la_boucle` |
 
 ## 11. Le thème, les polices, les couleurs
