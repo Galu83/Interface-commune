@@ -91,6 +91,11 @@ pub mod verification;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod bords;
+// Hors de Windows, les bords gardent ce qui vaut partout (le thème suivi, les polices et
+// leurs contrôles, bloc L) ; leurs parties Windows y sont coupées (`src/bords/mod.rs`).
+#[cfg(not(windows))]
+#[allow(unsafe_code)]
+mod bords;
 #[cfg(windows)]
 #[allow(unsafe_code)]
 pub mod echelle;

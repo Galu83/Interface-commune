@@ -422,6 +422,76 @@
     `src/parametres/`, `crates/ic-coeur/src/parametres.rs`, `docs/COMPORTEMENTS.md` ou
     `docs/CARTE.md` ; le dossier de compilation `target-bloc-e/` reste hors de l'index ;
   - **sous-agents** : aucun.
+- **Refonte, bloc L « Système Windows »** (26 nov. 06:30, branche `refonte-bloc-l-systeme`,
+  partie de `refonte` à 61c66d4, à intégrer par l'Atelier Master ; **rien n'est commité** :
+  tout est indexé, le message est dans `docs/MESSAGE-COMMIT.txt`, hors de l'index) :
+  - **dans les bords** : `src/systeme.rs` (802 lignes) découpé en `src/bords/systeme/` :
+    `fenetre` (habillage DWM, place, opacité, fenêtre du fil), `ecran`, `reveil`, `dossier`,
+    `registre` (lecture du thème), `echelle` (changement d'échelle, `reglage_dpi` venu de
+    `horloge`), `apparence` (le thème suivi), `polices` (lecture des polices) ;
+    `src/verification.rs` déplacé (`git mv`) en `src/bords/verification.rs` ;
+  - **une seule fabrique de fenêtre cachée** (`bords/systeme/cachee.rs`) : l'icône unique
+    (`horloge`), les icônes d'une zone (`zone`) et les essais en font leurs fenêtres ;
+  - **dans le cœur** (calcul pur, avec essais) : `theme::choix_du_registre` (ce que veulent dire
+    les valeurs du registre ; 4 essais), `theme::polices` (le plan des polices : quel fichier,
+    ses replis, graisse et taille optique ; 5 essais), `gestes::clics::temps_double_clic` (la
+    borne du double-clic ; 1 essai) ;
+  - **dans le dessin** : `src/dessin/apparence.rs`, la palette, les styles de texte et les
+    espacements donnés à egui (2 essais) ;
+  - **essais** : ceux de `systeme` sortent du code dans `bords/systeme/essais.rs` (fenêtres
+    toujours cachées, détruites à la fin) ; nouveaux : la fabrique refuse ou reprend une classe
+    déjà là ; le changement d'échelle suit Windows quoi que winit demande, et une fenêtre non
+    suivie va où winit la pose (C-113) ; `Apparence` (3), les polices lues (3) ;
+  - **repris aux mêmes chemins** : `systeme`, `apparence`, `polices`, `echelle` et
+    `verification` sont des modules minces (`pub use`) ; **aucun changement d'API**
+    (`tests/compatibilite.rs` inchangé) ; **aucune image de référence ne change** ;
+    `COMPORTEMENTS.md` (C-57, C-90, C-92, C-93, C-111 à C-113) et `CARTE.md` suivent ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, aucune fenêtre vue) :
+    `ic-coeur` 169 essais (avant : 159) ; `interface-commune` 139 essais internes, les 18
+    fichiers de `tests/` verts (references aux images identiques, compatibilite, comportements,
+    polices, etages, fenetres_en_rafale, recreation_apres_panique, sans_fenetre…), exemples de
+    documentation (1 sauté, comme avant) : 398 essais en tout ; `fmt`, `clippy -D warnings`,
+    `cargo deny` propres ; `clippy -D warnings` de `ic-coeur` propre aussi pour Linux ;
+    contrôle de la règle n° 1 : 0 trouvé dans une copie de l'index avec
+    `docs/MESSAGE-COMMIT.txt` ; sur le worktree, seulement `.git:1` (le fichier du worktree, hors
+    de l'index) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - L-1 : la fabrique a un choix `ClasseDejaLa` : `Refuser` pour l'icône unique (une deuxième
+      classe serait une erreur, comme avant), `Reprendre` pour une deuxième zone et les essais ;
+      la fenêtre reste de style simple, demandée de taille nulle (pas `HWND_MESSAGE`, qui ne
+      reçoit pas « TaskbarCreated ») ;
+    - L-2 : `Apparence::appliquer` passe la palette au dessin (`dessin::apparence::appliquer`) :
+      les réglages d'egui sont du dessin pur, la lecture de Windows reste dans les bords ;
+    - L-3 : `bords` est compilé sur tous les systèmes (une deuxième déclaration
+      `#[cfg(not(windows))] mod bords;` ajoutée dans `src/lib.rs`, sans toucher à la première) ;
+      ses parties Windows seulement sous Windows (`apparence` et `polices` valent partout, comme
+      avant) ; `echelle` et `systeme` n'ont plus de code `unsafe` (leur `allow(unsafe_code)` de
+      `src/lib.rs` est laissé tel quel, pour n'y faire que des ajouts) ; `tests/etages.rs` ne
+      tolère plus que `horloge.rs` et `zone.rs` ;
+    - L-4 : `verification` va dans les bords (il lit les fichiers de polices), sans `unsafe` ;
+    - L-5 : l'essai de la fabrique vérifie que la fenêtre n'est pas visible, pas sa taille :
+      Windows donne sa taille minimale (136 × 39 ici) à une fenêtre de style simple ;
+  - **reste** : `horloge.rs` et `zone.rs` gardent leur `unsafe` (blocs M et J) ;
+  - **à savoir pour l'intégration** : conflits possibles si `refonte` a bougé dans `src/lib.rs`,
+    `src/horloge.rs`, `src/zone.rs`, `src/dessin.rs`, `tests/etages.rs`, `docs/CARTE.md`,
+    `docs/COMPORTEMENTS.md` ou `crates/ic-coeur/src/{theme,gestes/clics}.rs` ; à part, et déjà
+    avant ce bloc : la crate principale ne se compile pas hors de Windows (`eframe` n'y est
+    pas, `src/toutes_faites.rs`) ; la CI ne la compile que sous Windows ;
+  - **lignes ajoutées aux fichiers partagés avec N et O** (seulement des ajouts) :
+    `src/lib.rs` : le commentaire et `#[cfg(not(windows))] #[allow(unsafe_code)] mod bords;`,
+    après le `mod bords;` de Windows ; `src/bords/mod.rs` : trois lignes de doc,
+    `#[cfg(windows)]` devant `pub(crate) mod poste;`, puis `pub(crate) mod systeme;` et
+    `pub(crate) mod verification;` ; `Cargo.toml` et `crates/ic-coeur/src/lib.rs` : rien ;
+    `src/horloge.rs` : seulement `reglage_dpi` (repris des bords), la fenêtre faite par la
+    fabrique dans `boucle`, et les `use` que cela retire (`GetModuleHandleW`,
+    `SetProcessDpiAwarenessContext`, `CreateWindowExW`, `RegisterClassW`, `WNDCLASSW`,
+    `WS_OVERLAPPED`…) : rustfmt a reformé le bloc `use …WindowsAndMessaging::{…}`, un conflit
+    possible avec N s'il y retire aussi des noms (garder les deux retraits) ;
+  - **`src/bords/verification.rs`** : ce bloc y a déplacé `src/verification.rs` (`git mv`,
+    tête de doc raccourcie, `use crate::bords::systeme::polices`) et laissé à
+    `src/verification.rs` un module mince ; si O le déplace aussi, garder une seule copie, avec
+    les changements de O et l'appel `crate::bords::systeme::polices` ;
+  - **sous-agents** : aucun.
 - **Prochaine étape de la refonte** : blocs G et E intégrés (26 nov.) ; ensuite le bloc H, puis le bloc
   suivant du `docs/PLAN-REFONTE.md`, §2 (une seule voie à la fois).
 - **Prochaine étape sur `main`** : fusionner `manques-projets`, puis passer KVMSoft, Vocalis et PowerPeek

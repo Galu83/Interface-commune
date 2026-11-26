@@ -130,6 +130,20 @@ impl<T: Horodatage> Clics<T> {
     }
 }
 
+/// Le temps du double-clic le plus court et le plus long que la bibliothèque prend de Windows
+/// (millisecondes) : un réglage hors de ces bornes (registre abîmé) ne rend jamais le
+/// double-clic impossible, ni chaque clic double.
+pub const DOUBLE_CLIC_MIN_MS: u32 = 100;
+pub const DOUBLE_CLIC_MAX_MS: u32 = 5_000;
+
+/// Le temps du double-clic, d'après celui que Windows donne (bloc L, C-112), ramené entre
+/// [`DOUBLE_CLIC_MIN_MS`] et [`DOUBLE_CLIC_MAX_MS`].
+pub fn temps_double_clic(windows_ms: u32) -> Duration {
+    Duration::from_millis(u64::from(
+        windows_ms.clamp(DOUBLE_CLIC_MIN_MS, DOUBLE_CLIC_MAX_MS),
+    ))
+}
+
 /// Les numéros que Windows donne aux gestes sur l'icône (`NOTIFYICON_VERSION_4`).
 const NIN_SELECT: u32 = 0x400;
 const NIN_KEYSELECT: u32 = 0x401;
@@ -229,6 +243,17 @@ mod tests {
         assert_eq!(suite(Geste::Volet, g), Suite::FenetrePrincipale);
         assert_eq!(suite(Geste::Ouvrir, g), Suite::FenetrePrincipale);
         assert_eq!(suite(Geste::Menu, g), Suite::Menu);
+    }
+
+    /// Le temps du double-clic de Windows est pris tel quel entre 100 ms et 5 s, ramené
+    /// aux bornes au-delà.
+    #[test]
+    fn temps_double_clic_borne() {
+        assert_eq!(temps_double_clic(500), Duration::from_millis(500));
+        assert_eq!(temps_double_clic(100), Duration::from_millis(100));
+        assert_eq!(temps_double_clic(0), Duration::from_millis(100));
+        assert_eq!(temps_double_clic(5_000), Duration::from_secs(5));
+        assert_eq!(temps_double_clic(u32::MAX), Duration::from_secs(5));
     }
 
     /// Le nom de chaque geste pour la sonde (les mots qu'écrivait l'horloge).

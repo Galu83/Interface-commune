@@ -12,9 +12,11 @@
 //! - l'animation d'ouverture et de fermeture, et sa courbe ([`ouverture`], [`fermeture`],
 //!   [`avancer`]) ;
 //! - **suivre Windows** : relire le clair ou sombre et l'accent toutes les 2 s, et changer la
-//!   palette dès qu'ils changent, sauf thème imposé (C-90, [`faut_relire`], [`relu`]).
+//!   palette dès qu'ils changent, sauf thème imposé (C-90, [`faut_relire`], [`relu`]) ;
+//! - ce que veulent dire les valeurs du registre lues par les bords ([`choix_du_registre`],
+//!   bloc L) et le choix des polices de Windows 11 ou de Windows 10 ([`polices`], C-92, bloc L).
 //!
-//! Ce qui n'est pas ici : lire Windows (bloc L), charger les polices (bloc L), donner ces
+//! Ce qui n'est pas ici : lire Windows (bloc L), lire les fichiers des polices (bloc L), donner ces
 //! couleurs à egui (bloc F, `interface_commune::apparence`). L'instant n'est jamais lu ici : le
 //! temps écoulé arrive en paramètre.
 //!
@@ -32,6 +34,8 @@ mod formes;
 pub mod icones;
 mod marque;
 pub mod mesures;
+pub mod polices;
+mod registre;
 mod relecture;
 mod tailles;
 
@@ -42,6 +46,7 @@ pub use animation::{
 pub use couleurs::{ChoixWindows, Palette, Rgb, contraste, couleur_lettre, couleurs_pastilles};
 pub use formes::couverture;
 pub use marque::{EtatCase, Marque, OPACITE_DEBRANCHE, etat_case, marque, texte_sur};
+pub use registre::choix_du_registre;
 pub use relecture::{RELECTURE, faut_relire, impose, relu};
 pub use tailles::{
     ARRONDI_CARTE, ARRONDI_CONTROLE, HAUTEUR_LIGNE, TAILLE_EXPLICATION, TAILLE_PETIT, TAILLE_SECTION,

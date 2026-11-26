@@ -7,7 +7,7 @@
 //! - le **dessin** (`src/dessin.rs` aujourd'hui, `src/dessin/` ensuite) n'appelle jamais
 //!   Windows : ni `windows::`, ni `unsafe`, ni eframe ;
 //! - `unsafe` n'est permis que dans les **bords** (`src/bords/`) et, en attendant qu'ils y
-//!   passent, dans les quatre modules qui appellent Windows aujourd'hui.
+//!   passent, dans les deux modules qui appellent encore Windows aujourd'hui (`horloge`, `zone`).
 //!
 //! Le compilateur tient déjà le cœur (une crate sans dépendance) ; cet essai le redit, avec
 //! un message clair, et tient seul la frontière entre le dessin et les bords, qui vivent dans
@@ -234,8 +234,9 @@ fn le_dessin_n_appelle_pas_windows() {
 }
 
 /// Les modules qui appellent Windows aujourd'hui, hors de `src/bords/`. Chacun sort de cette
-/// liste quand son bloc (L, M, J) le range dans les bords ; la liste finit vide.
-const UNSAFE_EN_ATTENDANT: [&str; 4] = ["echelle.rs", "horloge.rs", "systeme.rs", "zone.rs"];
+/// liste quand son bloc (M, J) le range dans les bords ; la liste finit vide. `echelle` et
+/// `systeme` en sont sortis au bloc L.
+const UNSAFE_EN_ATTENDANT: [&str; 2] = ["horloge.rs", "zone.rs"];
 
 #[test]
 fn unsafe_seulement_dans_les_bords() {

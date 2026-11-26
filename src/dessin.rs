@@ -13,6 +13,7 @@
 //! déplacement des seuils, la marque d'une pastille, le plan des cases) vit dans le cœur
 //! (`ic-coeur`).
 
+pub(crate) mod apparence;
 pub(crate) mod briques;
 mod controles;
 pub(crate) mod couleur;
