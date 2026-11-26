@@ -136,6 +136,8 @@ pub fn choisir_couleur(
 /// (`Contexte::changer`, clé `cle`, valeur [`Valeur::Nombre`] = le rang) : le logiciel le
 /// reçoit par `Reglages::changer`, et la bulle « Annuler » (titre `titre`) remet le rang d'avant.
 /// Avec `None`, rien n'est signalé : c'est au logiciel de tout faire.
+// Fonction publique prise telle quelle par les logiciels : chaque argument est une donnée du
+// dessin ; les regrouper changerait leur appel.
 #[allow(clippy::too_many_arguments)]
 pub fn carte_couleur(
     ui: &mut Ui,

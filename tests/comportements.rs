@@ -10,6 +10,7 @@
 // Dans un essai, un échec doit arrêter l'essai ; le verrou et le DPI se lisent par Windows.
 #![allow(clippy::expect_used, unsafe_code)]
 
+// Le logiciel inventé des images de référence, partagé : ce fichier n'en prend qu'une partie.
 #[allow(dead_code)]
 #[path = "references/logiciel.rs"]
 mod logiciel;

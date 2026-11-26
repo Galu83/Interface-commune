@@ -1,6 +1,7 @@
 //! Les essais du bord de la sonde : les vrais fils, le journal branché (C-110), la vraie boucle
 //! de surveillance avec des délais courts (200 ms, jamais 15 s), le chien des créations, les
 //! paniques. La décision elle-même est essayée dans le cœur, à fausse horloge.
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` y sont voulus.
 #![allow(clippy::unwrap_used)]
 
 use std::time::Duration;

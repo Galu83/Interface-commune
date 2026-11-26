@@ -2,6 +2,7 @@
 //! ([`crate::bords::fenetres::faux_moteur`]) : egui croit avoir de vraies fenêtres, rien ne
 //! s'ouvre.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use crate::bords::fenetres::faux_moteur::{CREATION_RATEE, CROIX, contexte, image};

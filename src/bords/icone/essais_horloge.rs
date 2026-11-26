@@ -1,6 +1,7 @@
 //! Les essais de l'icône seule (`horloge`), repris de l'ancien `horloge.rs` (bloc M) : le
 //! décodage pur, sans Windows ni fenêtre.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` y sont voulus.
 #![allow(clippy::unwrap_used)]
 
 use std::time::{Duration, Instant};

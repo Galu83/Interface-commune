@@ -1,6 +1,7 @@
 //! Les essais du guichet, sans fenêtre ni matériel : un faux réveil prend la place du message
 //! Windows à la fenêtre cachée.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` y sont voulus.
 #![allow(clippy::unwrap_used)]
 
 use std::sync::atomic::{AtomicIsize, AtomicUsize};

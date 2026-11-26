@@ -96,17 +96,25 @@ mod bords;
 #[allow(unsafe_code)]
 mod bords;
 #[cfg(windows)]
+// Façade à l'ancien chemin : son `unsafe` est passé dans les bords, l'autorisation reste
+// tant que la façade n'est pas relue (une suite possible de la refonte).
 #[allow(unsafe_code)]
 pub mod echelle;
 #[cfg(windows)]
+// Façade à l'ancien chemin : son `unsafe` est passé dans les bords, l'autorisation reste
+// tant que la façade n'est pas relue (une suite possible de la refonte).
 #[allow(unsafe_code)]
 pub mod horloge;
 #[cfg(windows)]
+// Façade à l'ancien chemin : son `unsafe` est passé dans les bords, l'autorisation reste
+// tant que la façade n'est pas relue (une suite possible de la refonte).
 #[allow(unsafe_code)]
 pub mod systeme;
 #[cfg(windows)]
 pub mod volet;
 #[cfg(windows)]
+// Façade à l'ancien chemin : son `unsafe` est passé dans les bords, l'autorisation reste
+// tant que la façade n'est pas relue (une suite possible de la refonte).
 #[allow(unsafe_code)]
 pub mod zone;
 

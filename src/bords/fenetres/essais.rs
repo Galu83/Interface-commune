@@ -2,6 +2,7 @@
 //! surface préparée une fois, la fenêtre perdue recréée et le clic refait, les pertes en
 //! rafale, la supervision d'une boucle du logiciel, le dernier filet du fil.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::sync::atomic::Ordering;

@@ -5,6 +5,8 @@
 //! gardée pour tout le programme.
 
 #![cfg(windows)]
+// Dans un essai, un échec doit arrêter l'essai (`expect`) ; le message et sa boucle
+// passent par Windows (`unsafe`).
 #![allow(clippy::expect_used, unsafe_code)]
 
 use std::time::Duration;

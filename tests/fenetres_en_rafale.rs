@@ -15,6 +15,7 @@
 //!   borné aux trois quarts des cœurs, moins un).
 
 #![cfg(windows)]
+// Dans un essai, un échec doit arrêter l'essai : `expect` et `panic!` y sont voulus.
 #![allow(clippy::expect_used, clippy::panic)]
 
 use std::sync::Arc;

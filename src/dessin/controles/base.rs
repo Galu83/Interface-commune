@@ -87,6 +87,8 @@ pub fn ligne_de(
 }
 
 /// Une ligne de cette hauteur, son texte dans cette police.
+// Chaque argument est une donnée distincte du dessin (egui, couleurs, textes) ; les regrouper
+// dans une structure n'ajouterait qu'une enveloppe.
 #[allow(clippy::too_many_arguments)]
 fn ligne_police(
     ui: &mut Ui,

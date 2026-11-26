@@ -84,6 +84,7 @@ pub struct Reception {
 impl Reception {
     /// La prochaine demande déjà arrivée, sans attendre. `Err(())` : plus personne ne peut
     /// en envoyer.
+    // `Err(())` suffit : la seule erreur possible est « plus personne ne peut envoyer ».
     #[allow(clippy::result_unit_err)]
     pub fn prendre(&self) -> Result<Option<Demande>, ()> {
         match self.reception.try_recv() {

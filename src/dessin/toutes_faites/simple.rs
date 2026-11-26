@@ -464,6 +464,7 @@ fn valider(ui: &Ui, s: &Simple, e: &mut EtatSimple, mut clic: ClicBrut) -> Optio
 
 #[cfg(test)]
 mod tests {
+    // Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
     #![allow(clippy::expect_used, clippy::unwrap_used)]
     use super::*;
     use crate::dessin::toutes_faites::essais::{cliquer, entree, palette, simple, une_image};

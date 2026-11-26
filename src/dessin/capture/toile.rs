@@ -174,6 +174,7 @@ impl Toile {
 
 #[cfg(test)]
 mod tests {
+    // Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
     #![allow(clippy::expect_used, clippy::unwrap_used)]
     use super::*;
 
