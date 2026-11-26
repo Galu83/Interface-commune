@@ -26,12 +26,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use windows::Win32::Foundation::{
-    CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM,
-};
-use windows::Win32::System::DataExchange::COPYDATASTRUCT;
+use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem, GetSystemMetricsForDpi,
     SetProcessDpiAwarenessContext,
@@ -43,14 +39,13 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyIcon,
-    DestroyMenu, DestroyWindow, DispatchMessageW, FindWindowW, GWLP_USERDATA, GetCursorPos, GetMessageW,
+    DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW,
     GetWindowLongPtrW, HICON, KillTimer, MF_SEPARATOR, MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC,
     PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, PBT_POWERSETTINGCHANGE, PostMessageW, PostQuitMessage,
-    RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
-    SetForegroundWindow, SetMenuDefaultItem, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA,
-    WM_DESTROY, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL, WM_POWERBROADCAST, WM_QUERYENDSESSION,
-    WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetMenuDefaultItem, SetTimer,
+    SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage,
+    WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL,
+    WM_POWERBROADCAST, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{HSTRING, PCWSTR};
 
@@ -65,8 +60,6 @@ use ic_coeur::gestes::aiguilleur::{Ordre, fermer_avant_la_fenetre_principale, or
 
 /// Clic sur l'icône.
 const WM_ICONE: u32 = WM_APP + 1;
-/// Une deuxième instance demande les Paramètres.
-const WM_OUVRIR_PARAMETRES: u32 = WM_APP + 3;
 /// Une commande du logiciel attend dans la file.
 const WM_COMMANDE: u32 = WM_APP + 4;
 /// Le menu moderne ne peut pas s'ouvrir : le menu de secours à `lparam` (x, y).
@@ -103,25 +96,10 @@ fn message_permis(msg: u32, wp: usize) -> bool {
     }
 }
 
-/// Le nom de la classe de la fenêtre cachée (une deuxième instance la cherche par ce nom).
-fn classe(nom: &str) -> HSTRING {
-    HSTRING::from(format!("{nom}-principal"))
-}
-
 /// Avant toute fenêtre : chaque écran à sa propre échelle (sinon Windows étire tout).
 pub fn reglage_dpi() {
     // SAFETY: simple appel sans pointeur ; un échec (déjà réglé) est sans conséquence.
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-}
-
-/// Le verrou « une seule instance », gardé jusqu'à la fin du programme.
-pub struct Unique(HANDLE);
-
-impl Drop for Unique {
-    fn drop(&mut self) {
-        // SAFETY: poignée créée par `instance_unique`, fermée une seule fois.
-        let _ = unsafe { CloseHandle(self.0) };
-    }
 }
 
 // Le contrat (bloc A), repris du cœur à ce chemin.
@@ -129,147 +107,12 @@ pub use ic_coeur::contrat::{Niveau, Reveil};
 // Le guichet (bloc K), repris des bords à ce chemin.
 pub use crate::bords::poste::{AuClic, Poste};
 use crate::bords::poste::{Commande, ReveilParMessage};
-
-/// Le nombre d'arguments qu'un second lancement peut transmettre.
-pub const ARGUMENTS_MAX: usize = 16;
-/// La taille de ce qu'un second lancement peut transmettre (octets, tous arguments ensemble).
-pub const ARGUMENTS_OCTETS_MAX: usize = 4096;
-/// Le temps que le second lancement attend l'instance en cours (au-delà, la demande est
-/// perdue : un second lancement ne reste jamais accroché).
-const ATTENTE_TRANSMISSION: u32 = 3000;
-/// Le `dwData` d'un `WM_COPYDATA` d'arguments : tout autre est ignoré.
-const MARQUE_ARGUMENTS: usize = 0x4943_4152;
-
-/// Les arguments en octets : chacun en UTF-8, suivi d'un zéro. `None` s'il y en a trop, s'ils
-/// sont trop gros, ou si l'un contient un zéro.
-fn coder_arguments(args: &[String]) -> Option<Vec<u8>> {
-    if args.len() > ARGUMENTS_MAX {
-        return None;
-    }
-    let mut octets = Vec::new();
-    for a in args {
-        if a.contains('\0') {
-            return None;
-        }
-        octets.extend_from_slice(a.as_bytes());
-        octets.push(0);
-    }
-    (octets.len() <= ARGUMENTS_OCTETS_MAX).then_some(octets)
-}
-
-/// L'inverse de [`coder_arguments`] ; `None` pour des octets qui ne viennent pas de lui
-/// (trop longs, trop d'arguments, UTF-8 invalide, zéro final absent).
-fn decoder_arguments(octets: &[u8]) -> Option<Vec<String>> {
-    if octets.len() > ARGUMENTS_OCTETS_MAX {
-        return None;
-    }
-    if octets.is_empty() {
-        return Some(Vec::new());
-    }
-    let (corps, fin) = octets.split_at(octets.len() - 1);
-    if fin != [0] {
-        return None;
-    }
-    let args: Vec<String> = corps
-        .split(|o| *o == 0)
-        .map(|a| std::str::from_utf8(a).map(str::to_string))
-        .collect::<Result<_, _>>()
-        .ok()?;
-    (args.len() <= ARGUMENTS_MAX).then_some(args)
-}
-
-/// Une seule instance par session et par logiciel (`nom`, sans espace ni barre oblique). Si
-/// le logiciel tourne déjà : lui demande d'ouvrir ses Paramètres et rend `Err(true)` ;
-/// `Err(false)` si sa fenêtre est introuvable (il démarre ou se ferme).
-pub fn instance_unique(nom: &str) -> Result<Unique, bool> {
-    instance_unique_avec(nom, &Reveil::Parametres)
-}
-
-/// Comme [`instance_unique`], en disant ce que le second lancement transmet ([`Reveil`]).
-/// `Err(true)` : l'instance en cours est prévenue (ou rien n'était à lui dire) ;
-/// `Err(false)` : sa fenêtre est introuvable ou n'a pas répondu en 3 s (elle démarre, se
-/// ferme ou ne répond plus) : la demande est perdue, ce second lancement s'arrête quand même.
-pub fn instance_unique_avec(nom: &str, reveil: &Reveil) -> Result<Unique, bool> {
-    let verrou = HSTRING::from(format!("Local\\{nom}-une-seule"));
-    // SAFETY: nom terminé par zéro, vivant pendant l'appel ; la poignée va dans `Unique`.
-    let h = unsafe { CreateMutexW(None, false, &verrou) };
-    // SAFETY: lecture de la dernière erreur du fil, juste après l'appel.
-    let deja = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
-    match h {
-        Ok(h) if !deja => Ok(Unique(h)),
-        autre => {
-            if let Ok(h) = autre {
-                drop(Unique(h));
-            }
-            if *reveil == Reveil::Rien {
-                return Err(true);
-            }
-            let c = classe(nom);
-            // SAFETY: nom de classe vivant pendant l'appel ; on ne fait que poster un message
-            // à la fenêtre trouvée.
-            let Ok(f) = (unsafe { FindWindowW(&c, PCWSTR::null()) }) else {
-                return Err(false);
-            };
-            match reveil {
-                Reveil::Parametres => {
-                    // SAFETY: fenêtre trouvée juste avant ; PostMessageW n'attend rien.
-                    let poste = unsafe { PostMessageW(Some(f), WM_OUVRIR_PARAMETRES, WPARAM(0), LPARAM(0)) };
-                    Err(poste.is_ok())
-                }
-                Reveil::Arguments(args) => Err(transmettre_arguments(f, args)),
-                Reveil::Rien => Err(true),
-            }
-        }
-    }
-}
-
-/// Envoie les arguments à la fenêtre cachée de l'instance en cours (`WM_COPYDATA`, qui copie
-/// les octets dans l'autre processus). Vrai si elle les a pris.
-fn transmettre_arguments(fenetre: HWND, args: &[String]) -> bool {
-    let Some(octets) = coder_arguments(args) else {
-        return false;
-    };
-    let copie = COPYDATASTRUCT {
-        dwData: MARQUE_ARGUMENTS,
-        cbData: octets.len() as u32,
-        lpData: octets.as_ptr().cast_mut().cast(),
-    };
-    let mut reponse = 0usize;
-    // SAFETY: `copie` et `octets` vivent pendant tout l'appel (envoi synchrone : Windows
-    // copie les octets avant de rendre la main) ; la fenêtre est celle d'une autre instance,
-    // et l'appel s'arrête au bout de 3 s ou si elle ne répond plus.
-    let r = unsafe {
-        SendMessageTimeoutW(
-            fenetre,
-            WM_COPYDATA,
-            WPARAM(0),
-            LPARAM(&raw const copie as isize),
-            SMTO_ABORTIFHUNG,
-            ATTENTE_TRANSMISSION,
-            Some(&raw mut reponse),
-        )
-    };
-    r.0 != 0 && reponse != 0
-}
-
-/// Lit les arguments d'un `WM_COPYDATA` reçu (`lparam`) : seulement ceux qui portent la marque
-/// et qu'on sait décoder.
-fn lire_arguments(lparam: isize) -> Option<Vec<String>> {
-    // SAFETY: pour un WM_COPYDATA, `lparam` est l'adresse d'une COPYDATASTRUCT que Windows
-    // garde valable pendant le traitement du message (ou 0, refusé ici).
-    let copie = unsafe { (lparam as *const COPYDATASTRUCT).as_ref() }?;
-    if copie.dwData != MARQUE_ARGUMENTS || copie.lpData.is_null() {
-        return None;
-    }
-    let n = copie.cbData as usize;
-    if n > ARGUMENTS_OCTETS_MAX {
-        return None;
-    }
-    // SAFETY: Windows garantit `cbData` octets lisibles à `lpData` pendant le message ;
-    // `n` est borné ci-dessus.
-    let octets = unsafe { std::slice::from_raw_parts(copie.lpData.cast::<u8>(), n) };
-    decoder_arguments(octets)
-}
+// L'instance unique (bloc N), reprise des bords à ce chemin ; la fenêtre cachée reçoit ses
+// messages (demande d'ouverture, arguments).
+pub use crate::bords::unique::{
+    ARGUMENTS_MAX, ARGUMENTS_OCTETS_MAX, Unique, instance_unique, instance_unique_avec,
+};
+use crate::bords::unique::{WM_OUVRIR_PARAMETRES, classe, lire_arguments};
 
 /// Un message de Windows reçu par la fenêtre cachée du logiciel (celle de l'icône).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1296,51 +1139,6 @@ mod essais {
         assert_eq!(destinataire(0, 0, 0), Destinataire::Logiciel);
     }
 
-    /// Les arguments d'un second lancement font l'aller-retour ; tout ce qui ne vient pas de
-    /// `coder_arguments` est refusé.
-    #[test]
-    fn arguments_du_second_lancement() {
-        let args: Vec<String> = ["--choisir=2", "un deux", "é"].map(String::from).into();
-        let octets = coder_arguments(&args).unwrap();
-        assert_eq!(decoder_arguments(&octets), Some(args));
-        assert_eq!(coder_arguments(&[]).as_deref(), Some(&[][..]));
-        assert_eq!(decoder_arguments(&[]), Some(vec![]));
-        // Trop, trop gros, un zéro dedans.
-        let trop: Vec<String> = (0..=ARGUMENTS_MAX).map(|i| i.to_string()).collect();
-        assert_eq!(coder_arguments(&trop), None);
-        assert_eq!(coder_arguments(&["x".repeat(ARGUMENTS_OCTETS_MAX)]), None);
-        assert_eq!(coder_arguments(&["a\0b".into()]), None);
-        // Reçu : pas de zéro final, UTF-8 invalide, trop long, trop d'arguments.
-        assert_eq!(decoder_arguments(b"abc"), None);
-        assert_eq!(decoder_arguments(&[0xFF, 0]), None);
-        assert_eq!(decoder_arguments(&vec![b'a'; ARGUMENTS_OCTETS_MAX + 1]), None);
-        assert_eq!(decoder_arguments(&[0u8; ARGUMENTS_MAX + 1]), None);
-    }
-
-    /// Un `WM_COPYDATA` sans la marque, vide ou mal fait n'est pas lu ; avec elle, il l'est.
-    #[test]
-    fn copie_de_donnees_lue_avec_prudence() {
-        let octets = coder_arguments(&["--choisir=3".to_string()]).unwrap();
-        let mut copie = COPYDATASTRUCT {
-            dwData: MARQUE_ARGUMENTS,
-            cbData: octets.len() as u32,
-            lpData: octets.as_ptr().cast_mut().cast(),
-        };
-        assert_eq!(
-            lire_arguments(&raw const copie as isize),
-            Some(vec!["--choisir=3".to_string()])
-        );
-        copie.dwData = 7;
-        assert_eq!(lire_arguments(&raw const copie as isize), None);
-        copie.dwData = MARQUE_ARGUMENTS;
-        copie.cbData = (ARGUMENTS_OCTETS_MAX + 1) as u32;
-        assert_eq!(lire_arguments(&raw const copie as isize), None);
-        copie.cbData = 1;
-        copie.lpData = std::ptr::null_mut();
-        assert_eq!(lire_arguments(&raw const copie as isize), None);
-        assert_eq!(lire_arguments(0), None);
-    }
-
     /// Une fenêtre qui ne répond plus ne retient pas la fermeture au-delà du délai.
     #[test]
     fn fenetre_bloquee_ne_retient_pas_la_fermeture() {
@@ -1360,23 +1158,5 @@ mod essais {
         let vite = std::thread::spawn(|| ());
         assert!(attendre_la_fin(vite, Duration::from_secs(5)));
         assert_eq!(ATTENTE_FERMETURE, Duration::from_secs(5));
-    }
-
-    /// Un second lancement ne fait rien quand c'est ce qu'on lui a dit, et un seul logiciel
-    /// à la fois tient le verrou.
-    #[test]
-    fn second_lancement_sans_rien_dire() {
-        let nom = format!("essai-instance-{}", std::process::id());
-        let premier = instance_unique_avec(&nom, &Reveil::Rien).unwrap();
-        // Le verrou est pris : le second est prévenu qu'il n'a rien à faire (sans fenêtre à
-        // chercher, donc sans rien dire à personne).
-        assert!(matches!(instance_unique_avec(&nom, &Reveil::Rien), Err(true)));
-        // Sans fenêtre cachée à l'autre bout, les arguments ne partent pas.
-        assert!(matches!(
-            instance_unique_avec(&nom, &Reveil::Arguments(vec!["--x".into()])),
-            Err(false)
-        ));
-        drop(premier);
-        assert!(instance_unique_avec(&nom, &Reveil::Rien).is_ok());
     }
 }
