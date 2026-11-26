@@ -12,6 +12,7 @@
 //! - [`choix`] : le menu de choix au clavier (bloc F) ;
 //! - [`seuils`] : la barre à seuils, ses limites et ses touches (bloc F).
 //! - [`clavier`] : les flèches du volet, qui passent d'une ligne à l'autre comme Tab (bloc G).
+//! - [`sonde`] : la décision « bloqué », la veille du PC, les créations longues (bloc O).
 
 pub mod aiguilleur;
 pub mod choix;
@@ -22,6 +23,7 @@ pub mod menu;
 pub mod ouverture;
 pub mod secours;
 pub mod seuils;
+pub mod sonde;
 mod temps;
 
 pub use temps::Horodatage;

@@ -176,8 +176,8 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 |---|---|---|
 | C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto : `ic_coeur::theme::essais::la_palette_de_windows_est_suivie`, `…::accent_par_defaut_et_accent_seul`, `…::relecture_toutes_les_deux_secondes`, `…::le_theme_de_windows_est_suivi`, `…::un_theme_impose_l_emporte` (horloge inventée), `tests/comportements::c90_le_theme_de_windows_est_relu` |
 | C-91 | Les contrastes des couleurs du thème sont suffisants. | auto : `ic_coeur::theme::essais::contrastes_suffisants` |
-| C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `verification::*`, `tests/polices_windows10::c92_repli_des_polices_de_windows_10` |
-| C-93 | Chaque icône commune existe dans les deux polices d'icônes ; un glyphe absent redonne la lettre. | auto : `tests/polices::chaque_icone_existe`, `verification::glyphe_absent_redonne_la_lettre` |
+| C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `bords::verification::*`, `tests/polices_windows10::c92_repli_des_polices_de_windows_10` |
+| C-93 | Chaque icône commune existe dans les deux polices d'icônes ; un glyphe absent redonne la lettre. | auto : `tests/polices::chaque_icone_existe`, `bords::verification::glyphe_absent_redonne_la_lettre` |
 | C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `ic_coeur::theme::essais_pastilles::*` (4 tests ; avant le bloc C : `tests/palette_pastilles.rs`) |
 | C-95 | Le choix de couleur (carte) : même palette que les pastilles, clic, clavier, colonnes selon la place, « Annuler » remet l'ancienne. | auto : `tests/couleurs::*` (10 tests) |
 | C-96 | Le nuancier : cases de 32 points, un clic donne la couleur, nom lu par les lecteurs d'écran. | auto : `dessin::nuancier::*` (4 tests) |
@@ -201,10 +201,10 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 |---|---|---|
 | C-105 | Capture sans fenêtre : le rendu logiciel d'egui en PNG, découpe respectée, sans superposition. | auto : `capture::*` (3 tests) |
 | C-106 | Les captures de la documentation se refont par un test. | auto : `tests/sans_fenetre::captures_pour_la_documentation` (images refaites, jamais comparées à une référence) |
-| C-107 | La sonde écrit une ligne quand un fil est bloqué, puis une ligne de reprise ; un fil qui avance n'écrit rien ; la veille du PC n'est pas un blocage. | auto : `sonde::*` (16 tests) |
-| C-108 | Une création de fenêtre longue donne une ligne au journal. | auto : `sonde::creation_longue_donne_une_ligne`, `sonde::le_chien_ecrit_la_creation_qui_dure` |
-| C-109 | Le lieu d'une panique est noté sans le chemin du PC. | auto : `sonde::lieu_de_panique_sans_le_chemin_du_pc` |
-| C-110 | Le journal du logiciel est branché sur celui de la bibliothèque (`brancher_le_journal`). | auto : `tests/comportements::c110_le_journal_est_branche` |
+| C-107 | La sonde écrit une ligne quand un fil est bloqué, puis une ligne de reprise ; un fil qui avance n'écrit rien ; la veille du PC n'est pas un blocage. | auto : la décision dans le cœur, à fausse horloge et fils simulés : `ic_coeur::gestes::sonde::*` (15 tests) ; les vrais fils, le journal et la vraie boucle à délais courts : `bords::sonde::*` (8 tests) |
+| C-108 | Une création de fenêtre longue donne une ligne au journal. | auto : `ic_coeur::gestes::sonde::creation_longue_donne_une_ligne`, `ic_coeur::gestes::sonde::la_veille_n_allonge_pas_une_creation`, `bords::sonde::le_chien_ecrit_la_creation_qui_dure` |
+| C-109 | Le lieu d'une panique est noté sans le chemin du PC. | auto : `ic_coeur::gestes::sonde::lieu_de_panique_sans_le_chemin_du_pc`, `bords::sonde::lieu_de_la_panique_garde_pour_le_fil` |
+| C-110 | Le journal du logiciel est branché sur celui de la bibliothèque (`brancher_le_journal`). | auto : `tests/comportements::c110_le_journal_est_branche`, `bords::sonde::le_journal_branche_recoit_les_lignes` |
 
 ## 14. Le système
 

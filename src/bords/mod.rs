@@ -4,3 +4,5 @@
 
 pub(crate) mod poste;
 pub(crate) mod unique;
+pub(crate) mod sonde;
+pub(crate) mod verification;
