@@ -1,5 +1,51 @@
 # État
 
+## Bloc O — la sonde, le journal et la vérification
+
+(26 nov. 06:30, branche `refonte-bloc-o-sonde`, partie de `refonte`, à intégrer par l'Atelier
+Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
+
+- **La sonde passe dans les bords** : `src/bords/sonde.rs` (les fils, leurs compteurs, la
+  dernière étape, le journal branché, les délais), `src/bords/sonde/chien.rs` (le fil de
+  surveillance et le chien des créations de fenêtre), `src/bords/sonde/panique.rs` (le lieu
+  de la dernière panique), `src/bords/sonde/essais.rs`.
+- **La décision « bloqué » est dans le cœur** : `crates/ic-coeur/src/gestes/sonde.rs`
+  (`Surveillance<K, T>`, `Releve`, `Constat`, `Delais`, `est_une_veille`, le chien des
+  créations, le texte de chaque ligne du journal, `lieu_court`), essais dans
+  `gestes/sonde/essais.rs`.
+- **La vérification passe dans les bords** : `src/bords/verification.rs` (déplacé tel quel).
+- **Chemins publics inchangés** : `src/sonde.rs` et `src/verification.rs` ne font plus que
+  reprendre (`pub use`) ce qui est dans `crate::bords::…`, avec la documentation pour les
+  logiciels ; `interface_commune::sonde::…` et `interface_commune::verification::…` restent
+  valables.
+- **Décisions prises seul** (à relire par l'Atelier Master) :
+  - **O-1** : la décision « bloqué » manquait dans le cœur ; elle est ajoutée au module voie 1
+    `gestes` (`ic_coeur::gestes::sonde`), avec la veille du PC, le chien des créations, les
+    phrases du journal (mot pour mot comme avant) et le lieu court d'une panique. Le cœur
+    reçoit l'heure UTC en secondes (`u64`) : `SystemTime` y est interdit ;
+  - **O-2** : `src/sonde.rs` et `src/verification.rs` deviennent des façades ; aucune ligne de
+    `src/lib.rs` ne change. Comme les bords, elles ne valent que sous Windows (c'était déjà le
+    cas de fait : la sonde et la vérification appellent Windows) ;
+  - **O-3** : `sonde::Surveillance` garde son nom, `new` et `avec_pas` : une enveloppe autour
+    de `coeur::Surveillance<usize, Instant>`, la clé d'un fil étant l'adresse de son `Arc`.
+    `Delais`, `est_une_veille` et `SEUIL_DE_CREATION` viennent du cœur, repris au même chemin ;
+  - **O-4** : les essais de la sonde sont partagés : 15 dans le cœur (fausse horloge
+    `Duration`, fils simulés `Releve<u8, Duration>`), 8 dans les bords (les vrais fils, le
+    journal branché — C-110 —, la vraie boucle à délais courts de 200 ms, le chien des
+    créations, les paniques). Aucune attente de 15 s, aucune fenêtre. Le lieu de panique
+    attendu par l'essai devient `sonde/essais.rs:` (le fichier de l'essai a changé).
+- **Fichiers partagés touchés** (une ligne ajoutée chacun) : `src/bords/mod.rs`
+  (`pub(crate) mod sonde;` et `pub(crate) mod verification;`, une ligne par module) ;
+  `crates/ic-coeur/src/gestes.rs` (`pub mod sonde;` et une ligne de son en-tête). Ni
+  `src/lib.rs`, ni `Cargo.toml`, ni `crates/ic-coeur/src/lib.rs`.
+- **Avec le bloc N** (entré dans `refonte`, c9c0394) : `crate::sonde::noter(ligne: String)`,
+  qu'appelle `src/bords/unique.rs`, reste valable (repris `pub(crate)` par `src/sonde.rs`) ;
+  dans `src/bords/mod.rs`, garder les deux côtés (`unique` et `sonde`, `verification`).
+- **Docs** : `COMPORTEMENTS.md` (C-92, C-93, C-107 à C-110 : les nouveaux noms des essais),
+  `CARTE.md` (les nouveaux fichiers).
+- **Tailles** : le plus long fichier du bloc fait 335 lignes (`gestes/sonde.rs`), aucune
+  fonction de plus de 80 lignes ; `src/sonde.rs` passe de plus de 1 000 lignes à 46.
+
 - **Version** : 0.1.0 publiée sur `main` (dépôt privé). La branche `manques-projets` ajoute ce
   qui manquait aux projets (pas encore fusionnée, numéro de version inchangé : c'est à
   l'Atelier de le choisir).
