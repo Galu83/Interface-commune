@@ -222,6 +222,8 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-115 | Le rendu ne change pas sans être annoncé : volet, petit menu, Paramètres gardent leurs mesures (`mesures`). | auto : `tests/references` (34 images comparées, à 6 près par couleur et 1 pixel sur 5 000 ; sautées si les polices du PC diffèrent de celles des références) |
 | C-116 | Les licences des dépendances sont à jour dans l'avis MIT. | auto : `tests/licences::avis_mit_a_jour` |
 
+C-115, bloc I de la refonte : les captures passent dans `src/dessin/capture.rs` (même rendu, les 34 images d'avant identiques octet pour octet) ; `tests/references` compare désormais **36 images** : la fenêtre de lecture (`fenetre-lecture-clair`, `fenetre-lecture-sombre`, le mot lu surligné) s'y ajoute.
+
 ## Bilan
 
 - **117 comportements** relevés.
