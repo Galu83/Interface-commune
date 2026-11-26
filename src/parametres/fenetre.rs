@@ -1,4 +1,4 @@
-//! La fenêtre des Paramètres (sous Windows) : « Paramètres de <logiciel> », coins arrondis et
+//! La fenêtre des Paramètres (sous Windows) : « Paramètres de `<logiciel>` », coins arrondis et
 //! barre de titre sombre par Windows, aucune animation à nous (Windows anime déjà les
 //! fenêtres), taille et place retenues d'une ouverture à l'autre et toujours en entier sur un
 //! écran, taille minimale. La place est retenue à la fermeture, et aussi 1 s après chaque

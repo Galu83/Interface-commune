@@ -13,10 +13,12 @@
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, sync_channel};
-use std::sync::{Arc, Mutex, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use ic_coeur::gestes::sonde as coeur;
+
+use crate::bords::verrou::{ecriture, lecture, verrou};
 
 mod chien;
 mod panique;
@@ -25,19 +27,18 @@ pub use chien::{Creation, Surveillance, creation};
 pub use ic_coeur::gestes::sonde::{Delais, SEUIL_DE_CREATION, est_une_veille};
 pub use panique::{etape_du_fil, lieu_de_la_derniere_panique, retenir_les_paniques};
 
+// ÉTAT GLOBAL : posé par `regler`, fonction publique appelée avant le lancement, lu par le fil
+// de surveillance à son démarrage.
 static DELAIS: Mutex<Option<Delais>> = Mutex::new(None);
 
 /// Change les délais de la surveillance ; à appeler avant le lancement (la surveillance les lit
 /// une fois, à son démarrage).
 pub fn regler(d: Delais) {
-    *DELAIS.lock().unwrap_or_else(PoisonError::into_inner) = Some(d);
+    *verrou(&DELAIS) = Some(d);
 }
 
 fn delais() -> Delais {
-    DELAIS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .unwrap_or_default()
+    verrou(&DELAIS).unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------------------
@@ -45,18 +46,20 @@ fn delais() -> Delais {
 
 type Sortie = Arc<dyn Fn(String) + Send + Sync>;
 
+// ÉTAT GLOBAL : la fonction de journal, posée par `brancher_le_journal` et appelée de tous les
+// fils (le chien de garde, les fenêtres, l'icône), sans poignée commune.
 static SORTIE: RwLock<Option<Sortie>> = RwLock::new(None);
 
 /// Branche le journal : `f` reçoit chaque ligne de la sonde (la bibliothèque y met
 /// `Logiciel::noter`). Sans journal branché, les lignes sont perdues.
 pub fn brancher_le_journal(f: impl Fn(String) + Send + Sync + 'static) {
-    *SORTIE.write().unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(f));
+    *ecriture(&SORTIE) = Some(Arc::new(f));
 }
 
 /// Écrit une ligne au journal branché, s'il y en a un. Le verrou est rendu avant l'appel : le
 /// journal peut lui-même noter, ou être rebranché, sans attendre.
 pub(crate) fn noter(ligne: String) {
-    let s = SORTIE.read().unwrap_or_else(PoisonError::into_inner).clone();
+    let s = lecture(&SORTIE).clone();
     if let Some(s) = s {
         s(ligne);
     }
@@ -125,22 +128,22 @@ impl Fil {
     }
 
     fn poser(&self, etape: &'static str) {
-        self.etat.lock().unwrap_or_else(PoisonError::into_inner).etape = etape;
+        verrou(&self.etat).etape = etape;
     }
 
     fn entrer(&self, nom: &'static str, maintenant: Instant) -> EnImbrication {
-        let mut e = self.etat.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut e = verrou(&self.etat);
         let avant = e.imbriquee;
         e.imbriquee = Some((nom, maintenant));
         avant
     }
 
     fn sortir(&self, avant: EnImbrication) {
-        self.etat.lock().unwrap_or_else(PoisonError::into_inner).imbriquee = avant;
+        verrou(&self.etat).imbriquee = avant;
     }
 
     fn etat(&self) -> EtatDuFil {
-        *self.etat.lock().unwrap_or_else(PoisonError::into_inner)
+        *verrou(&self.etat)
     }
 
     /// Ce que le cœur lit de ce fil à un tour ; la clé est l'adresse du fil, unique tant qu'il
@@ -157,8 +160,12 @@ impl Fil {
     }
 }
 
+// ÉTAT GLOBAL : les fils inscrits, lus par le fil de surveillance ; `inscrire` est appelée de
+// chaque fil sans poignée commune.
 static FILS: Mutex<Vec<Arc<Fil>>> = Mutex::new(Vec::new());
 
+// ÉTAT GLOBAL : le fil inscrit de ce fil, pour que `battement` et `etape` (appelés sans
+// poignée) trouvent leur compteur ; un par fil.
 thread_local! {
     static COURANT: RefCell<Option<Arc<Fil>>> = const { RefCell::new(None) };
 }
@@ -171,9 +178,7 @@ pub struct Inscription {
 
 impl Drop for Inscription {
     fn drop(&mut self) {
-        FILS.lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|f| !Arc::ptr_eq(f, &self.fil));
+        verrou(&FILS).retain(|f| !Arc::ptr_eq(f, &self.fil));
         COURANT.with(|c| *c.borrow_mut() = None);
     }
 }
@@ -183,9 +188,7 @@ impl Drop for Inscription {
 /// demandée) ; `None` si sa boucle tourne toujours.
 pub fn inscrire(nom: &'static str, reveil: Option<Box<dyn Fn() + Send + Sync>>) -> Inscription {
     let fil = Fil::nouveau(nom, reveil);
-    FILS.lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .push(fil.clone());
+    verrou(&FILS).push(fil.clone());
     COURANT.with(|c| *c.borrow_mut() = Some(fil.clone()));
     chien::demarrer_la_surveillance();
     Inscription { fil }

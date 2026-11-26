@@ -58,7 +58,7 @@ pub fn ligne_menu(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str) -> Respon
     ligne_de(ui, p, glyphe, p.texte, texte, None, MENU_LIGNE)
 }
 
-/// La ligne du petit menu par défaut (« Ouvrir <logiciel> »), en gras (semibold), comme
+/// La ligne du petit menu par défaut (« Ouvrir `<logiciel>` »), en gras (semibold), comme
 /// l'entrée par défaut des menus de Windows.
 pub fn ligne_menu_grasse(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str) -> Response {
     ligne_police(ui, p, glyphe, p.texte, texte, None, MENU_LIGNE, semibold(14.0))
@@ -185,16 +185,31 @@ pub enum Genre {
     Danger,
 }
 
+/// La largeur du texte d'un [`bouton`] et la place de son icône (points).
+fn mesure_bouton(ui: &Ui, glyphe: Option<char>, texte: &str) -> (f32, f32) {
+    let largeur_texte = ui
+        .painter()
+        .layout_no_wrap(
+            texte.to_string(),
+            FontId::proportional(14.0),
+            egui::Color32::PLACEHOLDER,
+        )
+        .size()
+        .x;
+    (largeur_texte, if glyphe.is_some() { 24.0 } else { 0.0 })
+}
+
+/// La largeur qu'aura un [`bouton`] (points), sans le dessiner : pour réserver sa place.
+pub(crate) fn largeur_bouton(ui: &Ui, glyphe: Option<char>, texte: &str) -> f32 {
+    let (largeur_texte, avec_icone) = mesure_bouton(ui, glyphe, texte);
+    (largeur_texte + avec_icone + 28.0).max(if texte.is_empty() { 32.0 } else { 80.0 })
+}
+
 /// Un bouton de 32 px de haut, avec une icône facultative.
 pub fn bouton(ui: &mut Ui, p: &Palette, glyphe: Option<char>, texte: &str, genre: Genre) -> Response {
     let police = FontId::proportional(14.0);
-    let largeur_texte = ui
-        .painter()
-        .layout_no_wrap(texte.to_string(), police.clone(), couleur(p.texte))
-        .size()
-        .x;
-    let avec_icone = if glyphe.is_some() { 24.0 } else { 0.0 };
-    let largeur = (largeur_texte + avec_icone + 28.0).max(if texte.is_empty() { 32.0 } else { 80.0 });
+    let (largeur_texte, avec_icone) = mesure_bouton(ui, glyphe, texte);
+    let largeur = largeur_bouton(ui, glyphe, texte);
     let (rect, r) = ui.allocate_exact_size(vec2(largeur, 32.0), Sense::click());
     if ui.is_rect_visible(rect) {
         let (fond, bord, texte_c) = match genre {

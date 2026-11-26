@@ -10,6 +10,7 @@ use super::*;
 
 /// Les essais qui touchent à l'état global (journal, fils inscrits, délais) se suivent, avec
 /// des délais courts : la surveillance réelle n'est lancée qu'une fois pour le programme.
+// ÉTAT GLOBAL (essais seulement) : un verrou qui fait passer ces essais l'un après l'autre.
 static GLOBAL: Mutex<()> = Mutex::new(());
 
 fn courts() {
@@ -90,7 +91,7 @@ fn deux_vrais_fils_un_seul_bloque() {
 /// reçoit ; débranché, les lignes sont perdues sans rien casser.
 #[test]
 fn le_journal_branche_recoit_les_lignes() {
-    let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let _g = verrou(&GLOBAL);
     let premier = journal();
     clic("essai");
     let second = journal();
@@ -110,7 +111,7 @@ fn le_journal_branche_recoit_les_lignes() {
 /// la surveillance ne laisse rien derrière lui.
 #[test]
 fn la_garde_ecrit_debut_et_fin_et_rend_l_etat() {
-    let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let _g = verrou(&GLOBAL);
     courts();
     let lignes = journal();
     let inscription = inscrire("essai", None);
@@ -190,7 +191,7 @@ fn attendre(lignes: &Mutex<Vec<String>>, f: &dyn Fn(&str) -> bool) -> bool {
 /// est dit une fois, puis dit reparti. (Seul essai qui lance la boucle réelle.)
 #[test]
 fn la_boucle_reelle_dit_le_blocage_et_la_reprise() {
-    let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let _g = verrou(&GLOBAL);
     courts();
     let lignes = journal();
     let (tx, rx) = std::sync::mpsc::channel::<()>();
@@ -225,7 +226,7 @@ fn la_boucle_reelle_dit_le_blocage_et_la_reprise() {
 /// C-108, le vrai fil : une création qui ne finit pas est écrite au journal, puis sa fin aussi.
 #[test]
 fn le_chien_ecrit_la_creation_qui_dure() {
-    let _g = GLOBAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let _g = verrou(&GLOBAL);
     let lignes = journal();
     regler_le_seuil_de_creation(Duration::from_millis(100));
     let c = creation("Fenêtre d'essai du chien");

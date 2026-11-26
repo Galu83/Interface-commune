@@ -26,9 +26,14 @@ garder (`COMPORTEMENTS.md`). Il finit par une recommandation : **A**, une refont
   arrive.
 - **Rendu ?** : est-ce que ce qu'on voit à l'écran change ? **API ?** : est-ce qu'un logiciel
   doit changer son code ? Pour chaque « oui », on dit comment migrer.
-- **Les logiciels qui dépendent de la bibliothèque** : KVMSoft, PowerPeek (refonte en cours),
-  Vocalis et Chat PDC. Chacun épingle une version précise (`rev`). Rien ne change pour eux tant
+- **Les logiciels qui dépendent de la bibliothèque** : KVMSoft, PowerPeek (refonte en cours)
+  et Vocalis. Chacun épingle une version précise (`rev`). Rien ne change pour eux tant
   qu'ils ne montent pas de version.
+
+> **Note d'histoire (26 nov. 2026)** : au moment de ce relevé (24 et 25 nov.), un quatrième
+> logiciel prenait la bibliothèque, Chat PDC, depuis arrêté par le propriétaire. Il ne prenait que
+> `horloge::Horloge` et `parametres::modele`, que les autres prennent aussi : les chiffres de
+> cette analyse ne changent pas sans lui.
 
 ## 1. Les chiffres
 
@@ -45,7 +50,7 @@ Mesurés sur le code de `main` au 24 nov. 2026 : 54 fichiers Rust, 27 679 lignes
 | `unwrap`, `expect`, `panic!`, `todo!` hors tests | **0** (interdits par `Cargo.toml`) |
 | `unsafe` | 110 blocs, environ 105 avec leur commentaire `SAFETY`. Le `#[allow(unsafe_code)]` est limité à 4 modules : `echelle`, `horloge`, `systeme`, `zone` |
 | Tests sans fenêtre | **254 tests, 0 échec** (`--lib` et 8 essais de `tests/`) |
-| Code mort | **2 éléments** : `surface::dessiner_volet` et `theme::HAUTEUR_LIGNE`. Aucun usage, ni dans la bibliothèque, ni dans ses tests, ni dans les quatre logiciels |
+| Code mort | **2 éléments** : `surface::dessiner_volet` et `theme::HAUTEUR_LIGNE`. Aucun usage, ni dans la bibliothèque, ni dans ses tests, ni dans les logiciels |
 | Cœur déjà sans Windows | `clics`, `menu`, `place`, `parametres::modele`, `textes`, `touches`, `theme`, `mesures` et la partie « décision » de `fenetres` ne touchent pas Windows, et sont testés |
 
 ### 1.2 Les défauts
@@ -63,7 +68,7 @@ Mesurés sur le code de `main` au 24 nov. 2026 : 54 fichiers Rust, 27 679 lignes
 | **Doublons** | **6** | voir § 1.4 |
 | **Comportements sans essai** | **15** sur 116 | 9 sans aucun essai, 6 en partie (`COMPORTEMENTS.md`, bilan) |
 | **Fichiers sans aucun test interne** | 9 | `apparence`, `couleurs`, `echelle`, `icones`, `lib`, `mesures`, `polices`, `surface`, `parametres/fenetre`. Plusieurs sont couverts par les essais de `tests/` |
-| **Surface publique plus large que l'usage** | 213 sur 680 éléments publics ne servent à aucun des quatre logiciels | surtout `mesures` (45), `fenetres` (20), `parametres` (32), `place` (12). **Ce n'est pas du code mort** : la bibliothèque s'en sert elle-même |
+| **Surface publique plus large que l'usage** | 213 sur 680 éléments publics ne servent à aucun des logiciels | surtout `mesures` (45), `fenetres` (20), `parametres` (32), `place` (12). **Ce n'est pas du code mort** : la bibliothèque s'en sert elle-même |
 | Fichier `.seuils-acquis` | absent | il faut le créer pour les gros fichiers gardés en attendant leur découpe |
 
 ### 1.3 La taille des fichiers
@@ -117,7 +122,7 @@ Les lettres renvoient aux blocs de `IDEAL.md` (§ 3).
 | **J. Boucle des fenêtres** | `fenetres` (1 630), `autres_fenetres` (1 501), une partie de `horloge` (`Fenetres`, `fil_des_fenetres`, secours) | Le code de `fenetres` est déjà pur et bien testé (19 tests), mais `boucle_des_fenetres` fait 155 lignes ; les tests (642 et 891 lignes) gonflent les fichiers ; le lancement du fil vit dans `horloge.rs` | **adapter** : sortir les tests ; couper `boucle_des_fenetres` en étapes ; déplacer `fil_des_fenetres` et `Fenetres` de `horloge.rs` vers `fenetres/fil.rs` | 2 | **élevé** : c'est la partie la plus fragile (pannes passées : rafales, recréation, fil bloqué). Elle est couverte surtout par des tests GitHub en vraies fenêtres | non | non (`fenetres::envoyer_le_clic`, `Demande` et `autres_fenetres::Ouverture` gardés pour PowerPeek et KVMSoft) |
 | **K. Guichet (`Poste`)** | dans `horloge.rs` (378-480) | il n'a pas de fichier à lui | **adapter** : `poste.rs`, `pub use` dans `horloge` | 0,5 | faible | non | non |
 | **L. Système Windows** | `systeme` (803), `apparence` (157), `polices` (152), `echelle` (91), `verification` (165) | une troisième fenêtre cachée (`systeme.rs:674`) ; `apparence`, `echelle` et `polices` sans test interne | **adapter** : une seule fabrique de fenêtre cachée ; sortir les tests de `systeme` | 1 | moyen | non | non |
-| **M. Icône et fenêtre cachée** | `horloge` (1 509), `zone` (1 618) | **Deux systèmes pour la même chose** (§ 1.4) : deux fenêtres cachées, deux procédures de messages (`horloge::procedure` 126 lignes), deux menus de secours, deux aiguilleurs. Les deux fichiers dépassent 1 100 lignes de code | **réécrire l'intérieur** : `Horloge` devient une façade sur une `Zone` à une seule icône ; un seul aiguilleur, une seule fenêtre cachée, un seul menu de secours. Les types publics (`Horloge`, `Reveil`, `Poste`, `Niveau`, `MessageWindows`, `FinDeSession`, `FenetresCommunes`, `guid_stable`) restent | 4 | **élevé** : messages de Windows, redémarrage de l'Explorateur (C-06, vérifié seulement à la main), notifications | **non**, à une condition : le menu de secours garde les lignes et l'ordre d'aujourd'hui (C-45) | **non** pour KVMSoft, Vocalis et Chat PDC (`Horloge` garde ses méthodes). Le GUID de l'icône seule doit rester le même, sinon Windows oublie la place de l'icône choisie par l'utilisateur : garder l'identifiant actuel (ID 1) ou le migrer une seule fois, en l'annonçant dans `MIGRATION.md` |
+| **M. Icône et fenêtre cachée** | `horloge` (1 509), `zone` (1 618) | **Deux systèmes pour la même chose** (§ 1.4) : deux fenêtres cachées, deux procédures de messages (`horloge::procedure` 126 lignes), deux menus de secours, deux aiguilleurs. Les deux fichiers dépassent 1 100 lignes de code | **réécrire l'intérieur** : `Horloge` devient une façade sur une `Zone` à une seule icône ; un seul aiguilleur, une seule fenêtre cachée, un seul menu de secours. Les types publics (`Horloge`, `Reveil`, `Poste`, `Niveau`, `MessageWindows`, `FinDeSession`, `FenetresCommunes`, `guid_stable`) restent | 4 | **élevé** : messages de Windows, redémarrage de l'Explorateur (C-06, vérifié seulement à la main), notifications | **non**, à une condition : le menu de secours garde les lignes et l'ordre d'aujourd'hui (C-45) | **non** pour KVMSoft et Vocalis (`Horloge` garde ses méthodes). Le GUID de l'icône seule doit rester le même, sinon Windows oublie la place de l'icône choisie par l'utilisateur : garder l'identifiant actuel (ID 1) ou le migrer une seule fois, en l'annonçant dans `MIGRATION.md` |
 | **N. Instance unique** | dans `horloge.rs` (121-287) | elle n'a pas de fichier à elle | **adapter** : `unique.rs`, avec `pub use` de `instance_unique_avec` et `Unique` | 0,5 | faible | non | non |
 | **O. Sonde et vérification** | `sonde` (1 028, dont 470 de code), `verification` (165) | 11 `static` sans commentaire ; 558 lignes de tests dans le fichier | **tel quel**, sauf : commenter l'état global, sortir les tests | 0,5 | faible | non | non |
 
@@ -176,7 +181,7 @@ nouveauté pendant le chantier, elle s'ajoute sur `main` entre deux étapes, ave
   les modules sont rangés comme les blocs de l'idéal, et la séparation devient un simple
   déménagement de dossiers (environ 3 jours). Elle reste possible plus tard, si un logiciel en a
   besoin, par exemple pour compiler le cœur sans Windows.
-- **B ne retire pas les méthodes de dessin des traits** (`Reglages::dessiner_page`…). Les quatre
+- **B ne retire pas les méthodes de dessin des traits** (`Reglages::dessiner_page`…). Les trois
   logiciels les implémentent : il faudrait changer leur code. Ce serait un changement d'API à
   annoncer, à faire plus tard, avec une période de dépréciation.
 - **B ne réduit pas la surface publique.** 213 éléments publics ne servent à aucun logiciel. Les
@@ -230,9 +235,7 @@ garderont les essais de compatibilité (§ 3).
   `place::Place` ; `horloge::{Niveau, MessageWindows}` ; `textes::FRANCAIS` ; `briques::Brique` ;
   `autres_fenetres::AutresFenetres` ; `zone::FinDeSession` ; `theme::Surface` ; `surface` ;
   `polices::polices_ou_vides` ; `capture`.
-- **Chat PDC** (rev `77bad2b`) : `horloge::Horloge` ; `parametres::modele`.
-
-Les quatre logiciels implémentent `Reglages` et `Logiciel`. Aucun n'utilise
+Les trois logiciels implémentent `Reglages` et `Logiciel`. Aucun n'utilise
 `dessiner_rapides` ni `largeur_rapides`.
 
 ## 7. Comment ces mesures ont été prises
@@ -241,7 +244,7 @@ Les quatre logiciels implémentent `Reglages` et `Logiciel`. Aucun n'utilise
   fichier, en séparant le module `#[cfg(test)]`, et qui suit les accolades de chaque `fn`.
 - Le code mort et la surface publique : un script qui cherche chaque nom public (`pub fn`,
   `struct`, `enum`, `trait`, `const`, `type`, `static`), mot entier, dans la bibliothèque, ses
-  tests et ses exemples, puis dans les fichiers Rust suivis par Git des quatre logiciels. Une
+  tests et ses exemples, puis dans les fichiers Rust suivis par Git des logiciels. Une
   méthode appelée par un trait, ou un nom très courant, peut échapper à ce relevé : les chiffres
   sont des ordres de grandeur.
 - Les tests : `cargo test --lib` et les essais sans fenêtre, avec `CARGO_BUILD_JOBS=2` et

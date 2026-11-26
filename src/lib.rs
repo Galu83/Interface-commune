@@ -62,7 +62,6 @@ pub mod pastilles {
 }
 pub mod place;
 pub mod polices;
-mod reprise;
 pub mod seuils {
     //! La barre à seuils : des zones colorées dont on fait glisser les limites (écrite dans
     //! `src/dessin/seuils.rs`, bloc F ; le déplacement d'une limite dans le cœur).

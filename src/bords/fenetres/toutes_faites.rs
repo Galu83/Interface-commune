@@ -6,9 +6,9 @@ use std::sync::{Arc, Mutex};
 use eframe::egui::{self, Ui, ViewportCommand, vec2};
 
 use super::autres::{AutresFenetres, Cadre, Contenu, Ouverture};
-use super::verrou;
 use crate::Textes;
 use crate::apparence::couleur;
+use crate::bords::verrou::verrou;
 use crate::place::Place;
 use crate::theme::Palette;
 

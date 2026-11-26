@@ -33,6 +33,9 @@ pub fn reglage_dpi() {
 /// Le numéro de notre sous-classe (une fenêtre peut en avoir plusieurs).
 const ID: usize = 0x4543_4845;
 
+// ÉTAT GLOBAL : la procédure de sous-classe ne reçoit rien d'autre que le message ;
+// WM_DPICHANGED pose le rectangle suggéré, WM_WINDOWPOSCHANGING (envoyé pendant l'appel, sur le
+// même fil) le lit. Un par fil, rendu à sa valeur d'avant à la fin du message.
 thread_local! {
     /// Le changement d'échelle en cours sur ce fil : la fenêtre et le rectangle suggéré.
     static EN_COURS: Cell<Option<(isize, Rect)>> = const { Cell::new(None) };

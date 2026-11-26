@@ -100,7 +100,7 @@ pub enum Brique {
 pub struct ImageAppareil {
     pub texture: egui::TextureId,
     /// Son côté, en points : dessinée à sa taille réelle (pixels / pixels par point), jamais
-    /// agrandie, au plus [`VOLET_TUILE`] moins 6.
+    /// agrandie, au plus [`VOLET_TUILE`](crate::mesures::VOLET_TUILE) moins 6.
     pub cote: f32,
     /// Le fond de sa tuile (par exemple la couleur de la barre des tâches, que l'icône
     /// suppose) ; `None` : sans tuile.
@@ -110,7 +110,7 @@ pub struct ImageAppareil {
 /// Ce qu'une brique « appareil » peut montrer de plus que son glyphe, son nom et son niveau.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlusAppareil {
-    /// Une image dans une tuile de [`VOLET_TUILE`] points, à la place du glyphe ; la ligne
+    /// Une image dans une tuile de [`VOLET_TUILE`](crate::mesures::VOLET_TUILE) points, à la place du glyphe ; la ligne
     /// prend alors au moins la hauteur de la tuile.
     pub image: Option<ImageAppareil>,
     /// La couleur de la barre et de l'éclair (vert, orange, rouge selon le niveau…) ; `None` :

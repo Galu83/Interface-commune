@@ -3,7 +3,7 @@
 use egui::{CornerRadius, Response, Sense, Stroke, Ui, Vec2, vec2};
 use ic_coeur::textes::insecables;
 
-use super::base::{Genre, bouton, focus, icone};
+use super::base::{Genre, bouton, focus, icone, largeur_bouton};
 use crate::dessin::couleur::couleur;
 use crate::icones;
 use crate::polices::{semibold, titre};
@@ -42,7 +42,27 @@ pub fn carte(
     explication: &str,
     controle: impl FnOnce(&mut Ui),
 ) {
-    carte_avec(ui, p, glyphe, texte, explication, 200.0, Some(controle));
+    carte_avec(ui, p, glyphe, texte, explication, PLACE_CONTROLE, Some(controle));
+}
+
+/// La hauteur minimale d'une carte, sans ses marges (points).
+const CARTE_HAUTEUR: f32 = 48.0;
+
+/// La place réservée à droite d'une carte pour un contrôle simple (interrupteur, un bouton).
+const PLACE_CONTROLE: f32 = 200.0;
+
+/// La place à réserver à droite d'une carte pour une rangée de boutons (pour
+/// [`carte_large`]) : leurs largeurs réelles, dans la langue du moment, et l'écart avant
+/// chacun (celui qui les sépare du texte compris) ; jamais moins qu'un contrôle simple. Une
+/// constante écrite à la main se trompe dès qu'un texte s'allonge : le bouton recouvre alors
+/// la fin de l'explication.
+pub(crate) fn place_des_boutons(ui: &Ui, boutons: &[(Option<char>, &str)]) -> f32 {
+    let ecart = ui.spacing().item_spacing.x;
+    let place: f32 = boutons
+        .iter()
+        .map(|(glyphe, texte)| largeur_bouton(ui, *glyphe, texte) + ecart)
+        .sum();
+    place.max(PLACE_CONTROLE)
 }
 
 /// Une carte dont les contrôles prennent `place` points (plusieurs boutons).
@@ -68,7 +88,7 @@ pub fn carte_chevron(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str, explic
     let r = cadre_carte(p).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            ui.set_min_height(48.0);
+            ui.set_min_height(CARTE_HAUTEUR);
             let (r, _) = ui.allocate_exact_size(Vec2::new(28.0, 32.0), Sense::hover());
             icone(ui, r.center(), glyphe, 20.0, p.texte);
             ui.add_space(8.0);
@@ -118,7 +138,7 @@ pub fn entete_section(
     let r = cadre_carte(p).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            ui.set_min_height(48.0);
+            ui.set_min_height(CARTE_HAUTEUR);
             if let Some(g) = glyphe {
                 let (r, _) = ui.allocate_exact_size(Vec2::new(28.0, 32.0), Sense::hover());
                 icone(ui, r.center(), g, 20.0, p.texte);
@@ -172,14 +192,21 @@ fn carte_avec(
     cadre_carte(p).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            ui.set_min_height(48.0);
+            ui.set_min_height(CARTE_HAUTEUR);
             let (r, _) = ui.allocate_exact_size(Vec2::new(28.0, 32.0), Sense::hover());
             icone(ui, r.center(), glyphe, 20.0, p.texte);
             ui.add_space(8.0);
             let largeur_texte = (ui.available_width() - place_controle).max(160.0);
             ui.vertical(|ui| {
                 ui.set_width(largeur_texte);
-                ui.add_space(4.0);
+                if explication.is_empty() {
+                    // Un titre seul se centre sur la hauteur de la carte, comme l'icône et le
+                    // contrôle (sinon il reste collé en haut).
+                    let hauteur = ui.text_style_height(&egui::TextStyle::Body);
+                    ui.add_space(((CARTE_HAUTEUR - hauteur) / 2.0).max(4.0));
+                } else {
+                    ui.add_space(4.0);
+                }
                 ui.label(texte);
                 if !explication.is_empty() {
                     ui.add(

@@ -3,10 +3,12 @@
 //! (`ic_coeur::gestes::sonde`) ce qu'il faut en dire, et l'écrit au journal.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use ic_coeur::gestes::sonde as coeur;
+
+use crate::bords::verrou::verrou;
 
 use super::{FILS, Fil, delais, noter, secondes_utc};
 
@@ -63,6 +65,8 @@ impl Surveillance {
 
 /// Lance l'unique fil de surveillance (une seule fois pour le programme).
 pub(super) fn demarrer_la_surveillance() {
+    // ÉTAT GLOBAL : un seul fil de surveillance pour tout le programme, quel que soit le fil
+    // inscrit le premier.
     static UNE_FOIS: OnceLock<()> = OnceLock::new();
     UNE_FOIS.get_or_init(|| {
         let d = delais();
@@ -75,10 +79,10 @@ pub(super) fn demarrer_la_surveillance() {
                 if coeur::est_une_veille(maintenant.saturating_duration_since(avant), d.pas) {
                     // Une reprise que Windows n'aurait pas signalée (WM_POWERBROADCAST) : le
                     // dessin des fenêtres attend aussi la fin du réveil.
-                    crate::reprise::reveil();
+                    crate::bords::reprise::reveil();
                 }
                 avant = maintenant;
-                let fils: Vec<Arc<Fil>> = FILS.lock().unwrap_or_else(PoisonError::into_inner).clone();
+                let fils: Vec<Arc<Fil>> = verrou(&FILS).clone();
                 s.tour_et_reveils(maintenant, &fils, &mut noter);
             }
         });
@@ -89,6 +93,8 @@ pub(super) fn demarrer_la_surveillance() {
 // Le chien de garde des créations de fenêtre
 
 /// Le seuil en millisecondes (les essais le raccourcissent).
+// ÉTAT GLOBAL : lu par le fil du chien des créations, qui n'a pas d'autre entrée ; seuls les
+// essais le changent.
 static SEUIL_CREATION_MS: AtomicU64 = AtomicU64::new(3_000);
 
 #[cfg(test)]
@@ -103,7 +109,10 @@ fn seuil_de_creation() -> Duration {
     Duration::from_millis(SEUIL_CREATION_MS.load(Ordering::Acquire))
 }
 
+// ÉTAT GLOBAL : les créations en cours, posées par le fil qui crée la fenêtre et lues par le
+// chien des créations (un autre fil) ; `creation` est appelée sans poignée.
 static CREATIONS: Mutex<Vec<coeur::EnCreation<Instant>>> = Mutex::new(Vec::new());
+// ÉTAT GLOBAL : le numéro de la prochaine création, même raison que `CREATIONS`.
 static PROCHAINE_CREATION: AtomicU64 = AtomicU64::new(1);
 
 /// Une création de fenêtre en cours : à garder pendant tout l'appel qui crée la fenêtre.
@@ -118,16 +127,13 @@ pub struct Creation {
 /// Commence la surveillance de la création de la fenêtre `nom`.
 pub fn creation(nom: &str) -> Creation {
     let id = PROCHAINE_CREATION.fetch_add(1, Ordering::AcqRel);
-    CREATIONS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .push(coeur::EnCreation {
-            id,
-            nom: nom.to_string(),
-            debut: Instant::now(),
-            debut_utc: secondes_utc(SystemTime::now()),
-            signalee: false,
-        });
+    verrou(&CREATIONS).push(coeur::EnCreation {
+        id,
+        nom: nom.to_string(),
+        debut: Instant::now(),
+        debut_utc: secondes_utc(SystemTime::now()),
+        signalee: false,
+    });
     demarrer_le_chien_des_creations();
     Creation { id }
 }
@@ -135,7 +141,7 @@ pub fn creation(nom: &str) -> Creation {
 impl Drop for Creation {
     fn drop(&mut self) {
         let fini = {
-            let mut l = CREATIONS.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut l = verrou(&CREATIONS);
             l.iter().position(|c| c.id == self.id).map(|i| l.remove(i))
         };
         if let Some(ligne) = fini.and_then(|c| coeur::fin_de_creation(&c, Instant::now())) {
@@ -147,6 +153,7 @@ impl Drop for Creation {
 /// Lance l'unique fil du chien de garde des créations (une seule fois pour le programme). Il
 /// regarde souvent ([`coeur::pas_des_creations`]) et ne fait rien d'autre.
 fn demarrer_le_chien_des_creations() {
+    // ÉTAT GLOBAL : un seul chien des créations pour tout le programme.
     static UNE_FOIS: OnceLock<()> = OnceLock::new();
     UNE_FOIS.get_or_init(|| {
         let _ = std::thread::Builder::new()
@@ -158,7 +165,7 @@ fn demarrer_le_chien_des_creations() {
                     let pas = coeur::pas_des_creations(seuil);
                     std::thread::sleep(pas);
                     let lignes = {
-                        let mut l = CREATIONS.lock().unwrap_or_else(PoisonError::into_inner);
+                        let mut l = verrou(&CREATIONS);
                         coeur::tour_des_creations(&mut l, Instant::now(), &mut dernier, pas, seuil)
                     };
                     for ligne in lignes {

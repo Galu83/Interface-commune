@@ -1,7 +1,7 @@
 //! Les Paramètres à la façon de Windows 11 (règles : interface Windows 11, point 7), le même
 //! squelette dans tous les logiciels, dessiné comme ceux de PowerPeek (le modèle) :
 //!
-//! - barre de titre « Paramètres de <logiciel> » ;
+//! - barre de titre « Paramètres de `<logiciel>` » ;
 //! - en haut de la navigation : le vrai logo du logiciel (32 points), son nom (16 points,
 //!   semibold) et juste dessous « Version x.y.z » (12 points) ;
 //! - la navigation à gauche, dont la largeur suit ses textes (250 points au moins, comme

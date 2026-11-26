@@ -1,5 +1,5 @@
-//! Les filets de compatibilité (C-114) : ce que chacun des quatre logiciels prend de la
-//! bibliothèque, relevé dans leur code le 24 nov. 2026 (KVMSoft, PowerPeek, Vocalis, Chat PDC),
+//! Les filets de compatibilité (C-114) : ce que chacun des trois logiciels prend de la
+//! bibliothèque, relevé dans leur code le 24 nov. 2026 (KVMSoft, PowerPeek, Vocalis),
 //! complété le 25 nov. avec les usages de KVMSoft et de PowerPeek sur la rev e077572.
 //!
 //! Chaque module reprend :
@@ -21,7 +21,7 @@
 
 use interface_commune::Identite;
 
-/// Une identité inventée, la même pour les quatre.
+/// Une identité inventée, la même pour les trois.
 fn identite() -> Identite {
     Identite {
         nom: "Imité".into(),
@@ -630,73 +630,5 @@ mod vocalis {
         let logiciel = Imite(super::identite());
         let _: &dyn ic::Logiciel = &logiciel;
         let _: Box<dyn ic::autres_fenetres::Contenu> = Box::new(Fenetre);
-    }
-}
-
-/// Ce que Chat PDC prend de la bibliothèque.
-mod chat_pdc {
-    use interface_commune as ic;
-    #[rustfmt::skip]
-    use interface_commune::{Communs as _, Credit as _, Etat as _, EtatMiseAJour as _, FenetrePrincipale as _, GenreEtat as _, Identite as _, Logiciel as _, Reglages as _, Valeur as _, cles as _, clics as _, clics::Geste as _, clics::Suite as _, horloge as _, horloge::AuClic as _, horloge::Horloge as _, horloge::Niveau as _, horloge::Poste as _, horloge::Reveil as _, menu as _, menu::Action as _, menu::Choix as _, parametres::modele::GENERAL as _, parametres::modele::MISE_A_JOUR as _, textes::FRANCAIS as _};
-
-    /// Un logiciel inventé qui remplace, dans les traits, les mêmes méthodes que Chat PDC.
-    struct Imite(ic::Identite);
-
-    impl ic::Reglages for Imite {
-        fn action(&self, _cle: &str) {}
-        fn changer(&self, _cle: &str, _valeur: ic::Valeur) {}
-        fn communs(&self) -> ic::Communs {
-            ic::Communs::default()
-        }
-        fn identite(&self) -> &ic::Identite {
-            &self.0
-        }
-        fn rechercher_mise_a_jour(&self) {}
-    }
-
-    impl ic::Logiciel for Imite {
-        fn actions_menu(&self) -> Vec<ic::menu::Action> {
-            Vec::new()
-        }
-        fn etat(&self) -> ic::Etat {
-            etat()
-        }
-        fn fenetre_principale(&self) -> Option<ic::FenetrePrincipale> {
-            Some(ic::FenetrePrincipale::default())
-        }
-        fn icone_etat(&self, _taille: u32, _barre_sombre: bool) -> Option<Vec<u8>> {
-            None
-        }
-        fn noter(&self, _ligne: String) {}
-        fn ouvrir_fenetre_principale(&self) {}
-        fn quitter(&self) {}
-    }
-
-    fn etat() -> ic::Etat {
-        ic::Etat {
-            genre: ic::GenreEtat::Pret,
-            titre: String::new(),
-            ligne: String::new(),
-            detail: None,
-        }
-    }
-
-    #[test]
-    fn les_noms_et_les_signatures_restent() {
-        let _: fn(ic::clics::Geste, Option<ic::FenetrePrincipale>) -> ic::clics::Suite = ic::clics::suite;
-        let _: fn(
-            &ic::Textes,
-            Option<&str>,
-            &[ic::menu::Action],
-            &[ic::menu::Action],
-        ) -> Vec<Option<ic::menu::Ligne>> = ic::menu::lignes_avec;
-        let _: fn(&dyn ic::Reglages, Option<&std::path::Path>, &str) -> Option<std::path::PathBuf> =
-            ic::parametres::fenetre::choisir_dossier;
-        let _: fn([i32; 2]) -> Option<[i32; 2]> = ic::systeme::centree;
-        let _: fn() -> ic::theme::ChoixWindows = ic::systeme::choix_windows;
-        let _: fn(isize, bool) = ic::systeme::habiller;
-        let _: fn(isize) = ic::systeme::premier_plan;
-        let logiciel = Imite(super::identite());
-        let _: &dyn ic::Logiciel = &logiciel;
     }
 }

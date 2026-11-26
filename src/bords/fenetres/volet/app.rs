@@ -5,10 +5,10 @@ use std::sync::atomic::Ordering;
 
 use eframe::egui::{self, ViewportCommand};
 
-use super::super::verrou;
 use super::fenetre::Volet;
 use super::{Etape, ImageVue, OBSERVATEUR, discret, fleches_en_tab, rang, voilee};
 use crate::apparence::couleur;
+use crate::bords::verrou::verrou;
 use crate::surface;
 use crate::systeme::{self, hwnd_de};
 
@@ -34,7 +34,7 @@ impl eframe::App for Volet<'_> {
         if let Etape::Preparation(_) = self.etape {
             // Une fenêtre cachée n'est dessinée que sur demande ; les demandes attendent la
             // fin de la préparation. Pendant un réveil de Windows, la préparation attend.
-            match crate::reprise::attente_avant_dessin() {
+            match crate::bords::reprise::attente_avant_dessin() {
                 Some(d) => ctx.request_repaint_after(d),
                 None => {
                     ctx.send_viewport_cmd(ViewportCommand::RequestPaintWhileHidden);
@@ -50,7 +50,7 @@ impl eframe::App for Volet<'_> {
             // ferait aucune). Une création ratée attend son nouvel essai. Pendant un réveil
             // de Windows (`crate::reprise`), aucune image complète : OpenGL et SwapBuffers
             // ont bloqué ce fil plus d'une minute au sortir d'une veille.
-            let dans = match crate::reprise::attente_avant_dessin() {
+            let dans = match crate::bords::reprise::attente_avant_dessin() {
                 Some(r) => dans.max(r),
                 None => dans,
             };

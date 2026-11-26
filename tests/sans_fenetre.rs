@@ -824,6 +824,86 @@ fn journal_detaille_et_effacer_avec_confirmation() {
     assert!(texte(&v, t.oui_effacer).is_some());
 }
 
+/// Un texte dessiné, retrouvé sans tenir compte des espaces insécables posées au dessin.
+fn texte_souple<'a>(v: &'a [Dessine], cherche: &str) -> Option<&'a egui::Rect> {
+    let simple = |s: &str| s.replace(['\u{a0}', '\u{202f}'], " ");
+    v.iter().find_map(|d| match d {
+        Dessine::Texte { texte, rect, .. } if simple(texte) == cherche => Some(rect),
+        _ => None,
+    })
+}
+
+/// Carte « Journal », journal effaçable, en français : les deux boutons (« Ouvrir le journal »,
+/// « Effacer le journal ») ne recouvrent jamais l'explication. La place réservée à droite se
+/// mesure sur les boutons réels, pas sur une constante.
+#[test]
+fn boutons_du_journal_ne_recouvrent_pas_l_explication() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let t = Textes::default();
+    let l = Variante(
+        Demo::new(),
+        Communs {
+            journal_effacable: true,
+            ..Demo::new().communs()
+        },
+    );
+    let mut s = Parametres::new(&l, Some("general"));
+    let v = image_parametres(&mut s, &l);
+    let explication = texte_souple(&v, t.journal_explication).expect("l'explication du journal");
+    for nom in [t.ouvrir_le_journal, t.effacer_le_journal] {
+        let (texte_bouton, _) = texte(&v, nom).expect("le bouton");
+        // Le texte est centré dans le bouton, 14 points de marge de chaque côté (80 au moins).
+        let bord = texte_bouton.center().x - (texte_bouton.width() + 28.0).max(80.0) / 2.0;
+        assert!(
+            explication.max.x <= bord + 0.5,
+            "« {nom} » recouvre l'explication ({explication:?}, bord du bouton à {bord})"
+        );
+        assert!(
+            (texte_bouton.center().y - explication.center().y).abs() < 48.0,
+            "« {nom} » sur la même carte"
+        );
+    }
+}
+
+/// Une carte sans explication (« Chercher les mises à jour ») : le titre seul est centré sur la
+/// hauteur de la carte, à la hauteur de l'interrupteur, et non collé en haut.
+#[test]
+fn titre_seul_centre_dans_sa_carte() {
+    if polices::polices().is_err() {
+        return;
+    }
+    let t = Textes::default();
+    // Recherches actives : la carte n'a pas d'explication.
+    let l = Variante(
+        Demo::new(),
+        Communs {
+            recherches: Some(true),
+            ..Demo::new().communs()
+        },
+    );
+    let mut s = Parametres::new(&l, Some("mise_a_jour"));
+    let v = image_parametres(&mut s, &l);
+    let (titre, _) = texte(&v, t.chercher_mises_a_jour).expect("le titre seul");
+    let etat = v
+        .iter()
+        .filter_map(|d| match d {
+            Dessine::Texte { texte, rect, .. } if texte == t.active || texte == t.desactive => Some(*rect),
+            _ => None,
+        })
+        .min_by(|a, b| {
+            let da = (a.center().y - titre.center().y).abs();
+            let db = (b.center().y - titre.center().y).abs();
+            da.total_cmp(&db)
+        })
+        .expect("l'état de l'interrupteur");
+    assert!(
+        (titre.center().y - etat.center().y).abs() <= 1.5,
+        "titre seul pas centré : {titre:?} contre l'interrupteur {etat:?}"
+    );
+}
+
 /// Notifications : le bouton « Essayer » ne se montre que si le logiciel le demande, et
 /// seulement avec la carte « Notifications » ; sans lui, la page ne change pas.
 #[test]

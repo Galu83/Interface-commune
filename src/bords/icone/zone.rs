@@ -489,6 +489,8 @@ impl Zone {
 // Les appels à `Shell_NotifyIconW` (opération, numéro, GUID, message de rappel) : dans les
 // essais, ils sont notés ici au lieu d'être faits, et réussissent ; aucune icône n'est
 // montrée.
+// ÉTAT GLOBAL (essais seulement) : `shell` est appelé au fond des bords, sans poignée vers
+// l'essai ; un par fil, pour que les essais parallèles ne se mêlent pas.
 #[cfg(test)]
 thread_local! {
     pub(crate) static APPELS: RefCell<Vec<(u32, u32, u128, u32)>> = const { RefCell::new(Vec::new()) };

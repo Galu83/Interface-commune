@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use eframe::egui::{self, FontDefinitions, ViewportCommand};
 
-use super::verrou;
 use crate::apparence::{Apparence, couleur};
 use crate::autres_fenetres::{AutresFenetres, Cadre, Contenu, Ouverture};
+use crate::bords::verrou::verrou;
 use crate::fenetres::Liens;
 use crate::parametres::{CLE_FENETRE, Parametres, TAILLE, TAILLE_MIN};
 use crate::place::{Place, Retenue, SuiviDePlace, garder_visible, place_valable};
@@ -46,7 +46,7 @@ fn place_retenue(l: &dyn Reglages) -> Option<Place> {
     })
 }
 
-/// Comment s'ouvrent les Paramètres : « Paramètres de <logiciel> », leur taille et leur
+/// Comment s'ouvrent les Paramètres : « Paramètres de `<logiciel>` », leur taille et leur
 /// place retenues (sinon centrés sur l'écran de la souris).
 pub fn ouverture(l: &dyn Reglages, sombre: bool) -> Ouverture {
     Ouverture::new(&Parametres::titre_fenetre(l), TAILLE)

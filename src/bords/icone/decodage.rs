@@ -39,6 +39,8 @@ pub(crate) const MINUTERIE_ICONE: usize = 0x1C0E;
 /// ignoré.
 pub(crate) fn jeton() -> usize {
     use std::hash::{BuildHasher, Hasher};
+    // ÉTAT GLOBAL : tiré une fois, il doit rester le même pour tout le processus (la fenêtre
+    // cachée le compare à chaque message interne).
     static JETON: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
     *JETON.get_or_init(|| {
         // RandomState est semé par le système (nombres aléatoires de Windows).

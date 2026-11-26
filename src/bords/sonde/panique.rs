@@ -7,6 +7,7 @@ use ic_coeur::gestes::sonde::lieu_court;
 
 use super::COURANT;
 
+// ÉTAT GLOBAL : posé par le crochet de panique, qui ne reçoit aucun paramètre ; un par fil.
 thread_local! {
     /// Le lieu (fichier et ligne) de la dernière panique de ce fil, gardé pour le journal.
     static DERNIERE_PANIQUE: RefCell<Option<String>> = const { RefCell::new(None) };
@@ -16,6 +17,7 @@ thread_local! {
 /// puis passe la main au crochet de panique déjà en place (qui garde son rôle). À appeler une
 /// fois ; sans effet ensuite.
 pub fn retenir_les_paniques() {
+    // ÉTAT GLOBAL : le crochet de panique est à tout le processus ; il n'est posé qu'une fois.
     static UNE_FOIS: std::sync::Once = std::sync::Once::new();
     UNE_FOIS.call_once(|| {
         let ancien = std::panic::take_hook();

@@ -204,6 +204,8 @@ impl Supervise for Supervisee {
 // --- Le faux moteur egui des autres fenêtres (partagé : egui n'en garde qu'un pour tout le
 // programme) : les Paramètres et les fenêtres du logiciel, dans la boucle de la bibliothèque.
 
+// ÉTAT GLOBAL (essais seulement) : le faux moteur tient la place d'eframe, appelé sans poignée
+// vers l'essai ; un par fil, pour que les essais parallèles ne se mêlent pas.
 thread_local! {
     /// Les fenêtres que le faux moteur a dessinées à la dernière image.
     pub(super) static DESSINEES: RefCell<Vec<ViewportId>> = const { RefCell::new(Vec::new()) };

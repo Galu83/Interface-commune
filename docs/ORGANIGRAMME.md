@@ -15,12 +15,12 @@ pendant que l'ancienne reste utilisable. `IDEAL.md` reste tel quel, comme trace.
   critère de bascule (méthode, §5, étape 4) : la nouvelle bibliothèque n'en perd aucun ;
 - les filets posés sur l'ancienne (branche `claude/filets-interface`) : les **images de
   référence** (`tests/references.rs`, 32 images), les **essais de compatibilité**
-  (`tests/compatibilite.rs` : chaque chemin et chaque signature que prennent KVMSoft, PowerPeek,
-  Vocalis et Chat PDC) et `tests/comportements.rs` ;
+  (`tests/compatibilite.rs` : chaque chemin et chaque signature que prennent KVMSoft, PowerPeek
+  et Vocalis) et `tests/comportements.rs` ;
 - `README.md`, `docs/CARTE.md`, `docs/MIGRATION.md`, `docs/ANALYSE.md` (§6 : ce que chaque
   logiciel importe), la fiche commune « Interface Windows 11 ».
 
-Le plan de travail, les dates et la migration des quatre logiciels sont dans
+Le plan de travail, les dates et la migration des trois logiciels sont dans
 `docs/PLAN-REFONTE.md`.
 
 Mots employés :
@@ -39,7 +39,7 @@ Mots employés :
 ## 1. L'idée en trois phrases
 
 L'Interface commune donne aux logiciels du propriétaire qui vivent près de l'horloge de Windows
-(KVMSoft, Vocalis, PowerPeek, Chat PDC) **la même allure Windows 11 et le même comportement** :
+(KVMSoft, Vocalis, PowerPeek) **la même allure Windows 11 et le même comportement** :
 l'icône, le volet, le petit menu, les Paramètres, les fenêtres et leurs contrôles. Le logiciel ne
 décrit que ce qui lui est propre (son nom, ses pages, ses réglages, ses actions), par deux traits
 (`Reglages` et `Logiciel`). Tout ce qui se décide (quel geste ouvre quoi, où poser le volet, quelle
@@ -49,12 +49,12 @@ mince et ne décide rien.
 
 ## 2. Les principes propres à cette bibliothèque
 
-1. **L'API est un contrat, gardé par un essai.** Quatre logiciels en dépendent, chacun épinglé sur
+1. **L'API est un contrat, gardé par un essai.** Trois logiciels en dépendent, chacun épinglé sur
    un commit. Ce que l'un d'eux prend (chemin, nom, signature) est écrit dans
    `tests/compatibilite.rs`, qui doit compiler à chaque commit. **La refonte ne change aucun de
    ces chemins ni aucune de ces signatures**, sauf les changements listés et décidés dans
    `PLAN-REFONTE.md` §4 (chacun avec sa migration pour chaque logiciel).
-   - Ce qui est public sans servir à aucun des quatre logiciels (213 éléments, `ANALYSE.md` §1.2)
+   - Ce qui est public sans servir à aucun des trois logiciels (213 éléments, `ANALYSE.md` §1.2)
      peut devenir interne : aucun logiciel n'a rien à changer, l'essai de compatibilité le prouve.
    - Après la bascule, une fonction publique qui sert ne disparaît pas sans une étape « dépréciée »
      (`#[deprecated]`, encore là, avec la ligne de remplacement dans `MIGRATION.md`) qui dure
@@ -101,7 +101,7 @@ complète, bloc par bloc, est au §13.
 - **Ne fait pas** : les traits `Reglages` et `Logiciel` eux-mêmes. Ils gardent leurs méthodes qui
   dessinent (`dessiner_page`, `dessiner_general`, `dessiner_pied`, `briques_avec_contexte`…) et
   prennent donc egui : **ils restent dans la crate `interface-commune`** (bloc F), à leur chemin
-  d'aujourd'hui. Les sortir des traits casserait les quatre logiciels sans rien leur donner ;
+  d'aujourd'hui. Les sortir des traits casserait les trois logiciels sans rien leur donner ;
   Rust interdit en outre d'ajouter des méthodes à un trait d'une autre crate.
 - **Entrées / sorties** : rien à l'exécution ; ce sont des types.
 - **Touche le système ?** non.
@@ -331,8 +331,8 @@ complète, bloc par bloc, est au §13.
   - **les délais** (battement attendu, « bloqué depuis… ») : une seule copie, dans `Delais`, que
     le logiciel peut changer par `sonde::regler` ; 15 s n'est que la valeur par défaut ;
   - **le journal** : `sonde::brancher_le_journal` reçoit la fonction d'écriture du logiciel
-    (C-110). C'est le chemin pour un logiciel qui n'a pas de `Logiciel` (Chat PDC, qui ne prend
-    que les Paramètres) ; un logiciel qui a un `Logiciel` reçoit aussi les lignes par
+    (C-110). C'est le chemin pour un logiciel qui n'a pas de `Logiciel` (qui ne prend que les
+    Paramètres) ; un logiciel qui a un `Logiciel` reçoit aussi les lignes par
     `Logiciel::noter`. Sans l'un ni l'autre, les lignes sont perdues (rien n'est écrit sur le
     disque, principe 4) ;
   - les contrôles pour les tests des logiciels (`verification` : chaque caractère et chaque icône
@@ -464,8 +464,10 @@ Par défaut, des messages, pas des verrous. Verrous permis et listés :
 - les **fenêtres à soi** de la façon 2 (`AutresFenetres`) : un verrou par liste de fenêtres,
   partagé entre le fil du logiciel qui demande et la boucle qui dessine.
 
-Un verrou empoisonné (un fil a paniqué en le tenant) est repris par **une seule fonction** commune
-(`verrou`), jamais par un `unwrap`.
+Un verrou empoisonné (un fil a paniqué en le tenant) est repris par **un seul mécanisme** commun,
+`src/bords/verrou.rs` (`verrou`, et `lecture`, `ecriture` pour un verrou de lecture), jamais par
+un `unwrap` : la sonde, le guichet, les polices, la reprise et les boucles des fenêtres passent
+tous par lui.
 
 ## 7. Où vit l'état
 
@@ -488,12 +490,22 @@ Un verrou empoisonné (un fil a paniqué en le tenant) est repris par **une seul
     de garde, posés par `regler` et `brancher_le_journal`) ;
   - le lieu de la dernière panique (posé par le crochet de panique, qui ne reçoit aucun
     paramètre) ;
-  - le verrou d'instance unique (il doit vivre aussi longtemps que le programme).
+  - le verrou d'instance unique (il doit vivre aussi longtemps que le programme) ;
+  - l'état de réveil de Windows (`bords/reprise.rs` : veille, écran éteint), signalé par le fil
+    de l'icône et la sonde, lu par toutes les boucles de fenêtres ;
+  - ce que Windows ne passe que par une procédure sans paramètre ou à tout le processus : le
+    jeton des messages internes de l'icône (`icone/decodage.rs`), le rectangle suggéré d'un
+    changement d'échelle (`systeme/echelle.rs`), les fenêtres déjà prises par une boucle
+    (`fenetres/autres.rs`) ;
+  - ce qui doit survivre à la recréation de la boucle des fenêtres après une panique, ou être
+    posé par une fonction publique sans poignée : `fenetres/volet.rs` (`OBSERVATEUR`, `DISCRET`,
+    `DEJA_OUVERTE`, `DEJA_PREPAREE`), `fenetres/autres.rs` (`GARDER_CACHEES`),
+    `fenetres/autres/delais.rs` (`AFFICHAGE_CHANGE`).
 
-  Rien d'autre : en particulier aucun état global dans le cœur ni dans le dessin. Les `static`
-  d'aujourd'hui hors de ces quatre familles (`volet` : `OBSERVATEUR`, `DISCRET`, `DEJA_OUVERTE`,
-  `DEJA_PREPAREE` ; `autres_fenetres` ; `parametres::OUVERTURES`) sont rangés dans un objet ou,
-  s'ils ne peuvent pas l'être, justifiés par écrit au même endroit.
+  Chacun dit pourquoi au-dessus de sa déclaration. Rien d'autre : en particulier aucun état global
+  dans le cœur ni dans le dessin (le compteur des ouvertures des Paramètres, `OUVERTURES`, a
+  disparu au bloc Transversal : chaque ouverture tire un numéro au hasard). Les essais gardent
+  quelques états globaux à eux, commentés de même.
 
 ## 8. Les fichiers écrits
 
@@ -515,7 +527,7 @@ logiciels n'ont rien à migrer.
 - **À l'API, les types d'aujourd'hui restent** : `lancer` rend `Result<(), String>`,
   `instance_unique` et `instance_unique_avec` rendent `Result<Unique, bool>`. Les erreurs nommées
   sont traduites en ces types à la frontière. Un type d'erreur commun (`ErreurInterface`) à l'API
-  changerait les quatre logiciels sans leur donner de geste nouveau : il n'est pas fait.
+  changerait les trois logiciels sans leur donner de geste nouveau : il n'est pas fait.
 - Les bords écrivent l'erreur au journal (bloc O), passent au secours (menu gris de Windows,
   police de repli, menu de secours sans OpenGL) et continuent.
 - **Les paniques** (bibliothèques d'autrui qui gardent des `unwrap`, contenu d'une fenêtre écrit
@@ -642,7 +654,7 @@ Seuils de la méthode : aucun fichier de plus de 800 lignes (600 visés), aucune
 - **Les comportements** : chaque ligne de `COMPORTEMENTS.md` garde son essai ; un essai qui dit
   « auto » sur l'ancienne le reste sur la nouvelle.
 - **La compatibilité** : `tests/compatibilite.rs` reprend les chemins et les signatures que
-  prennent KVMSoft, PowerPeek, Vocalis et Chat PDC (sans leur code propre) et doit compiler à
+  prennent KVMSoft, PowerPeek et Vocalis (sans leur code propre) et doit compiler à
   chaque commit de la refonte.
 - **Les étages** : `tests/etages.rs` (pas d'appel à Windows dans le dessin).
 - **De bout en bout** : l'exemple `demo` lancé sur un bureau Windows caché, piloté par des entrées

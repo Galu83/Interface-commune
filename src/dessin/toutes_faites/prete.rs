@@ -1,4 +1,4 @@
-//! La fenêtre « <Logiciel> x.y.z est prête », toute faite avec la fenêtre simple : le logo,
+//! La fenêtre « `<Logiciel>` x.y.z est prête », toute faite avec la fenêtre simple : le logo,
 //! le titre, les nouveautés, « Plus tard » et « Installer maintenant ».
 
 use super::simple::{Bouton, Simple};
@@ -9,7 +9,7 @@ use crate::Textes;
 pub const PLUS_TARD: &str = "plus_tard";
 
 impl Simple {
-    /// La fenêtre « <Logiciel> x.y.z est prête » : le logo, le titre, les nouveautés (une
+    /// La fenêtre « `<Logiciel>` x.y.z est prête » : le logo, le titre, les nouveautés (une
     /// par ligne), « Plus tard » et « Installer maintenant » (bouton d'accent, Entrée).
     pub fn version_prete(
         identite: &crate::Identite,
@@ -48,7 +48,7 @@ mod tests {
     use crate::dessin::toutes_faites::{EtatSimple, dessiner_simple};
     use crate::textes::FRANCAIS;
 
-    /// « <Logiciel> x.y.z est prête » : titre, nouveautés, « Plus tard » puis « Installer
+    /// « `<Logiciel>` x.y.z est prête » : titre, nouveautés, « Plus tard » puis « Installer
     /// maintenant », qu'Entrée choisit.
     #[test]
     fn version_prete_toute_faite() {

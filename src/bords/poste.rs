@@ -22,6 +22,7 @@ use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 use crate::bords::systeme::fenetre::hwnd;
+use crate::bords::verrou::verrou;
 use crate::fenetres::{Demandes, Liens};
 use crate::horloge::Niveau;
 
@@ -74,23 +75,21 @@ impl<T> Default for Boite<T> {
 }
 
 impl<T> Boite<T> {
-    /// Dépose un message ; faux s'il est refusé (boîte pleine, ou verrou empoisonné).
+    /// Dépose un message ; faux s'il est refusé (boîte pleine). Un verrou empoisonné est repris
+    /// ([`verrou`]) : la file reste utilisable.
     pub(crate) fn deposer(&self, m: T) -> bool {
-        match self.file.lock() {
-            Ok(mut f) if f.len() < CAPACITE => {
-                f.push_back(m);
-                true
-            }
-            _ => false,
+        let mut f = verrou(&self.file);
+        if f.len() < CAPACITE {
+            f.push_back(m);
+            true
+        } else {
+            false
         }
     }
 
     /// Tous les messages en attente, dans l'ordre d'arrivée ; la boîte est vide après.
     pub(crate) fn vider(&self) -> Vec<T> {
-        self.file
-            .lock()
-            .map(|mut f| f.drain(..).collect())
-            .unwrap_or_default()
+        verrou(&self.file).drain(..).collect()
     }
 }
 

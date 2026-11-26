@@ -6,7 +6,9 @@ use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use super::liens::Demande;
-use super::verrou;
+#[cfg(not(windows))]
+use crate::bords::verrou::sans_poison;
+use crate::bords::verrou::verrou;
 
 /// Le réveil du fil des fenêtres entre deux fenêtres. Sous Windows, il répond en attendant
 /// aux messages que Windows envoie aux fenêtres du fil (sinon Windows le croit bloqué).
@@ -30,10 +32,7 @@ impl Reveil {
 
     pub fn attendre(&self, ms: u32) {
         let attente = std::time::Duration::from_millis(u64::from(ms));
-        let (mut s, _) = self
-            .cv
-            .wait_timeout_while(verrou(&self.sonne), attente, |s| !*s)
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (mut s, _) = sans_poison(self.cv.wait_timeout_while(verrou(&self.sonne), attente, |s| !*s));
         *s = false;
     }
 }
@@ -67,7 +66,7 @@ impl Demandes {
         // (`crate::reprise`), pas de message : la demande est lue par une image sans dessin,
         // et la fenêtre principale, réveillée plus tard (`AutresFenetres::reveiller_dans`).
         #[cfg(windows)]
-        if crate::reprise::attente_avant_dessin().is_none() {
+        if crate::bords::reprise::attente_avant_dessin().is_none() {
             crate::systeme::reveiller(self.racine.load(Ordering::Acquire));
         }
         r

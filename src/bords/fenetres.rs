@@ -20,7 +20,6 @@
 //! Les chemins publics d'avant restent : `fenetres`, `autres_fenetres`, `volet`,
 //! `parametres::fenetre` et `toutes_faites` reprennent ces modules.
 
-use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 pub(crate) mod autres;
@@ -41,10 +40,3 @@ mod faux_moteur;
 
 /// Les pertes récentes des fenêtres, à l'heure de Windows ([`ic_coeur::gestes::secours::Pertes`]).
 pub type Pertes = ic_coeur::gestes::secours::Pertes<Instant>;
-
-/// Le verrou d'un partage entre les fils. Un fil qui a paniqué en le tenant ne bloque pas les
-/// autres : ce qu'il a laissé est repris tel quel (les fenêtres sont refaites au besoin), au
-/// lieu de propager sa panique (le seul endroit des boucles qui le décide).
-pub(crate) fn verrou<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}

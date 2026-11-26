@@ -15,8 +15,10 @@
 //! aussi une reprise qu'elle constate (un long trou dans sa boucle), au cas où Windows n'aurait
 //! rien envoyé.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+
+use crate::bords::verrou::verrou;
 
 /// Après la reprise ou le retour de l'écran, le temps laissé à Windows et au pilote graphique
 /// avant la première image.
@@ -116,6 +118,8 @@ impl Reprise {
     }
 }
 
+// ÉTAT GLOBAL : la veille et l'écran sont signalés par le fil de l'icône (WM_POWERBROADCAST) et
+// par la sonde, et lus par toutes les boucles de fenêtres, sans poignée commune entre eux.
 static ETAT: Mutex<Reprise> = Mutex::new(Reprise {
     en_veille: false,
     ecran_eteint: false,
@@ -123,8 +127,8 @@ static ETAT: Mutex<Reprise> = Mutex::new(Reprise {
     attente: None,
 });
 
-fn etat() -> std::sync::MutexGuard<'static, Reprise> {
-    ETAT.lock().unwrap_or_else(PoisonError::into_inner)
+fn etat() -> MutexGuard<'static, Reprise> {
+    verrou(&ETAT)
 }
 
 /// Windows va se mettre en veille. Depuis le fil de l'icône.

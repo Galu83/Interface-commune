@@ -4,7 +4,7 @@
 
 use std::sync::Mutex;
 
-use super::super::verrou;
+use crate::bords::verrou::verrou;
 
 /// Les créations ratées de suite après lesquelles une fenêtre est abandonnée (fermée).
 pub const CREATIONS_MAX: u32 = 3;

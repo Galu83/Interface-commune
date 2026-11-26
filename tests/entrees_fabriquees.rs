@@ -357,6 +357,7 @@ impl Essais {
     }
 
     fn debut(&self) -> &'static Instant {
+        // ÉTAT GLOBAL (essais seulement) : l'heure de départ commune à toutes les lignes.
         static DEBUT: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
         DEBUT.get_or_init(Instant::now)
     }

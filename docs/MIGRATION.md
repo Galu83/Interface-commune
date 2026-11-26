@@ -133,15 +133,15 @@ Rien ne change pour un logiciel qui n'en veut pas : tout est facultatif.
   - pour un logiciel à plusieurs icônes (`zone`), `Aiguilleur::avec_logiciel` fait de même.
   Le calcul est dans `clics::suite(geste, principale)`.
 - **`clic_gauche: true`** : le clic gauche (et Entrée ou Espace) ouvre la fenêtre principale
-  au lieu du volet. Pour un logiciel dont la fenêtre est tout l'usage, comme Chat PDC :
+  au lieu du volet. Pour un logiciel dont la fenêtre est tout l'usage :
 
   ```rust
-  impl Logiciel for ChatPdc {
+  impl Logiciel for MonLogiciel {
       fn fenetre_principale(&self) -> Option<FenetrePrincipale> {
           Some(FenetrePrincipale { clic_gauche: true })
       }
       fn ouvrir_fenetre_principale(&self) {
-          // poste.fenetres().ouvrir("principale", Ouverture::new("Chat PDC", [900.0, 640.0]), Fenetre { .. });
+          // poste.fenetres().ouvrir("principale", Ouverture::new("Mon logiciel", [900.0, 640.0]), Fenetre { .. });
       }
       // …
   }
@@ -164,8 +164,22 @@ Rien ne change pour un logiciel qui n'en veut pas : tout est facultatif.
   (`theme::TAILLE_EXPLICATION`), toujours en gris ; les précisions et légendes restent en
   12 px (`theme::TAILLE_PETIT`).
 - **Redite retirée** (audit KVMSoft) : quand les recherches de mise à jour sont actives, la
-  carte n'écrit plus « Dans le dossier « Installateurs », trouvé tout seul. » (déjà dit par la
-  carte du dossier). `Textes::recherches_automatique` et `recherches_dossier` restent, inutilisés.
+  carte « Chercher les mises à jour » n'écrit plus de phrase qui redit le chemin des
+  installateurs : la carte du dossier, juste en dessous, le dit déjà. La phrase retirée
+  dépendait du logiciel, par exemple « Dans le dossier « Installateurs », trouvé tout seul. »
+  ou « Dans le dossier des installateurs, réglé plus bas. ». La carte n'a donc plus
+  d'explication : son titre est centré sur sa hauteur (bloc Transversal).
+  `Textes::recherches_automatique` et `recherches_dossier` restent, inutilisés.
+- **Deux défauts du dessin corrigés** (bloc Transversal, trouvés par l'essai de compatibilité
+  de PowerPeek ; aucun changement d'API) :
+  - la carte « Journal », quand le journal est effaçable, réserve la place de ses deux boutons
+    mesurés dans la langue du moment (« Effacer le journal » recouvrait la fin de
+    l'explication en français) : l'explication passe à la ligne et la carte grandit ;
+  - une carte sans explication centre son titre sur sa hauteur, comme son icône et son
+    contrôle (il restait collé en haut).
+
+  Les images de référence d'un logiciel qui montrent la page « Général » avec le journal
+  effaçable, ou une carte sans explication, changent : à refaire après la montée de version.
 
 ## Les manques de KVMSoft, couverts (branche `manques-kvmsoft`)
 
@@ -682,7 +696,7 @@ choix, la barre à seuils, le nuancier, les couleurs et les traits sont rangés 
 `dessin::carte`, `Logiciel`, `Reglages`…).
 
 - **`Logiciel::dessiner_rapides` et `Logiciel::largeur_rapides` disparaissent** (changement
-  2). Aucun des quatre logiciels ne les écrit (relevé du 25 nov.) : rien à changer. Un logiciel
+  2). Aucun des logiciels ne les écrit (relevé du 25 nov.) : rien à changer. Un logiciel
   qui les écrirait passe ce contenu en briques (`Logiciel::briques`) : une `Brique::Choix`,
   un `Interrupteur` ou des `Segments`, que la bibliothèque dessine et place elle-même.
 - **Le niveau d'un appareil du volet s'écrit « 42 % » avec l'espace insécable** (changement 5,
