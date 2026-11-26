@@ -9,6 +9,7 @@
 //! [`crate::pastilles`], [`crate::menu_choix`], [`crate::seuils`], [`crate::nuancier`],
 //! [`crate::couleurs`], [`crate::touches`], [`crate::surface`] (le volet et le petit menu, bloc G),
 //! [`crate::parametres`] et [`crate::toutes_faites`] (bloc H),
+//! [`crate::capture`] (les captures sans fenêtre, bloc I),
 //! `apparence::couleur`, et les traits
 //! [`crate::Reglages`] et [`crate::Logiciel`]. Ce qui décide (les touches du menu de choix, le
 //! déplacement des seuils, la marque d'une pastille, le plan des cases) vit dans le cœur
@@ -16,6 +17,7 @@
 
 pub(crate) mod apparence;
 pub(crate) mod briques;
+pub(crate) mod capture;
 mod controles;
 pub(crate) mod couleur;
 pub(crate) mod couleurs;

@@ -28,7 +28,9 @@ use std::path::{Path, PathBuf};
 use interface_commune::capture::{self, Image, Options};
 use interface_commune::dessin::{self, Genre};
 use interface_commune::parametres::Parametres;
-use interface_commune::toutes_faites::{self, Bouton, Champ, Choix, EtatSimple, Simple, Ton};
+use interface_commune::toutes_faites::{
+    self, Bouton, Champ, Choix, EtatLecture, EtatSimple, Lecture, Simple, Ton,
+};
 use interface_commune::{
     EtatMiseAJour, Logiciel, Reglages, Rgb, Valeur, couleurs, nuancier, polices, seuils, textes,
 };
@@ -176,6 +178,7 @@ fn toutes_les_images() -> Vec<(String, Image)> {
             format!("fenetre-simple-{}", theme(o)),
             fenetre_simple(&simple_complete(), o),
         );
+        ajouter(format!("fenetre-lecture-{}", theme(o)), fenetre_lecture(o));
         ajouter(
             format!("controles-{}", theme(o)),
             capture::dessin(egui::vec2(480.0, 900.0), o, controles),
@@ -279,6 +282,20 @@ fn fenetre_simple(s: &Simple, o: Options) -> Result<Image, String> {
     let mut e = EtatSimple::default();
     capture::dessin(egui::vec2(s.largeur_fenetre(), 440.0), o, |ui, p| {
         toutes_faites::dessiner_simple(ui, p, &textes::FRANCAIS, s, &mut e);
+    })
+}
+
+/// La fenêtre de lecture (bloc I) : un texte inventé de deux paragraphes, le mot lu surligné
+/// dans le premier.
+fn fenetre_lecture(o: Options) -> Result<Image, String> {
+    let mut l = Lecture::de(
+        "Une page inventée, lue à voix haute : le mot lu est surligné et la page le suit.\n\n\
+         Un clic sur un mot reprend la lecture là, au mot choisi.",
+    );
+    l.mot = Some(5);
+    let mut e = EtatLecture::default();
+    capture::dessin(egui::vec2(480.0, 240.0), o, |ui, p| {
+        toutes_faites::dessiner_lecture(ui, p, &l, &mut e);
     })
 }
 

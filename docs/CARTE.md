@@ -32,6 +32,7 @@
 | `src/icones.rs` | les icônes communes (écrites dans `ic_coeur::theme::icones`, reprises ici) |
 | `src/place.rs`, `clics.rs`, `systeme.rs` | placement et clics de l'icône (repris de `ic_coeur::placement` et `ic_coeur::gestes::clics` ; `place.rs` convertit aussi les rectangles egui ↔ cœur), appels à Windows (dont le sélecteur de dossier et les fenêtres sans fantôme ; `systeme.rs` reprend `bords::systeme::…`, bloc L) |
 | `src/capture.rs` | captures PNG du volet, du petit menu et des Paramètres pour la documentation, sans fenêtre |
+| `src/dessin/capture.rs`, `src/dessin/capture/toile.rs` | bloc I : les captures sans fenêtre (`capture.rs` : `Options`, `Image`, le volet, le petit menu, les Paramètres, tout dessin, la mise en page par egui ; `toile.rs` : le rendu logiciel des triangles et des textures), reprises par `src/capture.rs` à `interface_commune::capture` ; elles réutilisent le dessin des blocs F, G et H, et font aussi les images de référence (`tests/references.rs`, la fenêtre de lecture comprise) |
 | `src/dessin/menu_choix.rs` | le menu flottant de choix : le dessin dans une `Area` (les touches et le nom pour le lecteur d'écran sont dans le cœur, `ic_coeur::gestes::choix`) |
 | `src/verification.rs` | contrôles des polices, pour les tests des logiciels (écrits dans `bords/verification.rs`) |
 | `src/dessin/apparence.rs` | la palette, les styles de texte et les espacements donnés à egui (bloc L ; repris par `Apparence::appliquer`) |

@@ -63,6 +63,69 @@
     cachée vivante) ; il reste couvert par `tests/comportements.rs` (C-17, C-18) et par
     GitHub ;
   - **sous-agents** : aucun.
+## Bloc I — les captures
+
+(26 nov., branche `refonte-bloc-i-captures`, partie de `refonte` à c4fd163, à intégrer par
+l'Atelier Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
+
+- **Les captures passent dans le dessin** (ORGANIGRAMME §3.2, §10.1 ligne `capture`) :
+  `src/dessin/capture.rs` (`Options`, `Image`, `Erreur`, `dessin`, `volet`, `volet_borne`,
+  `petit_menu`, `parametres`, `parametres_de`, `toutes`, et la mise en page par egui en
+  quatre passes) et `src/dessin/capture/toile.rs` (le rendu logiciel : textures, triangles,
+  règle « haut-gauche », découpe ; ses 2 essais). Le code du rendu est déplacé tel quel :
+  aucun calcul de pixel n'a changé.
+- **Réutilisation du dessin rangé** : le volet et le petit menu par `dessin::surface`
+  (bloc G), les Paramètres par `dessin::parametres::Parametres` (bloc H), les fenêtres toutes
+  faites et les contrôles par `capture::dessin` (blocs F et H) ; rien n'est recopié.
+- **Chemin public inchangé** : `src/capture.rs` ne fait plus que reprendre
+  `crate::dessin::capture::*` (`pub use`), avec la documentation pour les logiciels (son
+  exemple compris) ; `interface_commune::capture::{self, Options, Image, …}` reste valable ;
+  `tests/compatibilite.rs` inchangé ; aucune ligne de `src/lib.rs` ne change.
+- **L'image de la fenêtre de lecture** (ORGANIGRAMME §3.2 I, « à ajouter ») : deux images de
+  référence de plus, `fenetre-lecture-clair.png` et `fenetre-lecture-sombre.png` (un texte
+  inventé de deux paragraphes, le mot « voix » surligné), faites par `capture::dessin` et
+  `toutes_faites::dessiner_lecture` dans `tests/references.rs` ; C-115 compare 36 images.
+- **Résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, cible hors de la copie,
+  aucune fenêtre ouverte par le bloc) : `ic-coeur` 184 essais ; `interface-commune` 136 essais
+  internes (les 3 du rendu, déplacés : 2 dans `toile.rs`, 1 dans `capture.rs`) ; les 16
+  fichiers de `tests/` verts (compatibilite 8, comportements 13, etages 6, sans_fenetre 23,
+  references 2 avec les 36 images ; `fenetres_en_rafale`, `premiere_creation` et
+  `recreation_apres_panique` passés, leurs fenêtres voilées et hors de l'écran comme avant) ;
+  exemples de documentation 1 + 8 (1 ignoré, comme avant) ; `fmt`, `clippy -D warnings`,
+  `cargo deny` propres ; contrôle de la règle n° 1 : seulement `.git:1` (le fichier du
+  worktree).
+- **Les 34 images d'avant ne changent pas d'un pixel** : refaites cinq fois de suite
+  (`REFERENCES=refaire`), 33 sont identiques octet pour octet à chaque fois ;
+  `parametres-conserver-clair.png` l'est deux fois sur cinq, et les autres fois diffère
+  (10 pixels les deux fois où l'écart a été mesuré, une zone de 3 × 4 pixels, au bout de la
+  barre du compte à rebours). Ce n'est
+  pas le déplacement : la carte « Conserver ces modifications ? » lit l'heure réelle
+  (`Instant::now`, `src/dessin/parametres/bulles.rs`), et la barre avance de quelques
+  millisecondes entre deux rendus. L'image de référence est gardée telle quelle (remise par
+  `git checkout`) ; l'écart reste bien sous la tolérance de l'essai (C-115 vert). Les deux
+  images de la fenêtre de lecture, refaites deux fois, sont identiques octet pour octet.
+- **Décisions prises seul** (à relire par l'Atelier Master) :
+  - **I-1** : `src/capture.rs` devient une façade (comme `sonde`, `verification` au bloc O) au
+    lieu d'un module en ligne dans `src/lib.rs` : aucune ligne de `src/lib.rs` ne bouge ;
+  - **I-2** : le rendu logiciel va dans son propre fichier (`capture/toile.rs`, 247 lignes) :
+    `capture.rs` dit ce qu'on capture, `toile.rs` comment on pose les pixels ; l'essai du PNG
+    reste avec `Image` dans `capture.rs` ;
+  - **I-3** : pas de fonction publique `capture::lecture` (aucun changement d'API, plan §1) :
+    l'image de la fenêtre de lecture passe par `capture::dessin`, comme la fenêtre simple ;
+  - **I-4** : la carte « Conserver » qui dépend de l'heure n'est pas corrigée ici : il faudrait
+    donner un instant aux Paramètres (blocs E et H) ; point ouvert pour l'Atelier Master.
+- **Fichiers partagés touchés** (des lignes ajoutées seulement) : `src/dessin.rs` (+2 :
+  `pub(crate) mod capture;` et une ligne de son en-tête) ; `docs/CARTE.md` (+1 ligne) ;
+  `docs/COMPORTEMENTS.md` (+2 lignes, sous le tableau des promesses : la ligne C-115 elle-même
+  dit encore « 34 images », à mettre à 36 à l'intégration) ; `docs/ETAT.md` (cette section).
+  Ni `src/lib.rs`, ni `Cargo.toml`.
+- **Pas vérifié** : les captures sur un PC dont les polices diffèrent (la comparaison s'y
+  saute, comme avant) ; la ligne « la fenêtre de lecture est à ajouter » de l'ORGANIGRAMME
+  (§3.2 I) n'est pas modifiée (fichier hors du bloc).
+- **Tailles** : `capture.rs` 258 lignes, `toile.rs` 247, `src/capture.rs` 35 ; aucune
+  fonction de plus de 60 lignes.
+- **Sous-agents** : aucun.
+
 ## Bloc O — la sonde, le journal et la vérification
 
 (26 nov. 06:30, branche `refonte-bloc-o-sonde`, partie de `refonte`, à intégrer par l'Atelier
