@@ -2,11 +2,14 @@
 //! chaque appel commenté. Les blocs J à O y entrent un à un (PLAN-REFONTE.md, §2) ; leurs types
 //! publics restent repris à leurs chemins d'aujourd'hui.
 //!
+//! - `fenetres` : les boucles des fenêtres, le volet, les Paramètres, les autres fenêtres
+//!   (bloc J) ;
 //! - `icone` : les icônes près de l'horloge, `horloge::Horloge` et `zone::Zone` (bloc M) ;
 //! - `poste` : le guichet des messages de Windows (`horloge::Poste`, bloc K) ;
 //! - `systeme` : fenêtres, écran, échelle, thème, polices, sélecteur de dossier (bloc L) ;
 //! - `verification` : chaque caractère affiché existe dans les polices de Windows (bloc L).
 
+pub(crate) mod fenetres;
 #[cfg(windows)]
 pub(crate) mod icone;
 #[cfg(windows)]

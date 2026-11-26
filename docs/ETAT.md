@@ -124,6 +124,83 @@ l'Atelier Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`
   (§3.2 I) n'est pas modifiée (fichier hors du bloc).
 - **Tailles** : `capture.rs` 258 lignes, `toile.rs` 247, `src/capture.rs` 35 ; aucune
   fonction de plus de 60 lignes.
+## Bloc J — les boucles des fenêtres
+
+(26 nov., branche `refonte-bloc-j-boucles`, partie de `refonte` à c4fd163, à intégrer par
+l'Atelier Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
+
+- **Ce qui a déménagé dans `src/bords/fenetres/`** (les anciens fichiers restent en modules minces : Git montre les nouveaux comme ajoutés) :
+  `src/fenetres.rs` (1 261 lignes) → `boucle.rs` (la boucle de la bibliothèque,
+  `boucle_des_fenetres`, `Ouvreur`), `liens.rs` (demandes, `envoyer_le_clic`, `Liens`),
+  `canal.rs` (envoi, réception, réveil), `supervision.rs` (façon 2 : `superviser_les_fenetres`,
+  `Supervise`) ; `src/autres_fenetres.rs` (1 507) → `autres.rs`, `autres/ouverture.rs`
+  (`Ouverture`, `Contenu`, `Cadre`), `autres/delais.rs` (attentes avant une création) ;
+  `src/volet.rs` (1 205) → `volet.rs`, `volet/veille.rs` (`Veilleur`), `volet/fenetre.rs` (la
+  fenêtre et ses étapes), `volet/app.rs` (son `eframe::App`) ; `src/parametres/fenetre.rs` →
+  `parametres.rs` (`AutresFenetres::lier/montrer` et `ouvrir_dans_boucle` y passent) ;
+  `src/toutes_faites.rs` → `toutes_faites.rs`. La racine `src/bords/fenetres.rs` tient
+  `Pertes` et `verrou`.
+- **Le faux moteur** (`faux_moteur.rs`) : une fausse fenêtre du volet pour la boucle (elle compte
+  préparations et ouvertures, se perd ou panique sur commande) et le faux egui des autres
+  fenêtres (egui croit avoir de vraies fenêtres, rien ne s'ouvre). Les paniques sont attrapées
+  fenêtre par fenêtre ; la recréation est essayée sur le faux moteur.
+- **Chemins publics inchangés** : `src/fenetres.rs`, `src/autres_fenetres.rs`, `src/volet.rs`,
+  `src/parametres/fenetre.rs` et `src/toutes_faites.rs` ne font plus que reprendre
+  (`pub use crate::bords::fenetres::…::*`) avec leur documentation ; aucune ligne de
+  `src/lib.rs` ne change ; `tests/compatibilite.rs` inchangé ; aucune image de référence
+  changée.
+- **Ce qui est réutilisé, pas copié** : `bords::poste` (K), `bords::systeme` (L), `src/dessin/`
+  (F, G, H) ; la décision du clic et d'une perte reste dans le cœur (`ic_coeur::gestes`, bloc D).
+- **Essais** : ceux des fenêtres dans `bords/fenetres/essais.rs` (faux moteur : surface
+  préparée une fois, perte recréée et clic refait, rafales, supervision), ceux des autres
+  fenêtres dans `bords/fenetres/autres/essais.rs`, ceux du volet et des fenêtres toutes faites
+  à côté de leur code ; `COMPORTEMENTS.md` donne leurs nouveaux noms complets (C-31 à C-34,
+  C-47, C-50, C-58 à C-63…) ; C-32, C-35, C-60, C-62, la recréation après panique et la
+  façon 2 gardés.
+- **Résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, cible à part, aucune
+  fenêtre vue) : `interface-commune` 136 essais internes verts ;
+  les 17 fichiers de `tests/` verts (compatibilite 8, comportements 13, sans_fenetre 23,
+  references aux images identiques ; `fenetres_en_rafale` et `recreation_apres_panique`
+  passés, fenêtres voilées) ; exemples de documentation 1 + 8 ; `fmt`, `clippy -D warnings`,
+  `cargo deny` propres ; contrôle de la règle n° 1 sur le contenu de l'index et le
+  message : 0 trouvé (le dossier de compilation, dans la copie mais ignoré par Git, est écarté) ; `ic-coeur` 183
+  essais sur 184 : l'essai au hasard `textes::essais::lisible_ne_change_pas_deux_fois`
+  (bloc B, aucune ligne de `crates/` touchée par J) échoue sur `["⌃", " ", "⌃"]` avec un
+  séparateur vide (« Ctrl » au lieu de « Ctrl+⌃ ») : un vrai défaut, voir « À suivre »
+- **Décisions prises seul** (à relire par l'Atelier Master) :
+  - **J-1** : les anciens chemins deviennent des modules minces `pub use …::*` (comme L et O) ;
+  - **J-2** : un seul `verrou` commun (`bords::fenetres::verrou`) pour tous les `Mutex` du
+    bloc : un verrou empoisonné est repris, jamais `unwrap`. Petit changement : avant, une
+    action était sautée sur un verrou empoisonné (`if let Ok`) ; elle se fait maintenant ;
+  - **J-3** : les statiques gardées sont justifiées par `// ÉTAT GLOBAL :` :
+    `OBSERVATEUR` et `DISCRET` (`observer()` est une fonction publique sans poignée),
+    `GARDER_CACHEES` (fonction publique des essais), `AFFICHAGE_CHANGE` (signal du fil de
+    l'icône), `PRISES` (les fenêtres de Windows sont à tout le processus), `DEJA_OUVERTE` et
+    `DEJA_PREPAREE` (« depuis le lancement » : doivent survivre à la recréation) ;
+    `parametres::OUVERTURES` (bloc H) n'est pas touché ;
+  - **J-4** : les délais avant création restent dans les bords (`autres/delais.rs`) ; ils sont
+    candidats pour le cœur plus tard ;
+  - **J-5** : tous les faux moteurs (boucle et egui) sont réunis dans `faux_moteur.rs` ;
+  - **J-6** : une cible de compilation à part (`target-bloc-j`) pour ne pas gêner les autres
+    blocs ;
+  - **J-7** : `boucle_des_fenetres` est découpée en un état et des pas ; le texte du journal
+    est mot pour mot le même ;
+  - **J-8** : `autres` et `volet` sont découpés en sous-modules, leurs longues fonctions
+    coupées sous 80 lignes (plus long fichier : 634 lignes, `autres.rs`).
+- **Fichiers partagés touchés** : `src/bords/mod.rs` (+3 lignes : `pub(crate) mod fenetres;` et
+  sa documentation) ; `docs/CARTE.md` (une ligne ajoutée, quatre complétées),
+  `docs/COMPORTEMENTS.md` (les noms complets des essais déplacés) ; ni `src/lib.rs`, ni
+  `Cargo.toml`, ni `crates/ic-coeur/src/lib.rs` ; ni `src/horloge.rs`, ni `src/zone.rs`, ni
+  `src/capture*`.
+- **Pas vérifié sur le PC** : les vraies fenêtres à l'écran (interdit pendant les essais) ;
+  elles restent couvertes par `tests/fenetres_en_rafale`, `tests/recreation_apres_panique`
+  (fenêtres voilées) et par GitHub.
+- **À suivre** (hors du bloc) : la sonde (bloc O) a ses propres `PoisonError` (pourrait
+  prendre `verrou`) ; `cargo doc` avec `-D warnings` signale des liens déjà cassés avant J
+  (`dessin::fond`, `crate::reprise`, `NOUVEL_ESSAI` privé, `VOLET_TUILE`, balises `<logiciel>`) ;
+  l'essai au hasard du bloc B (`textes::lisible`, entrée `["⌃", " ", "⌃"]`, séparateur vide)
+  trouve un vrai défaut, rejoué à chaque passage depuis que `proptest` l'a gardé ; son dossier
+  `crates/ic-coeur/proptest-regressions/` reste hors de l'index (à corriger dans le bloc B).
 - **Sous-agents** : aucun.
 
 ## Bloc O — la sonde, le journal et la vérification

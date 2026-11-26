@@ -70,7 +70,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-22 | Le volet est préparé au repos ; deux ouvertures ne le reconstruisent pas (une seule fenêtre, cachée puis montrée). | auto : `fenetres::deux_ouvertures_ne_reconstruisent_pas_le_volet` |
+| C-22 | Le volet est préparé au repos ; deux ouvertures ne le reconstruisent pas (une seule fenêtre, cachée puis montrée). | auto : `bords::fenetres::essais::deux_ouvertures_ne_reconstruisent_pas_le_volet` |
 | C-23 | En-tête du volet : nom du logiciel en gros, version petite et grise à droite, roue dentée des Paramètres à l'extrême droite ; puis l'état en couleur ; puis les briques. Ni « Quitter » ni ligne du bas. | auto : `tests/sans_fenetre::volet_et_petit_menu_sans_fenetre`, captures de `tests/sans_fenetre::captures_pour_la_documentation` (images non comparées) |
 | C-24 | Un titre long ne chevauche jamais la roue dentée. | auto : `tests/sans_fenetre::titre_long_ne_chevauche_pas_la_roue` |
 | C-25 | Rien n'est coupé : la largeur suit les textes, jusqu'à une largeur maximale ; au-delà, les phrases passent à la ligne. | auto : `tests/sans_fenetre::volet_borne_grandit_avec_son_contenu`, `tests/comportements::c25_un_long_texte_passe_a_la_ligne`, `ic_coeur::placement::surface::essais::largeur_entre_min_et_max` |
@@ -79,10 +79,10 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-28 | Un clic hors du volet le ferme ; un clic dedans ne le ferme pas. | auto : `ic_coeur::gestes::ouverture::clic_dedans_ou_dehors`, `…::appuis_de_souris`, `…::juste_fermee_par_le_clic` (bloc D : dans le cœur) |
 | C-29 | Un deuxième clic sur l'icône tout de suite après l'ouverture n'est pas pris pour une fermeture (garde des premiers instants, anti-rebond de 400 ms). | auto : `ic_coeur::gestes::ouverture::garde_des_premiers_instants` (bloc D : dans le cœur) |
 | C-30 | Animation d'ouverture : fondu de 83 ms parti de 50 %, à sa place ; fermeture en fondu de 83 ms ; aucune animation si Windows les a coupées. | auto : `ic_coeur::theme::essais::courbe_rapide_puis_ralentie`, `…::durees_de_windows`, `…::ouverture_vive`, `…::sans_effets_aucune_animation`, `…::un_retard_ne_fait_pas_sauter_l_animation` (bloc C : dans le cœur) |
-| C-31 | La première image montrée est déjà dessinée (pas de fenêtre vide ou noire au premier clic) ; la fenêtre reste voilée tant qu'elle n'est pas vraiment montrée. | auto : `volet::premiere_image_montree_deja_visible`, `volet::voilee_sauf_montree_pour_de_vrai` |
-| C-32 | Les fenêtres n'attendent pas la synchronisation verticale (le clic ne patiente pas derrière l'écran). | auto : `volet::fenetres_sans_synchronisation_verticale` |
+| C-31 | La première image montrée est déjà dessinée (pas de fenêtre vide ou noire au premier clic) ; la fenêtre reste voilée tant qu'elle n'est pas vraiment montrée. | auto : `bords::fenetres::volet::essais::premiere_image_montree_deja_visible`, `bords::fenetres::volet::essais::voilee_sauf_montree_pour_de_vrai` |
+| C-32 | Les fenêtres n'attendent pas la synchronisation verticale (le clic ne patiente pas derrière l'écran). | auto : `bords::fenetres::volet::essais::fenetres_sans_synchronisation_verticale` |
 | C-33 | Dans le volet, les flèches du clavier se comportent comme Tab (d'une brique à l'autre). | auto : `dessin::volet::clavier::essais::les_fleches_deviennent_tab`, `ic_coeur::gestes::clavier::essais::fleches_comme_tab` |
-| C-34 | Le logiciel peut observer l'ouverture et la fermeture du volet sans fenêtre (veilleur public). | auto : `volet::veilleur_public_sans_fenetre` |
+| C-34 | Le logiciel peut observer l'ouverture et la fermeture du volet sans fenêtre (veilleur public). | auto : `bords::fenetres::volet::essais::veilleur_public_sans_fenetre` |
 | C-35 | Le temps d'ouverture du volet est écrit au journal. | auto : `ic_coeur::gestes::ouverture::temps_d_ouverture_au_journal` (bloc D : dans le cœur) |
 
 ## 5. Les briques du volet
@@ -104,19 +104,19 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-42 | Toujours le même ordre : actions du logiciel (la sienne « Ouvrir » en tête), Paramètres (E713), Rechercher une mise à jour (E895), lignes en plus (Ouvrir le journal…), Quitter. | auto : `ic_coeur::gestes::menu::ordre_du_petit_menu`, `ic_coeur::gestes::menu::ouvrir_le_logiciel_en_tete` |
 | C-43 | Le petit menu prend les mesures des menus de Windows 11. | auto : `tests/sans_fenetre::petit_menu_aux_mesures_communes` |
 | C-44 | Il s'ouvre au point du clic, toujours en entier sur l'écran. | auto : `ic_coeur::placement::essais::petit_menu_au_point`, `ic_coeur::placement::essais::petit_menu_toujours_dans_la_zone` |
-| C-45 | Sans OpenGL (pilote absent ou cassé), le petit menu passe au menu de secours de Windows, avec les mêmes lignes numérotées. | auto : `fenetres::sans_opengl_le_menu_de_secours`, `bords::icone::zone::essais::menu_windows_numerote_les_choix` (le même menu de secours pour l'icône seule, bloc M) |
+| C-45 | Sans OpenGL (pilote absent ou cassé), le petit menu passe au menu de secours de Windows, avec les mêmes lignes numérotées. | auto : `bords::fenetres::essais::sans_opengl_le_menu_de_secours`, `bords::icone::zone::essais::menu_windows_numerote_les_choix` (le même menu de secours pour l'icône seule, bloc M) |
 | C-46 | Les raccourcis s'écrivent en toutes lettres (« Ctrl + Maj + K »). | auto : `tests/sans_fenetre::raccourcis_en_toutes_lettres`, `ic_coeur::textes::essais` (7 tests de `lisible`, plus `lisible_ne_change_pas_deux_fois` au hasard), `dessin::touches::ce_que_saisit_le_champ_de_raccourci_se_lit_bien` |
 
 ## 7. La boucle des fenêtres et ses secours
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-47 | Le volet, le petit menu, les Paramètres et les fenêtres du logiciel sont dessinés par une seule boucle ; on peut les ouvrir depuis n'importe quel fil. | auto : `fenetres::suite_des_demandes`, `fenetres::parametres_ouverts_dans_la_boucle`, `autres_fenetres::plusieurs_fenetres_et_croix` ; dans la boucle du logiciel (façon 2, vue du dehors) : `compatibilite::powerpeek::les_parametres_s_ouvrent_dans_la_boucle_sans_fenetre` |
-| C-48 | Un clic sur l'icône pendant que les Paramètres sont ouverts fait ce qu'il doit (volet devant, puis retour). | auto : `ic_coeur::gestes::ouverture::clic_avec_les_parametres_ouverts`, `fenetres::surface_devant_les_parametres_puis_retour` |
-| C-49 | La fenêtre principale perdue (fermée par Windows, plantage d'egui) est refaite, et le clic qui l'a révélé ouvre quand même. | auto : `fenetres::fenetre_perdue_recreee_et_le_clic_ouvre_quand_meme` |
-| C-50 | Après 3 pertes en 60 s, la bibliothèque arrête de refaire la fenêtre et passe au menu de secours ; elle réessaie au clic suivant. | auto : `fenetres::pertes_en_rafale_menu_de_secours_puis_recreee_au_clic_suivant`, `fenetres::supervision_rafale_puis_reprise_au_clic_suivant`, `fenetres::supervision_reprise_apres_rafale`, `fenetres::supervision_pertes_espacees_toujours_recreees`, `fenetres::supervision_echec_premier_tour_ou_passager`, `ic_coeur::gestes::secours::pertes_sur_la_derniere_rafale`, `…::reprise_selon_la_perte`, `…::phrases_des_pertes` (bloc D : la décision dans le cœur) ; vue du dehors, avec une horloge inventée : `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
-| C-51 | Si le fil des fenêtres s'arrête, le petit menu passe au menu de secours. | auto : `fenetres::fil_des_fenetres_arrete_menu_de_secours` |
-| C-52 | Quitter arrête la boucle proprement ; rien n'est préparé après « Quitter ». | auto : `fenetres::supervision_quitter`, `fenetres::rien_n_est_prepare_apres_quitter`, `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
+| C-47 | Le volet, le petit menu, les Paramètres et les fenêtres du logiciel sont dessinés par une seule boucle ; on peut les ouvrir depuis n'importe quel fil. | auto : `bords::fenetres::essais::suite_des_demandes`, `bords::fenetres::essais::parametres_ouverts_dans_la_boucle`, `bords::fenetres::autres::essais::plusieurs_fenetres_et_croix` ; dans la boucle du logiciel (façon 2, vue du dehors) : `compatibilite::powerpeek::les_parametres_s_ouvrent_dans_la_boucle_sans_fenetre` |
+| C-48 | Un clic sur l'icône pendant que les Paramètres sont ouverts fait ce qu'il doit (volet devant, puis retour). | auto : `ic_coeur::gestes::ouverture::clic_avec_les_parametres_ouverts`, `bords::fenetres::essais::surface_devant_les_parametres_puis_retour` |
+| C-49 | La fenêtre principale perdue (fermée par Windows, plantage d'egui) est refaite, et le clic qui l'a révélé ouvre quand même. | auto : `bords::fenetres::essais::fenetre_perdue_recreee_et_le_clic_ouvre_quand_meme` |
+| C-50 | Après 3 pertes en 60 s, la bibliothèque arrête de refaire la fenêtre et passe au menu de secours ; elle réessaie au clic suivant. | auto : `bords::fenetres::essais::pertes_en_rafale_menu_de_secours_puis_recreee_au_clic_suivant`, `bords::fenetres::essais::supervision_rafale_puis_reprise_au_clic_suivant`, `bords::fenetres::essais::supervision_reprise_apres_rafale`, `bords::fenetres::essais::supervision_pertes_espacees_toujours_recreees`, `bords::fenetres::essais::supervision_echec_premier_tour_ou_passager`, `ic_coeur::gestes::secours::pertes_sur_la_derniere_rafale`, `…::reprise_selon_la_perte`, `…::phrases_des_pertes` (bloc D : la décision dans le cœur) ; vue du dehors, avec une horloge inventée : `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
+| C-51 | Si le fil des fenêtres s'arrête, le petit menu passe au menu de secours. | auto : `bords::fenetres::essais::fil_des_fenetres_arrete_menu_de_secours` |
+| C-52 | Quitter arrête la boucle proprement ; rien n'est préparé après « Quitter ». | auto : `bords::fenetres::essais::supervision_quitter`, `bords::fenetres::essais::rien_n_est_prepare_apres_quitter`, `compatibilite::powerpeek::la_supervision_vue_du_dehors` |
 | C-53 | Une fenêtre perdue par une panique est refaite sur le même fil. | auto, GitHub : `tests/recreation_apres_panique` |
 | C-54 | Les Paramètres s'ouvrent au premier essai, juste après le démarrage. | auto, GitHub : `tests/premiere_creation` |
 | C-55 | Des fenêtres ouvertes et fermées sans pause ne bloquent jamais la boucle. | auto, GitHub : `tests/fenetres_en_rafale` |
@@ -127,12 +127,12 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-58 | Plusieurs fenêtres à la fois, chacune avec sa croix ; la croix ferme la bonne. | auto : `autres_fenetres::plusieurs_fenetres_et_croix` |
-| C-59 | Le logiciel peut refuser une fermeture (crochet de fermeture). | auto : `autres_fenetres::crochet_de_fermeture_avec_refus` |
-| C-60 | Une création ratée ne fait pas planter ; un nouvel essai suit. | auto : `autres_fenetres::creation_ratee_sans_panique_puis_nouvel_essai` |
-| C-61 | Une fenêtre peut être créée cachée, puis montrée plus tard ; un contenu pas prêt garde sa fenêtre cachée. | auto : `autres_fenetres::creation_differee_jamais_montree_puis_reveillee`, `autres_fenetres::un_contenu_pas_pret_garde_sa_fenetre_cachee`, `autres_fenetres::attendre_ou_dessiner` |
-| C-62 | Une panique dans le contenu d'une fenêtre ne tue pas les autres. | auto : `autres_fenetres::panique_du_contenu_suit_son_cours` |
-| C-63 | Une fenêtre peut en ouvrir une autre ; une fenêtre peut être ouverte et fermée dans la même image ; recréée après destruction. | auto : `autres_fenetres::un_contenu_ouvre_une_autre_fenetre`, `autres_fenetres::deuxieme_fenetre_ouverte_puis_fermee_dans_la_meme_boucle`, `autres_fenetres::creation_apres_destruction` |
+| C-58 | Plusieurs fenêtres à la fois, chacune avec sa croix ; la croix ferme la bonne. | auto : `bords::fenetres::autres::essais::plusieurs_fenetres_et_croix` |
+| C-59 | Le logiciel peut refuser une fermeture (crochet de fermeture). | auto : `bords::fenetres::autres::essais::crochet_de_fermeture_avec_refus` |
+| C-60 | Une création ratée ne fait pas planter ; un nouvel essai suit. | auto : `bords::fenetres::autres::essais::creation_ratee_sans_panique_puis_nouvel_essai` |
+| C-61 | Une fenêtre peut être créée cachée, puis montrée plus tard ; un contenu pas prêt garde sa fenêtre cachée. | auto : `bords::fenetres::autres::essais::creation_differee_jamais_montree_puis_reveillee`, `bords::fenetres::autres::essais::un_contenu_pas_pret_garde_sa_fenetre_cachee`, `bords::fenetres::autres::essais::attendre_ou_dessiner` |
+| C-62 | Une panique dans le contenu d'une fenêtre ne tue pas les autres. | auto : `bords::fenetres::autres::essais::panique_du_contenu_suit_son_cours` |
+| C-63 | Une fenêtre peut en ouvrir une autre ; une fenêtre peut être ouverte et fermée dans la même image ; recréée après destruction. | auto : `bords::fenetres::autres::essais::un_contenu_ouvre_une_autre_fenetre`, `bords::fenetres::autres::essais::deuxieme_fenetre_ouverte_puis_fermee_dans_la_meme_boucle`, `bords::fenetres::autres::essais::creation_apres_destruction` |
 | C-64 | Une fenêtre glissée d'un écran à l'autre d'échelle différente (125 %, 150 %) suit la souris sans sauter ni revenir. | auto (calcul) : `ic_coeur::placement::essais::glisser_vers_l_ecran_du_haut`, `ic_coeur::placement::essais::glisser_vers_le_portable`, `ic_coeur::placement::essais::changement_d_echelle_*` ; manuel pour le vrai glisser (`echelle`) |
 
 ## 9. Les Paramètres
@@ -168,7 +168,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-86 | Sa hauteur suit le contenu. | auto : `dessin::toutes_faites::simple::la_hauteur_suit_le_contenu` |
 | C-87 | La fenêtre « version prête » (mise à jour) toute faite. | auto : `dessin::toutes_faites::prete::version_prete_toute_faite` |
 | C-88 | La fenêtre de lecture : le mot lu est surligné et suivi ; un clic entre deux mots ou sur un mot le rend au logiciel. | auto : `dessin::toutes_faites::lecture::mots_et_clic_entre_deux_mots`, `dessin::toutes_faites::lecture::mot_surligne_suivi_et_clique` |
-| C-89 | Ces fenêtres tournent dans la boucle commune. | auto : `toutes_faites::fenetres_toutes_faites_dans_la_boucle` |
+| C-89 | Ces fenêtres tournent dans la boucle commune. | auto : `bords::fenetres::toutes_faites::tests::fenetres_toutes_faites_dans_la_boucle` |
 
 ## 11. Le thème, les polices, les couleurs
 
