@@ -14,6 +14,7 @@
 #[path = "references/logiciel.rs"]
 mod logiciel;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use interface_commune::autres_fenetres::Contenu;
@@ -449,4 +450,79 @@ fn c113_reglage_d_echelle_par_ecran() {
     // Une deuxième fois : sans effet, sans erreur.
     reglage_dpi();
     assert!(par_ecran());
+}
+
+/// Un logiciel inventé dont l'unique page a une section repliable « Affichage » ; il retient
+/// si le contenu de la section a été dessiné (elle est donc ouverte).
+struct Sections {
+    identite: Identite,
+    ouverte: AtomicBool,
+}
+
+impl Reglages for Sections {
+    fn identite(&self) -> &Identite {
+        &self.identite
+    }
+    fn action(&self, _: &str) {}
+    fn rechercher_mise_a_jour(&self) {}
+    fn pages(&self) -> Vec<Page> {
+        vec![Page::new("ecrans", "Écrans", '\u{E7F4}').avec_mots(&["luminosité"])]
+    }
+    fn dessiner_page(&self, _: &str, ui: &mut egui::Ui, page: &mut Contexte) {
+        page.section_repliable(
+            ui,
+            "Affichage",
+            "La taille et la clarté inventées.",
+            &["luminosité"],
+            |ui, _| {
+                ui.label("Un contenu inventé");
+                self.ouverte.store(true, Ordering::Relaxed);
+            },
+        );
+    }
+    fn communs(&self) -> Communs {
+        Communs::default()
+    }
+    fn changer(&self, _: &str, _: Valeur) {}
+}
+
+/// C-68 (le dessin) : arriver sur une page en la choisissant dans « Rechercher un
+/// paramètre » ouvre la section repliable qui contient les mots tapés (sans tenir compte des
+/// accents) ; y venir à la main la laisse repliée ; une nouvelle ouverture des Paramètres
+/// repart repliée.
+#[test]
+fn c68_la_recherche_ouvre_la_section() {
+    let l = Sections {
+        identite: logiciel::identite(),
+        ouverte: AtomicBool::new(false),
+    };
+    let ctx = egui::Context::default();
+    let p = apparence::Apparence::de(Default::default(), Some(false)).palette;
+    // Deux images ; vrai si le contenu de la section est dessiné à la seconde.
+    let ouverte = |s: &mut Parametres| {
+        let mut vu = false;
+        for _ in 0..2 {
+            l.ouverte.store(false, Ordering::Relaxed);
+            let entree = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(920.0, 680.0),
+                )),
+                ..Default::default()
+            };
+            let mut sortie = ctx.run_ui(entree, |ui| s.dessiner(ui, &p, &l));
+            sortie.textures_delta.clear();
+            vu = l.ouverte.load(Ordering::Relaxed);
+        }
+        vu
+    };
+    let mut a_la_main = Parametres::new(&l, None);
+    a_la_main.aller_a("ecrans");
+    assert!(!ouverte(&mut a_la_main), "venue à la main : repliée");
+    let mut cherchee = Parametres::new(&l, None);
+    cherchee.aller_a_par_recherche("ecrans", "luminosite");
+    assert_eq!(cherchee.cle(), "ecrans");
+    assert!(ouverte(&mut cherchee), "venue par la recherche : ouverte");
+    let mut rouverte = Parametres::new(&l, Some("ecrans"));
+    assert!(!ouverte(&mut rouverte), "nouvelle ouverture : repliée");
 }

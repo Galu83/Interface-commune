@@ -8,6 +8,7 @@
 //! dessin gardent leur chemin d'aujourd'hui, à la racine de la bibliothèque : [`crate::briques`],
 //! [`crate::pastilles`], [`crate::menu_choix`], [`crate::seuils`], [`crate::nuancier`],
 //! [`crate::couleurs`], [`crate::touches`], [`crate::surface`] (le volet et le petit menu, bloc G),
+//! [`crate::parametres`] et [`crate::toutes_faites`] (bloc H),
 //! `apparence::couleur`, et les traits
 //! [`crate::Reglages`] et [`crate::Logiciel`]. Ce qui décide (les touches du menu de choix, le
 //! déplacement des seuils, la marque d'une pastille, le plan des cases) vit dans le cœur
@@ -20,10 +21,12 @@ pub(crate) mod couleur;
 pub(crate) mod couleurs;
 pub(crate) mod menu_choix;
 pub(crate) mod nuancier;
+pub(crate) mod parametres;
 pub(crate) mod pastilles;
 pub(crate) mod seuils;
 pub(crate) mod surface;
 pub(crate) mod touches;
+pub(crate) mod toutes_faites;
 pub(crate) mod traits;
 pub(crate) mod volet;
 
