@@ -53,10 +53,10 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-15 | Une deuxième copie lancée ne s'ouvre pas : elle passe ses arguments à la première et s'arrête sans rien afficher. | auto : `horloge::second_lancement_sans_rien_dire`, `horloge::arguments_du_second_lancement` |
-| C-16 | Les données reçues de la deuxième copie sont lues avec prudence (taille, texte valide). | auto : `horloge::copie_de_donnees_lue_avec_prudence` |
+| C-15 | Une deuxième copie lancée ne s'ouvre pas : elle passe ses arguments à la première et s'arrête sans rien afficher. | auto : `bords::unique::essais::second_lancement_sans_rien_dire`, `bords::unique::essais::arguments_du_second_lancement`, `bords::unique::essais::bornes_exactes`, `bords::unique::essais::decisions_du_second_lancement`, `bords::unique::essais::traduction_pour_l_api` (bloc N) |
+| C-16 | Les données reçues de la deuxième copie sont lues avec prudence (taille, texte valide). | auto : `bords::unique::essais::copie_de_donnees_lue_avec_prudence` (bloc N) |
 | C-17 | La première copie montre ses Paramètres (ou la page demandée) quand la deuxième arrive. | auto (en partie) : `tests/comportements::c17_la_premiere_copie_montre_ses_parametres` (verrou pris, demande « Paramètres » et page voulue) ; le message reçu par la copie déjà lancée demande une vraie icône : GitHub |
-| C-18 | La copie unique vaut par session Windows (verrou `Local\…`) : deux utilisateurs connectés en même temps ont chacun la leur. | auto : `tests/comportements::c18_une_seule_copie_par_session` (nom exact `Local\<nom>-une-seule`, absent de `Global\`) |
+| C-18 | La copie unique vaut par session Windows (verrou `Local\…`) : deux utilisateurs connectés en même temps ont chacun la leur. | auto : `tests/comportements::c18_une_seule_copie_par_session` (nom exact `Local\<nom>-une-seule`, absent de `Global\`) ; `bords::unique::essais::verrou_dans_la_session`, `bords::unique::essais::noms_du_rendez_vous` (bloc N) |
 
 ## 3. Les notifications
 

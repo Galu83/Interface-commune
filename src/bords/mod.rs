@@ -3,3 +3,4 @@
 //! publics restent repris à leurs chemins d'aujourd'hui.
 
 pub(crate) mod poste;
+pub(crate) mod unique;

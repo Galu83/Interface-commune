@@ -1,5 +1,69 @@
 # État
 
+- **Refonte, bloc N « Instance unique »** (26 nov. 06:20, branche `refonte-bloc-n-instance`,
+  partie de `refonte` à 61c66d4, à intégrer par l'Atelier Master ; rien n'est commité) :
+  - **`src/bords/unique.rs`** (nouveau ; ORGANIGRAMME §10.1) : le verrou nommé
+    `Local\<nom>-une-seule` (`Unique`, fermé à sa fin), le second lancement qui cherche la
+    fenêtre cachée `<nom>-principal` et lui demande de s'ouvrir (`WM_APP + 3`) ou lui transmet
+    ses arguments (`WM_COPYDATA`, 3 s au plus), et `lire_arguments` pour la copie qui reçoit ;
+    chaque `unsafe` commenté ;
+  - **sa partie pure** (`src/bords/unique/codage.rs`, aucun appel à Windows) : les noms du
+    rendez-vous, le codage et la lecture des arguments (16 au plus, 4 096 octets en tout,
+    marque « ICAR », vérifiés à l'arrivée), la décision d'un second lancement selon son
+    `Reveil` (`Rien` : s'arrêter sans rien chercher ; `Parametres` : demander l'ouverture ;
+    `Arguments` : transmettre, ou refuser hors des bornes), des **erreurs nommées**
+    (`ErreurUnique`, cinq cas, en français) et leur traduction pour l'API ;
+  - **repris aux mêmes chemins** : `interface_commune::horloge::{instance_unique,
+    instance_unique_avec, Unique, ARGUMENTS_MAX, ARGUMENTS_OCTETS_MAX, Reveil}` (`pub use`) ;
+    aucun changement d'API ; `tests/compatibilite.rs` et `examples/demo.rs` inchangés ;
+    `horloge.rs` passe de 1382 à 1162 lignes (il garde la fenêtre cachée et sa réaction aux
+    deux messages : bloc M) ;
+  - **essais sans fenêtre** (`src/bords/unique/essais.rs`, 8) : aller-retour et refus du codage,
+    bornes exactes (16 arguments, 4 096 octets, arguments vides), noms du rendez-vous, décisions
+    du second lancement, traduction et ligne du journal, lecture prudente d'un `WM_COPYDATA`
+    fabriqué à la main ; avec le vrai verrou et des noms inventés propres au processus : un
+    second lancement sans rien dire (et ses demandes perdues faute de fenêtre), le verrou
+    présent dans `Local\`, absent de `Global\`, libéré à la fin de la première copie. Les 3
+    essais de `horloge` (`second_lancement_sans_rien_dire`, `arguments_du_second_lancement`,
+    `copie_de_donnees_lue_avec_prudence`) y sont venus avec toutes leurs vérifications ;
+    `COMPORTEMENTS.md` (C-15, C-16, C-18) et `CARTE.md` suivent ;
+  - **résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, cible hors de la copie,
+    aucune fenêtre vue) : `ic-coeur` 159 essais ; `interface-commune` 134 essais internes (129 − 3
+    déplacés + 8 de l'instance unique) ; les 17 fichiers de `tests/` verts (compatibilite 8,
+    comportements 12, etages 6, references aux images identiques ; `fenetres_en_rafale` et
+    `recreation_apres_panique` passés, leurs fenêtres voilées et hors de l'écran) ; exemples de
+    documentation 1 + 8 ; `fmt`, `clippy -D warnings`, `cargo deny` propres ;
+    contrôle de la règle n° 1 : seulement `.git:1` (le fichier du worktree) ;
+  - **Décisions prises seul** (à relire par l'Atelier Master) :
+    - N-1 : la partie pure reste dans `src/bords/unique/codage.rs`, pas dans `ic-coeur` : la
+      liste des modules du cœur est fixée au bloc 0 et l'ORGANIGRAMME (§3.1, §10.1) range N
+      dans les bords ; elle est pure et essayée là ;
+    - N-2 : erreurs nommées dedans (`ErreurUnique`, `Issue`), traduites à la frontière en
+      `Result<Unique, bool>` (§9) ; une demande perdue s'écrit au journal
+      (`sonde::noter`, appelé, pas modifié) ; à ce moment le journal n'est souvent pas encore
+      branché : la ligne se perd alors, sans dommage ;
+    - N-3 : le numéro du message « ouvre-toi » (`WM_OUVRIR_PARAMETRES`) et le nom de la classe
+      (`classe`, le point de rendez-vous des deux copies) passent dans `unique.rs` ;
+      `horloge.rs` les reprend pour sa fenêtre cachée ;
+    - N-4 : le canal qui ouvre une page demandée reste `Liens::montrer_page` (bloc J) ; la
+      réaction de la première copie (`WM_OUVRIR_PARAMETRES` → ouvrir le logiciel,
+      `WM_COPYDATA` → `lire_arguments` → le récepteur, réponse 1 ou 0) reste dans la procédure
+      de la fenêtre cachée de `horloge.rs` (bloc M) ;
+    - N-5 : comportement inchangé : noms, marque, bornes et délai identiques ; un verrou que
+      Windows refuse compte comme « déjà là » ; seul changement : des arguments hors des
+      bornes sont refusés avant de chercher la fenêtre (même résultat pour l'API :
+      `Err(false)`) ; le nom du logiciel (sans espace ni barre oblique) n'est toujours pas
+      vérifié ;
+    - N-6 : `Unique` reste tenu par le logiciel (aucun état global), comme avant ;
+  - **fichiers partagés touchés** : `src/bords/mod.rs` (+1 ligne : `pub(crate) mod unique;`) ;
+    `src/horloge.rs` (seulement la partie instance unique et ses imports) ; `docs/CARTE.md`
+    (2 lignes), `docs/COMPORTEMENTS.md` (3 lignes) ; ni `src/lib.rs`, ni `Cargo.toml`, ni
+    `crates/ic-coeur/src/lib.rs` ;
+  - **Pas vérifié sur le PC** : le vrai échange entre deux processus (il faudrait une fenêtre
+    cachée vivante) ; il reste couvert par `tests/comportements.rs` (C-17, C-18) et par
+    GitHub ;
+  - **sous-agents** : aucun.
+
 - **Version** : 0.1.0 publiée sur `main` (dépôt privé). La branche `manques-projets` ajoute ce
   qui manquait aux projets (pas encore fusionnée, numéro de version inchangé : c'est à
   l'Atelier de le choisir).
