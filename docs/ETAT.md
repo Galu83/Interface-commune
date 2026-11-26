@@ -109,6 +109,86 @@ Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
 - **Tailles** : le plus long fichier du bloc fait 335 lignes (`gestes/sonde.rs`), aucune
   fonction de plus de 80 lignes ; `src/sonde.rs` passe de plus de 1 000 lignes à 46.
 
+## Bloc M — l'icône seule devient une zone à une icône
+
+(26 nov. 08:59, branche `refonte-bloc-m-icone`, partie de `refonte`, à intégrer par l'Atelier
+Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
+
+- **Un seul moteur des icônes** : `src/bords/icone/zone.rs` (`Zone` : la fenêtre cachée de
+  `bords::systeme::cachee`, les appels à `Shell_NotifyIconW`, la remise après le redémarrage
+  de l'Explorateur, le menu gris de secours, la fin de session, le changement d'affichage).
+  `Horloge` (`src/bords/icone/horloge.rs`) n'est plus qu'une zone à **une seule icône** : une
+  seule fenêtre cachée, un seul menu de secours ; elle y ajoute sa procédure (commandes,
+  veille, thème, instance unique de `bords::unique`, guichet de `bords::poste`) et sa boucle.
+  `FenetresCommunes` (`communes.rs`) reste pour le logiciel qui garde sa boucle.
+- **Les autres fichiers** : `decodage.rs` (le décodage pur : messages et rappels, fin de
+  session, destinataire d'un message, lignes et textes du menu, alimentation), `image.rs`
+  (l'image depuis des pixels), `fil.rs` (le fil des fenêtres et son secours), `icone.rs` (la
+  liste des modules).
+- **Chemins publics inchangés** : `src/horloge.rs` (39 lignes) et `src/zone.rs` (63 lignes)
+  gardent leur documentation et reprennent tout par `pub use`, sans `unsafe` ;
+  `tests/compatibilite.rs` et `examples/` inchangés ; aucune image de référence ne change.
+- **Décisions prises seul** (à relire par l'Atelier Master) :
+  - **M-1** : l'icône seule garde son numéro 1 sans GUID et son message `WM_ICONE` (Windows
+    retient déjà l'icône des logiciels sous ce numéro) ; les icônes de la zone gardent leur
+    GUID tiré du nom. `Ident::{Guid, Numero}` dans la zone ;
+  - **M-2** : le menu de secours est celui de la zone pour les deux : mêmes lignes, même ordre
+    (C-45) ; les « & » y sont doublés, la ligne par défaut est mise par `SetMenuDefaultItem`
+    et un `WM_NULL` est posté après le menu (conseil de Windows), pour l'icône seule aussi ;
+  - **M-3** : la procédure de l'icône seule passe **avant** celle de la zone (« complément ») ;
+    pendant son appel, il est sorti de la zone et remis ensuite si la fenêtre vit encore
+    (`GWLP_USERDATA` relu) ; un message envoyé pendant ce temps va à la zone seule. Le
+    changement d'affichage (C-13) est signalé avant ; la fin de session et « TaskbarCreated »
+    restent à la zone ;
+  - **M-4** : une modification relance l'ajout si l'icône n'était pas dans la barre ; une
+    remise manquée pendant le menu de secours est rattrapée au message suivant ; les gestes
+    reçus pendant le menu sont ignorés ; la place de l'icône est relue à chaque geste ;
+  - **M-5** : `Aiguilleur` (bloc D) remplace les clics et l'ordre propres à l'icône seule :
+    la même suite des gestes pour les deux ;
+  - **M-6** : la fin de la zone (`Drop`) retire ses icônes et détruit sa fenêtre ; `Horloge`
+    ferme par `detruire` puis `PostQuitMessage`. `Horloge::new` reste sans effet sur Windows ;
+  - **M-7** : dans les essais (`cfg(test)`), `Shell_NotifyIconW` est remplacé par une note de
+    chaque appel (opération, numéro, GUID, message) qui réussit : **aucune icône n'est
+    montrée** et la remise après le redémarrage de l'Explorateur s'essaie (C-06). En
+    contrepartie, le vrai appel n'est fait que par les logiciels ;
+  - **M-8** : le décodage pur reste dans `bords/icone/decodage.rs` (essayé là, sans Windows) ;
+    le passer dans `ic-coeur` est une suite possible. Les `#[allow(unsafe_code)]` de
+    `src/lib.rs` pour `horloge` et `zone` restent (lib.rs n'est pas touché) : les retirer est
+    une suite possible, les façades n'ayant plus d'`unsafe` ;
+  - **M-9** : les essais de la zone sont dans `zone/essais.rs`, un module enfant (il lit les
+    champs privés de `Zone`) ; ceux de l'icône seule dans `essais_horloge.rs`. L'ancien essai
+    `gestes_par_les_mecanismes_communs` (93 lignes) est coupé en deux
+    (`gestes_vers_le_secours`) pour la limite de 80 lignes ; aucune vérification perdue ;
+  - **M-10** : aucune sonde de plus pour `FenetresCommunes` ; les étapes de sonde autour de
+    `Shell_NotifyIcon` valent maintenant aussi pour les icônes de la zone.
+- **Essais nouveaux** (sans fenêtre visible, aucune icône montrée) :
+  `remise_apres_le_redemarrage_de_l_explorateur` (l'icône seule et une icône de zone, ajout
+  puis version 4, « TaskbarCreated » reçu, remise une seule fois, modification, retrait),
+  `rappel_de_l_icone_seule` (le rappel au numéro 1, les messages qui ne sont pas des gestes),
+  `procedure_de_plus_avant_la_zone` (réponse du complément, réentrée, fin de session gardée
+  par la zone).
+- **Fichiers partagés touchés** : `src/bords/mod.rs` (+2 lignes : la doc et
+  `pub(crate) mod icone;`, sous `cfg(windows)`) ; `docs/CARTE.md` (+1 ligne) ;
+  `docs/COMPORTEMENTS.md` (9 lignes **modifiées**, pas seulement ajoutées : les essais ont
+  changé de chemin — C-03, C-04, C-06, C-08 à C-12, C-45) ; `tests/etages.rs` (la liste
+  `UNSAFE_EN_ATTENDANT` est vide : `horloge` et `zone` n'ont plus d'`unsafe`). Ni
+  `src/lib.rs`, ni `Cargo.toml`, ni `crates/ic-coeur/src/lib.rs`.
+- **Tailles** : `src/horloge.rs` passe de 1 129 à 39 lignes, `src/zone.rs` de 1 556 à 63 ; le
+  plus long fichier du bloc fait 708 lignes (`bords/icone/zone.rs`), aucune fonction de plus
+  de 80 lignes.
+- **Résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, cible hors de la copie,
+  aucune fenêtre vue, aucune icône montrée) : `ic-coeur` 184 essais ; `interface-commune` 140
+  essais internes ; les 18 fichiers de `tests/` verts (compatibilite 8, comportements 13,
+  etages 6, zone_affichage 1, references aux images identiques, `fenetres_en_rafale` et
+  `recreation_apres_panique` passés) ; exemples de documentation 1 + 8 ; `fmt`,
+  `clippy -D warnings`, `cargo deny` propres ; contrôle de la règle n° 1 : seulement `.git:1`
+  (le fichier du worktree).
+- **Pas vérifié sur le PC** : le vrai `Shell_NotifyIconW` (remplacé dans les essais, M-7), un
+  vrai redémarrage de l'Explorateur, le menu de secours ouvert à l'écran et la vraie boucle de
+  `Horloge::lancer` : ils demandent une icône visible ; à essayer à la main ou par un
+  logiciel (C-06 reste aussi « manuel »).
+- **Sous-agents** : aucun.
+
 - **Version** : 0.1.0 publiée sur `main` (dépôt privé). La branche `manques-projets` ajoute ce
   qui manquait aux projets (pas encore fusionnée, numéro de version inchangé : c'est à
   l'Atelier de le choisir).
