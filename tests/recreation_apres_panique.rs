@@ -7,6 +7,7 @@
 //! n'accepte qu'une boucle de fenêtres par programme.
 
 #![cfg(windows)]
+// Dans un essai, un échec doit arrêter l'essai : `expect` et `panic!` y sont voulus.
 #![allow(clippy::expect_used, clippy::panic)]
 
 use std::panic::{AssertUnwindSafe, catch_unwind};

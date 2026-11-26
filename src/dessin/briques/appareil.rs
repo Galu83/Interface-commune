@@ -56,6 +56,8 @@ struct Gabarit {
     barre: Rgb,
 }
 
+// Chaque argument est une donnée distincte du dessin (egui, couleurs, textes) ; les regrouper
+// dans une structure n'ajouterait qu'une enveloppe.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn appareil(
     ui: &mut Ui,

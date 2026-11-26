@@ -10,6 +10,7 @@
 //! par programme.
 
 #![cfg(windows)]
+// Dans un essai, un échec doit arrêter l'essai : `expect` y sont voulus.
 #![allow(clippy::expect_used)]
 
 use std::sync::atomic::Ordering;

@@ -6,8 +6,11 @@
 //! copie, dans un dossier temporaire, de trois polices du PC).
 
 #![cfg(windows)]
+// Dans un essai, un échec doit arrêter l'essai (`expect`) ; `WINDIR` se change par
+// `set_var`, qui demande `unsafe`.
 #![allow(clippy::expect_used, unsafe_code)]
 
+// Le logiciel inventé des images de référence, partagé : ce fichier n'en prend qu'une partie.
 #[allow(dead_code)]
 #[path = "references/logiciel.rs"]
 mod logiciel;

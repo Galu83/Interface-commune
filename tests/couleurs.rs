@@ -2,6 +2,7 @@
 //! (souris, clavier), la carte avec la bulle « Annuler » en option, la pastille d'une carte.
 //! Logiciel et valeurs inventés.
 
+// Dans un essai, un échec doit arrêter l'essai : `expect` y sont voulus.
 #![allow(clippy::expect_used)]
 
 use std::sync::Mutex;

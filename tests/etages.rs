@@ -12,6 +12,7 @@
 //! Le compilateur tient déjà le cœur (une crate sans dépendance) ; cet essai le redit, avec
 //! un message clair, et tient seul la frontière entre le dessin et les bords, qui vivent dans
 //! la même crate.
+// Dans un essai, un échec doit arrêter l'essai : `expect` et `panic!` y sont voulus.
 #![allow(clippy::expect_used, clippy::panic)]
 
 use std::fs;

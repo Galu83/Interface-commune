@@ -168,6 +168,8 @@ pub fn titre_section(ui: &mut Ui, p: &Palette, t: &str) {
 }
 
 /// Le carré coloré d'une pastille ou d'une case : un fond, sa lettre ; absent : hachuré.
+// Chaque argument est une donnée distincte du dessin (egui, couleurs, textes) ; les regrouper
+// dans une structure n'ajouterait qu'une enveloppe.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn carre(
     ui: &Ui,
@@ -540,6 +542,8 @@ fn coupe(ui: &Ui, texte: &str, taille: f32, c: Rgb, largeur: f32) -> std::sync::
 }
 
 /// Dessine un choix illustré ; rend l'action de son clic.
+// Chaque argument est une donnée distincte du dessin (egui, couleurs, textes) ; les regrouper
+// dans une structure n'ajouterait qu'une enveloppe.
 #[allow(clippy::too_many_arguments)]
 pub fn dessiner_choix(
     ui: &mut Ui,

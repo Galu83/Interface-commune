@@ -15,6 +15,7 @@
 //! Le relevé se refait à chaque nouvel import dans un logiciel ; ces modules ne vérifient que
 //! les noms et les types, pas le comportement (les autres essais s'en chargent).
 #![cfg(windows)]
+// Chaque chemin importé (`use … as _`) sert seulement à vérifier qu'il existe encore.
 #![allow(unused_imports)]
 // Les signatures vérifiées sont recopiées telles quelles : longues, sans alias exprès.
 #![allow(clippy::type_complexity)]

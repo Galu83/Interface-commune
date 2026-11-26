@@ -1,6 +1,7 @@
 //! Ce que partagent les essais des fenêtres toutes faites : une image sans fenêtre, un clic,
 //! une fenêtre simple inventée.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use egui::{Ui, vec2};

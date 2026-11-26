@@ -3,6 +3,7 @@
 //! `Local\`, avec des noms inventés propres à ce processus. Aucun essai n'ouvre de fenêtre ni
 //! n'en cherche une qui existerait vraiment.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` y sont voulus.
 #![allow(clippy::unwrap_used)]
 
 use windows::Win32::Foundation::CloseHandle;

@@ -124,6 +124,8 @@ pub fn carte_chevron(ui: &mut Ui, p: &Palette, glyphe: char, texte: &str, explic
 /// à droite qui tourne de 180° à l'ouverture. `part` : 0 (replié) à 1 (ouvert), pour la
 /// rotation ; `ouvert` : l'état voulu (annoncé aux lecteurs d'écran). Le clavier : l'en-tête
 /// prend le focus, Entrée et Espace comptent comme un clic. `id` : l'identité de la section.
+// Chaque argument est une donnée distincte du dessin (egui, couleurs, textes) ; les regrouper
+// dans une structure n'ajouterait qu'une enveloppe.
 #[allow(clippy::too_many_arguments)]
 pub fn entete_section(
     ui: &mut Ui,

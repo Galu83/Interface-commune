@@ -1,6 +1,7 @@
 //! La carte d'information reste dans la largeur donnée (mesurée sans fenêtre). Défaut
 //! corrigé : le bloc de contrôle vide ajoutait un espacement de 8 pt après le texte, et la
 //! carte débordait d'autant.
+// Dans un essai, un échec doit arrêter l'essai : `expect` y sont voulus.
 #![allow(clippy::expect_used)]
 
 use interface_commune::capture::{self, Options};

@@ -11,6 +11,8 @@
 //!   fenêtres du logiciel, [`super::autres`]) : egui croit avoir de vraies fenêtres, rien ne
 //!   s'ouvre.
 
+// Ce faux moteur ne sert qu'aux essais : un échec doit y arrêter l'essai (`unwrap`,
+// `expect` voulus).
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::cell::{Cell, RefCell};

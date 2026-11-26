@@ -268,6 +268,7 @@ pub fn dessiner_lecture(ui: &mut Ui, p: &Palette, l: &Lecture, e: &mut EtatLectu
 
 #[cfg(test)]
 mod tests {
+    // Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
     #![allow(clippy::expect_used, clippy::unwrap_used)]
     use super::*;
     use crate::dessin::toutes_faites::essais::{cliquer, palette, une_image};

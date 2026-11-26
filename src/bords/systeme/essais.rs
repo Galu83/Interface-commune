@@ -2,6 +2,7 @@
 //! fenêtre n'est jamais montrée : toutes viennent de la fabrique de fenêtre cachée, et sont
 //! détruites à la fin de chaque essai.
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` et `expect` y sont voulus.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::path::{Path, PathBuf};

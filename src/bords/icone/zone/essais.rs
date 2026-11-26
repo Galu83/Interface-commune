@@ -3,6 +3,7 @@
 //! Les fenêtres sont cachées ; aucune icône n'est donnée à Windows (les appels à
 //! `Shell_NotifyIconW` sont notés dans [`APPELS`]).
 
+// Dans un essai, un échec doit arrêter l'essai : `unwrap` y sont voulus.
 #![allow(clippy::unwrap_used)]
 
 use std::rc::Rc;

@@ -22,6 +22,7 @@
 //! 8. petit menu : clic sur « Paramètres » → ils se rouvrent.
 
 #![cfg(windows)]
+// Dans un essai, un échec doit arrêter l'essai : `unwrap`, `expect` et `panic!` y sont voulus.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 // Pourquoi c'est sûr : les appels Windows de ce fichier ne reçoivent que des structures
 // locales bien remplies (SendInput, GetWindowRect…) et des poignées lues juste avant.
@@ -132,6 +133,7 @@ impl Reglages for Essai {
 // ---- Les entrées fabriquées -------------------------------------------------------------
 
 fn envoyer(entrees: &[INPUT]) {
+    // SAFETY: `entrees` est une tranche d'INPUT bien remplis, et la taille annoncée est celle d'un INPUT.
     let n = unsafe { SendInput(entrees, std::mem::size_of::<INPUT>() as i32) };
     assert_eq!(
         n as usize,
@@ -155,6 +157,7 @@ fn touche_entree(vk: VIRTUAL_KEY, relache: bool) -> INPUT {
         Anonymous: INPUT_0 {
             ki: KEYBDINPUT {
                 wVk: vk,
+                // SAFETY: simple traduction d'un code de touche, sans pointeur.
                 wScan: unsafe { MapVirtualKeyW(u32::from(vk.0), MAPVK_VK_TO_VSC) } as u16,
                 dwFlags: drapeaux,
                 time: 0,
@@ -201,6 +204,7 @@ fn souris(dx: i32, dy: i32, drapeaux: MOUSE_EVENT_FLAGS) -> INPUT {
 
 /// Déplace la souris à ce point de l'écran (pixels).
 fn aller_a(x: i32, y: i32) {
+    // SAFETY: lecture de deux mesures de l'écran, sans pointeur.
     let (l, h) = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
     let norme =
         |v: i32, max: i32| ((i64::from(v.clamp(0, max - 1)) * 65_535) / i64::from((max - 1).max(1))) as i32;
@@ -229,14 +233,20 @@ struct Recherche {
     trouvee: Option<HWND>,
 }
 
+// SAFETY: rappel d'EnumWindows ; `lp` porte toujours l'adresse d'une `Recherche` vivante
+// (voir `fenetre`), et `h` est une fenêtre que Windows vient d'énumérer.
 unsafe extern "system" fn examiner(h: HWND, lp: LPARAM) -> BOOL {
+    // SAFETY: `lp` vient de `fenetre`, qui y met l'adresse de sa `Recherche` et la garde vivante
+    // pendant tout EnumWindows ; rien d'autre n'y touche pendant ce temps.
     let r = unsafe { &mut *(lp.0 as *mut Recherche) };
     let mut pid = 0u32;
+    // SAFETY: `h` vient d'EnumWindows ; `pid` est une variable locale.
     unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
     if pid != r.pid {
         return BOOL(1);
     }
     let mut tampon = [0u16; 256];
+    // SAFETY: `h` vient d'EnumWindows ; le tampon local donne lui-même sa longueur.
     let n = unsafe { GetWindowTextW(h, &mut tampon) };
     let titre = String::from_utf16_lossy(&tampon[..n.max(0) as usize]);
     if titre == r.titre {
@@ -249,10 +259,12 @@ unsafe extern "system" fn examiner(h: HWND, lp: LPARAM) -> BOOL {
 /// La fenêtre de ce programme qui porte ce titre.
 fn fenetre(titre: &str) -> Option<HWND> {
     let mut r = Recherche {
+        // SAFETY: lecture du numéro de ce processus, sans argument.
         pid: unsafe { GetCurrentProcessId() },
         titre: titre.to_string(),
         trouvee: None,
     };
+    // SAFETY: `examiner` ne lit que la `Recherche` locale `r`, vivante jusqu'au retour d'EnumWindows.
     let _ = unsafe { EnumWindows(Some(examiner), LPARAM(&mut r as *mut Recherche as isize)) };
     r.trouvee
 }
@@ -260,12 +272,14 @@ fn fenetre(titre: &str) -> Option<HWND> {
 /// Le rectangle de la fenêtre (pixels) : gauche, haut, droite, bas.
 fn rectangle(h: HWND) -> [i32; 4] {
     let mut r = RECT::default();
+    // SAFETY: `r` est un RECT local ; une poignée périmée fait seulement échouer l'appel.
     unsafe { GetWindowRect(h, &mut r).expect("rectangle de la fenêtre") };
     [r.left, r.top, r.right, r.bottom]
 }
 
 /// L'échelle de l'écran de la fenêtre (1,0 à 96 ppp).
 fn echelle(h: HWND) -> f32 {
+    // SAFETY: lecture du DPI ; une poignée périmée rend 0, traité juste dessous.
     let dpi = unsafe { GetDpiForWindow(h) };
     if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 }
 }
@@ -274,10 +288,12 @@ fn echelle(h: HWND) -> f32 {
 fn module_charge(nom: &str) -> String {
     use windows::Win32::System::LibraryLoader::{GetModuleFileNameW, GetModuleHandleW};
     let n: Vec<u16> = nom.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: `n` est une chaîne UTF-16 terminée par un zéro, vivante pendant l'appel.
     let Ok(m) = (unsafe { GetModuleHandleW(windows::core::PCWSTR(n.as_ptr())) }) else {
         return "non chargé".into();
     };
     let mut tampon = [0u16; 512];
+    // SAFETY: `m` vient de GetModuleHandleW ; le tampon local donne lui-même sa longueur.
     let long = unsafe { GetModuleFileNameW(Some(m), &mut tampon) } as usize;
     String::from_utf16_lossy(&tampon[..long.min(512)])
 }
@@ -295,6 +311,8 @@ fn photographier(h: HWND, nom: &str) {
         return;
     }
     let mut px = vec![0u8; (l * ha * 4) as usize];
+    // SAFETY: chaque objet GDI créé ici est rendu à la fin du bloc ; `px` a la place de l'image
+    // entière (l × ha × 4 octets, 32 bits par point) que GetDIBits y écrit.
     unsafe {
         let ecran = GetDC(None);
         let mem = CreateCompatibleDC(Some(ecran));
@@ -423,13 +441,16 @@ impl Essais {
     /// La fenêtre a le clavier : sinon on la prend, puis on la clique en un endroit neutre.
     fn premier_plan(&mut self, fen: HWND, surface: Surface) {
         for essai in 0..3 {
+            // SAFETY: lecture de la fenêtre au premier plan, sans argument.
             if unsafe { GetForegroundWindow() } == fen {
                 self.noter("la fenêtre a le clavier");
                 return;
             }
             self.noter(format!("pas le premier plan (essai {essai})"));
+            // SAFETY: `fen` est une poignée de fenêtre ; périmée, l'appel échoue seulement.
             let _ = unsafe { SetForegroundWindow(fen) };
             std::thread::sleep(Duration::from_millis(300));
+            // SAFETY: lecture de la fenêtre au premier plan, sans argument.
             if unsafe { GetForegroundWindow() } == fen {
                 continue;
             }
@@ -440,6 +461,7 @@ impl Essais {
                 cliquer(g + (30.0 * e) as i32, h + (28.0 * e) as i32);
             }
         }
+        // SAFETY: lecture de la fenêtre au premier plan, sans argument.
         if unsafe { GetForegroundWindow() } != fen {
             self.echec("la fenêtre n'a pas pu prendre le clavier (Windows refuse le premier plan)");
         }
@@ -486,6 +508,7 @@ fn les_fenetres_repondent_aux_entrees_fabriquees() {
         let _ = fini.send(format!("{:?}", r.as_ref().map(|_| ()).map_err(|e| e.0.clone())));
     });
 
+    // SAFETY: lecture de deux mesures de l'écran, sans pointeur.
     let (largeur, hauteur) = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
     let mut e = Essais {
         liens: liens.clone(),
