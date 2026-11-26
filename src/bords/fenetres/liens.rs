@@ -11,7 +11,7 @@ use ic_coeur::gestes::ouverture::{Clic, Ouvert, decider_le_clic};
 
 use super::autres::AutresFenetres;
 use super::canal::{Demandes, Reception};
-use super::verrou;
+use crate::bords::verrou::verrou;
 use crate::place::Rect;
 use crate::theme::Surface;
 

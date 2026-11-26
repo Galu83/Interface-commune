@@ -10,13 +10,13 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Key, ViewportCommand};
 use ic_coeur::theme::avancer;
 
-use super::super::verrou;
 use super::{
     DEJA_OUVERTE, DEJA_PREPAREE, Etape, IMAGE_DE_FONDU, Montrer, Sortie, Veilleur, centre, discret, faire,
     noter, ouvrir_parametres, rang,
 };
 use crate::Logiciel;
 use crate::apparence::Apparence;
+use crate::bords::verrou::verrou;
 use crate::fenetres::{
     Demande, GARDE, GARDE_MAX, Garde, LENTE, Liens, Mesure, Ouvert, Reception, Suite, suite,
 };

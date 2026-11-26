@@ -39,6 +39,23 @@ Rien n'y est propre à un logiciel : le nom, la version, l'icône, les pages, le
 les réglages rapides et les textes viennent du logiciel, par les traits `Reglages` (les
 Paramètres) et `Logiciel` (tout le reste).
 
+## Comment elle est rangée
+
+Trois étages, contrôlés par `tests/etages.rs` (le détail fichier par fichier : `docs/CARTE.md` ;
+les règles : `docs/ORGANIGRAMME.md`) :
+
+- **le cœur** (`crates/ic-coeur/`) : tout ce qui décide, en calcul pur, sans egui, sans Windows
+  et sans `unsafe` (contrat, textes, thème, gestes, placement, modèle des Paramètres) ;
+- **les bords** (`src/bords/`) : tout ce qui parle à Windows, à egui ou à winit (l'icône, les
+  boucles des fenêtres, le guichet, l'instance unique, la sonde, les appels au système). Le seul
+  étage où `unsafe` et l'état global sont permis ; un seul mécanisme de verrou
+  (`bords/verrou.rs`) ;
+- **le dessin** (`src/dessin/`) : tout ce qui se dessine avec egui seul (contrôles, volet,
+  Paramètres, fenêtres toutes faites, captures).
+
+Les modules à la racine de `src/` (`horloge`, `theme`, `parametres`…) ne sont que des façades : ils
+reprennent les étages à leur chemin d'avant la refonte, si bien qu'un logiciel n'a rien à changer.
+
 ## L'utiliser dans un projet
 
 1. Dans le `Cargo.toml` du projet, épinglée sur un commit (jamais une branche : une mise à jour
@@ -132,9 +149,11 @@ de déploiement**, en lecture seule, valable pour ce seul dépôt, sans date de 
 ## Les vérifications
 
 - `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`, `cargo build --examples`, `cargo deny check` (les deux crates de
-  l'espace de travail : `interface-commune` et le cœur `crates/ic-coeur`) : aucune fenêtre ne s'ouvre pendant les tests
-  (le volet, le menu et les Paramètres sont mis en page par egui seul).
+  `cargo test --workspace`, `cargo build --examples`, `cargo deny check`, et la documentation
+  sans avertissement (`RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace`), pour les
+  deux crates de l'espace de travail (`interface-commune` et le cœur `crates/ic-coeur`) : aucune
+  fenêtre ne s'ouvre pendant les tests (le volet, le menu et les Paramètres sont mis en page par
+  egui seul).
 - Le crochet `pre-push` commun contrôle chaque envoi (règle n° 1).
 
 ## Licences des dépendances

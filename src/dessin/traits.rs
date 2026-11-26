@@ -19,7 +19,7 @@ pub trait Reglages: Send + Sync + 'static {
         &textes::FRANCAIS
     }
 
-    /// Une action commune choisie ([`cles`]), ou une action du logiciel.
+    /// Une action commune choisie ([`cles`](crate::cles)), ou une action du logiciel.
     fn action(&self, cle: &str);
 
     /// « Rechercher une mise à jour » : la recherche part sur un fil à part ; sa réponse
@@ -166,7 +166,7 @@ pub trait Logiciel: Reglages {
     /// La **fenêtre principale** du logiciel, s'il en a une à lui (règles : interface
     /// Windows 11, point 10, « double-clic = ouvrir le logiciel »). Avec elle :
     /// - le double-clic sur l'icône l'ouvre (sans elle : les Paramètres) ;
-    /// - le petit menu commence par « Ouvrir <logiciel> », en gras ;
+    /// - le petit menu commence par « Ouvrir `<logiciel>` », en gras ;
     /// - relancer le logiciel déjà ouvert l'ouvre (sans elle : les Paramètres) ;
     /// - avec [`FenetrePrincipale::clic_gauche`], le clic gauche l'ouvre aussi, au lieu du
     ///   volet.

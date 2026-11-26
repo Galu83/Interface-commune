@@ -98,7 +98,7 @@ pub struct Etat {
     /// Un état (« Prêt », la disposition active, « Changement en cours… ») ne va pas ici mais
     /// dans la ligne d'état.
     pub titre: String,
-    /// La ligne d'état, en couleur, sous le titre : « Prêt · <disposition> », « Changement en
+    /// La ligne d'état, en couleur, sous le titre : « Prêt · `<disposition>` », « Changement en
     /// cours… ».
     pub ligne: String,
     /// Une explication plus longue, en texte secondaire, s'il y en a une.

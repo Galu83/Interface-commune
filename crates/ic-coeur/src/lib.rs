@@ -21,28 +21,31 @@
 
 #![forbid(unsafe_code)]
 
-/// Bloc A, le contrat : les types que le logiciel fournit ou reçoit et qui ne dessinent pas
-/// (`Identite`, `Etat`, `Communs`, `Valeur`, `Page`, `Instantane`, `Reveil`, `Niveau`,
-/// `menu::Action`, les clés communes…). Voie 1.
+// Bloc A, le contrat : les types que le logiciel fournit ou reçoit et qui ne dessinent pas
+// (`Identite`, `Etat`, `Communs`, `Valeur`, `Page`, `Instantane`, `Reveil`, `Niveau`,
+// `menu::Action`, les clés communes…). Voie 1.
 pub mod contrat;
 
-/// Bloc B, les textes : chaque mot de la bibliothèque, en français et en anglais ; les
-/// raccourcis en toutes lettres ; l'espace insécable avant chaque unité (C-98). Voie 1.
+// Bloc B, les textes : chaque mot de la bibliothèque, en français et en anglais ; les
+// raccourcis en toutes lettres ; l'espace insécable avant chaque unité (C-98). Voie 1.
+// Une ligne de leur documentation écrit « <Logiciel> » sans guillemets de code ; les textes ne
+// se touchent pas dans ce bloc (le bloc des textes les tient), d'où cette seule tolérance.
+#[allow(rustdoc::invalid_html_tags)]
 pub mod textes;
 
-/// Bloc C, le thème et les mesures : palette, couleurs d'état et des pastilles, glyphes,
-/// animation, mesures du volet, du menu et des Paramètres, relecture de Windows toutes les
-/// 2 s (C-90). Voie 2.
+// Bloc C, le thème et les mesures : palette, couleurs d'état et des pastilles, glyphes,
+// animation, mesures du volet, du menu et des Paramètres, relecture de Windows toutes les
+// 2 s (C-90). Voie 2.
 pub mod theme;
 
-/// Bloc D, les gestes et les secours : l'aiguilleur des clics, l'anti-rebond, les pertes de
-/// fenêtres, la décision « bloqué » de la sonde. Voie 1.
+// Bloc D, les gestes et les secours : l'aiguilleur des clics, l'anti-rebond, les pertes de
+// fenêtres, la décision « bloqué » de la sonde. Voie 1.
 pub mod gestes;
 
-/// Bloc D, le placement : où poser le volet, le petit menu, un menu de choix, les Paramètres.
-/// Voie 1.
+// Bloc D, le placement : où poser le volet, le petit menu, un menu de choix, les Paramètres.
+// Voie 1.
 pub mod placement;
 
-/// Bloc E, le modèle des Paramètres : pages, recherche, « Annuler » (C-70), « Conserver ? »,
-/// présentation de la mise à jour. Voie 2.
+// Bloc E, le modèle des Paramètres : pages, recherche, « Annuler » (C-70), « Conserver ? »,
+// présentation de la mise à jour. Voie 2.
 pub mod parametres;

@@ -15,6 +15,8 @@ use egui::{FontData, FontDefinitions, FontFamily, FontId, FontTweak};
 
 use ic_coeur::theme::polices::{self as plan, Famille, Police};
 
+use crate::bords::verrou::verrou;
+
 /// Les fichiers de polices, dans le dossier des polices de Windows.
 pub use ic_coeur::theme::polices::{ICONES_FLUENT, ICONES_MDL2, SEGOE, SEGOE_SEMIBOLD, SEGOE_VARIABLE};
 
@@ -92,6 +94,8 @@ fn charger() -> Result<FontDefinitions, String> {
 /// les suivantes rendent les mêmes, sans rien relire. En erreur (polices absentes), le
 /// logiciel garde le menu de secours de Windows.
 pub fn polices() -> Result<FontDefinitions, String> {
+    // ÉTAT GLOBAL : les polices lues une fois sur le disque (lecture coûteuse), partagées par
+    // toutes les fenêtres et tous les fils.
     static POLICES: OnceLock<Result<FontDefinitions, String>> = OnceLock::new();
     POLICES.get_or_init(charger).clone()
 }
@@ -101,20 +105,18 @@ pub fn polices() -> Result<FontDefinitions, String> {
 /// MDL2 Assets), et chaque réponse est retenue. Sans police (hors Windows) : `false`. Sert à
 /// retomber sur une lettre quand un glyphe manque, jamais à dessiner un carré vide.
 pub fn icone_disponible(c: char) -> bool {
+    // ÉTAT GLOBAL : les réponses retenues pour la police déjà chargée (même raison que
+    // `POLICES`).
     static REPONSES: OnceLock<Mutex<HashMap<char, bool>>> = OnceLock::new();
     let table = REPONSES.get_or_init(Mutex::default);
-    if let Ok(t) = table.lock()
-        && let Some(r) = t.get(&c)
-    {
+    if let Some(r) = verrou(table).get(&c) {
         return *r;
     }
     let present = polices()
         .ok()
         .and_then(|d| d.font_data.get(plan::ICONES).cloned())
         .is_some_and(|f| crate::bords::verification::contient(AsRef::<[u8]>::as_ref(&*f.font), c));
-    if let Ok(mut t) = table.lock() {
-        t.insert(c, present);
-    }
+    verrou(table).insert(c, present);
     present
 }
 

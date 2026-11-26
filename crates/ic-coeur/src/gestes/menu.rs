@@ -1,7 +1,7 @@
 //! Le petit menu de l'icône (clic droit), en calcul pur (règles : interface Windows 11,
 //! point 10) : toujours dans cet ordre, avec ces mots ([`crate::textes`]) et ces icônes dans
 //! tous les logiciels :
-//! « Ouvrir <logiciel> » en gras (E8A7), seulement s'il a une fenêtre principale
+//! « Ouvrir `<logiciel>` » en gras (E8A7), seulement s'il a une fenêtre principale
 //! (`Logiciel::fenetre_principale`), puis les une ou deux actions propres au logiciel, un trait, puis « Paramètres » (E713),
 //! « Rechercher une mise à jour » (E895), les lignes communes de plus (« Ouvrir le
 //! journal »…), et « Quitter » en dernier.
@@ -22,7 +22,7 @@ pub struct Ligne {
 }
 
 impl Ligne {
-    /// La ligne s'écrit en gras : seulement « Ouvrir <logiciel> » (bloc G).
+    /// La ligne s'écrit en gras : seulement « Ouvrir `<logiciel>` » (bloc G).
     pub fn en_gras(&self) -> bool {
         self.quoi == Choix::Ouvrir
     }
@@ -34,7 +34,7 @@ pub enum Choix {
     /// Une action propre au logiciel, ou une ligne commune de plus : sa clé, rendue au
     /// logiciel (`Logiciel::action`).
     Action(String),
-    /// « Ouvrir <logiciel> » : la fenêtre principale. En gras, toujours la première ligne.
+    /// « Ouvrir `<logiciel>` » : la fenêtre principale. En gras, toujours la première ligne.
     Ouvrir,
     Parametres,
     RechercherMiseAJour,
@@ -82,7 +82,7 @@ pub fn lignes(t: &Textes, propres: &[Action], en_plus: &[Action]) -> Vec<Option<
 }
 
 /// Les lignes du petit menu, comme [`lignes`] ; avec `ouvrir` (le nom du logiciel, quand il a
-/// une fenêtre principale), « Ouvrir <logiciel> » vient en première ligne, avant les actions
+/// une fenêtre principale), « Ouvrir `<logiciel>` » vient en première ligne, avant les actions
 /// propres, et le trait suit ce premier groupe.
 pub fn lignes_avec(
     t: &Textes,
@@ -139,7 +139,7 @@ mod tests {
             .collect()
     }
 
-    /// Seule « Ouvrir <logiciel> » s'écrit en gras (bloc G).
+    /// Seule « Ouvrir `<logiciel>` » s'écrit en gras (bloc G).
     #[test]
     fn seule_ouvrir_en_gras() {
         let fr = &crate::textes::FRANCAIS;
@@ -198,7 +198,7 @@ mod tests {
         );
     }
 
-    /// Avec une fenêtre principale : « Ouvrir <logiciel> » en première ligne (E8A7), avant
+    /// Avec une fenêtre principale : « Ouvrir `<logiciel>` » en première ligne (E8A7), avant
     /// les actions propres, puis le trait ; sans action propre, le trait suit « Ouvrir ».
     /// Sans fenêtre principale, le menu ne change pas.
     #[test]

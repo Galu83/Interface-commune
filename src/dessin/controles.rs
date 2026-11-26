@@ -10,6 +10,7 @@ mod raccourci;
 pub use base::{
     Genre, bouton, bouton_icone, focus, icone, largeur_ligne, ligne, ligne_de, ligne_menu, ligne_menu_grasse,
 };
+pub(crate) use cartes::place_des_boutons;
 pub use cartes::{
     ETAT_ICONE, bandeau, cadre_carte, carte, carte_chevron, carte_info, carte_large, entete_section, etat,
     etat_long, titre_page, titre_section,

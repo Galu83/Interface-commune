@@ -68,8 +68,13 @@ pub struct Parametres {
     animations: bool,
 }
 
-/// Compte les ouvertures des Paramètres, pour que chacune reparte avec des sections repliées.
-static OUVERTURES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Un numéro propre à chaque ouverture des Paramètres, pour que chacune reparte avec des
+/// sections repliées. Sans compteur global (aucun état global dans le dessin) : `RandomState`
+/// change de clé à chaque appel, donc deux ouvertures n'ont pas le même numéro.
+fn numero_d_ouverture() -> u64 {
+    use std::hash::BuildHasher;
+    std::collections::hash_map::RandomState::new().hash_one(0u8)
+}
 
 impl Parametres {
     pub fn new(l: &dyn Reglages, page: Option<&str>) -> Parametres {
@@ -94,7 +99,7 @@ impl Parametres {
             textes,
             faite_avec,
             logo: None,
-            session: OUVERTURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            session: numero_d_ouverture(),
             recherche_page: String::new(),
             animations: true,
         }
@@ -123,7 +128,7 @@ impl Parametres {
         self.pages.get(self.page).map_or("", |p| p.cle.as_str())
     }
 
-    /// Le titre de la fenêtre : « Paramètres de <logiciel> », dans la langue du logiciel.
+    /// Le titre de la fenêtre : « Paramètres de `<logiciel>` », dans la langue du logiciel.
     pub fn titre_fenetre(l: &dyn Reglages) -> String {
         remplir(l.textes().parametres_de, &[&l.identite().nom])
     }

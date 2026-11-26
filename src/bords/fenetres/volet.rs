@@ -9,9 +9,9 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, FontDefinitions};
 
-use super::verrou;
 use crate::Logiciel;
 use crate::apparence::Apparence;
+use crate::bords::verrou::verrou;
 use crate::fenetres::{Demande, Garde, Liens, Reception};
 use crate::menu::Choix;
 use crate::place::Rect;

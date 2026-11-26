@@ -16,7 +16,7 @@ use super::Pertes;
 use super::canal::Reception;
 use super::liens::{Demande, Liens};
 use super::supervision::cause_de_panique;
-use super::verrou;
+use crate::bords::verrou::verrou;
 use crate::theme::Surface;
 
 /// Ce que le fil des fenêtres ouvre : les vraies fenêtres (egui), ou un faux dans les tests.

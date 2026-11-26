@@ -27,7 +27,7 @@ Mots employés :
 ## 1. L'idée en trois phrases
 
 L'Interface commune donne aux logiciels du propriétaire qui vivent près de l'horloge de Windows
-(KVMSoft, Vocalis, PowerPeek, Chat PDC) **la même allure Windows 11 et le même comportement** :
+(KVMSoft, Vocalis, PowerPeek) **la même allure Windows 11 et le même comportement** :
 l'icône, le volet, le petit menu, les Paramètres, les fenêtres et leurs contrôles. Le logiciel ne
 décrit que ce qui lui est propre (son nom, ses pages, ses réglages, ses actions), par deux traits
 (`Reglages` et `Logiciel` : la liste de ce qu'il doit savoir répondre). Tout ce qui se décide
@@ -37,7 +37,7 @@ décide rien.
 
 ## 2. Les principes propres à cette bibliothèque
 
-1. **L'API est un contrat.** Quatre logiciels en dépendent, chacun épinglé sur un commit. Une
+1. **L'API est un contrat.** Trois logiciels en dépendent, chacun épinglé sur un commit. Une
    fonction publique ne disparaît pas sans une étape « dépréciée » (marquée, encore là, avec la
    ligne de remplacement dans `MIGRATION.md`) d'au moins une version. Toute nouveauté arrive en
    option, avec une valeur par défaut qui ne change rien (déjà la pratique : à garder).
@@ -395,7 +395,7 @@ Seuils de la méthode : aucun fichier de plus de 800 lignes (600 visés), aucune
 - **Un essai de bout en bout** : l'exemple `demo` lancé sur un bureau Windows caché, piloté par des
   entrées fabriquées (clic, double-clic, clic droit, Entrée, Échap), qui vérifie ce qui s'ouvre.
 - **Un essai de compatibilité** par logiciel : un petit programme qui reprend les appels de
-  KVMSoft, Vocalis, PowerPeek et Chat PDC à l'API (sans leur code propre) et doit compiler à
+  KVMSoft, Vocalis et PowerPeek à l'API (sans leur code propre) et doit compiler à
   chaque commit. Il dit tout de suite si un changement casse un logiciel.
 
 ## 12. Les doutes

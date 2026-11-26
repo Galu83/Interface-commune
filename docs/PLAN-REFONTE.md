@@ -5,7 +5,7 @@
 | Interface commune | 2026-11-25 | 1 | le propriétaire a choisi A le 24 novembre ; ce plan est à valider par l'Atelier Master |
 
 **Ce que dit ce plan** : dans quel ordre écrire les quinze blocs de `docs/ORGANIGRAMME.md`, combien
-de jours chacun coûte, ce qui avance en parallèle, ce qui change pour les quatre logiciels et
+de jours chacun coûte, ce qui avance en parallèle, ce qui change pour les trois logiciels et
 comment ils passent à la nouvelle version, et à quelles conditions on bascule.
 
 **Ce qu'il ne dit pas** : la conception (c'est `ORGANIGRAMME.md`), les comportements à garder
@@ -67,7 +67,7 @@ Un jour = un jour de travail d'une session. Les coûts viennent de la taille du 
 | | **Total** | | | **44,5** |
 
 Le détail de la bascule : vérification complète 1,5 ; essai du retour en arrière 0,5 ; KVMSoft 1 ;
-PowerPeek 1 ; Vocalis 1 ; Chat PDC 0,5.
+PowerPeek 1 ; Vocalis 1.
 
 Les blocs les plus risqués sont **J** (les boucles, les paniques, la recréation) et **M** (deux
 systèmes d'icône à fondre en un) : ce sont eux qui portent la marge du §3.
@@ -92,7 +92,7 @@ Deux voies, une session par voie. Jours ouvrés ; pause du 24 décembre au 1er j
 | | | | |
 | **Bascule** | | | |
 | vérification complète, retour en arrière | 7 – 8 janv. | | |
-| migration des quatre logiciels | 11 – 14 janv. | | |
+| migration des trois logiciels | 11 – 14 janv. | | |
 | essai du propriétaire | semaine du 18 janv. | | |
 
 - **J** commence le 22 décembre par ce qui ne demande pas H (le faux moteur, la boucle de la
@@ -118,14 +118,12 @@ Deux voies, une session par voie. Jours ouvrés ; pause du 24 décembre au 1er j
 ## 4. Les changements d'API, et la migration de chaque logiciel
 
 Ce que prend chaque logiciel aujourd'hui (`ANALYSE.md` §6) :
-- **KVMSoft** épingle `rev = "e077572"` ;
+- **KVMSoft** épingle `rev = "d9d56da"` (dans `Cargo.toml` et `Cargo.lock`, relevé le 26 nov.) ;
 - **PowerPeek** : sa refonte épingle `rev = "e077572"` (dans `crates/bords-windows`) ; son
   `main`, gelé, épingle encore `rev = "119c500"` (relevé sur le disque le 25 nov.) ;
   il garde sa propre boucle eframe et y branche les fenêtres de la bibliothèque
   (`AutresFenetres::lier`, `montrer`) : façon 2 du bloc J ;
-- **Vocalis** épingle `rev = "119c500"` ;
-- **Chat PDC** épingle `rev = "77bad2b"` et ne prend que `horloge::Horloge` et
-  `parametres::modele`.
+- **Vocalis** épingle `rev = "119c500"`.
 
 **Première étape, la même pour tous** : rattraper `main` d'après `MIGRATION.md` (de son `rev` au
 dernier commit de `main`), puis passer au commit de la bascule. Les deux marches sont séparées :
@@ -134,13 +132,13 @@ un logiciel qui a rattrapé `main` sait que ce qui casse ensuite vient de la ref
 **Les changements de la refonte** (tous les autres chemins et signatures restent, essai de
 compatibilité à l'appui) :
 
-| # | Changement | Pourquoi | KVMSoft | PowerPeek | Vocalis | Chat PDC |
-|---|---|---|---|---|---|---|
-| 1 | Les éléments publics qu'aucun des quatre ne prend (213, `ANALYSE.md` §1.2) deviennent internes (`pub(crate)`) ou disparaissent | une API plus petite à garder ; le relevé est **refait au moment de la bascule** sur le code des quatre | rien | rien | rien | rien |
-| 2 | Les méthodes `Logiciel::dessiner_rapides` et `Logiciel::largeur_rapides` sont retirées | aucun logiciel ne les écrit (relevé du 25 nov. dans le code des quatre) ; leur place dans le volet est prise par les briques | rien (ne les écrit pas) | rien (ne les écrit pas) | rien (ne les écrit pas) | sans objet (pas de `Logiciel`) |
-| 3 | La constante `theme::HAUTEUR_LIGNE` est retirée | aucun logiciel ne la prend ; une seule mesure de ligne reste (`mesures`) | rien | rien | rien | rien |
-| 4 | Le texte `conserver_retour` (français et anglais) prend l'espace insécable (C-98), ainsi que « 24 h » dans `journal_detaille_explication` (trouvé au bloc B) | règle de l'unité, sans exception à la bascule | rien à écrire ; le texte affiché change d'une espace | idem | idem | idem |
-| 5 | `briques::pourcent` écrit `42 %` avec l'espace insécable (C-98) | idem | rien à écrire ; si un test du logiciel compare ce texte, y mettre `\u{A0}` | idem | idem | sans objet |
+| # | Changement | Pourquoi | KVMSoft | PowerPeek | Vocalis |
+|---|---|---|---|---|---|
+| 1 | Les éléments publics qu'aucun des trois ne prend (213, `ANALYSE.md` §1.2) deviennent internes (`pub(crate)`) ou disparaissent | une API plus petite à garder ; le relevé est **refait au moment de la bascule** sur le code des trois | rien | rien | rien |
+| 2 | Les méthodes `Logiciel::dessiner_rapides` et `Logiciel::largeur_rapides` sont retirées | aucun logiciel ne les écrit (relevé du 25 nov. dans le code des logiciels) ; leur place dans le volet est prise par les briques | rien (ne les écrit pas) | rien (ne les écrit pas) | rien (ne les écrit pas) |
+| 3 | La constante `theme::HAUTEUR_LIGNE` est retirée | aucun logiciel ne la prend ; une seule mesure de ligne reste (`mesures`) | rien | rien | rien |
+| 4 | Le texte `conserver_retour` (français et anglais) prend l'espace insécable (C-98), ainsi que « 24 h » dans `journal_detaille_explication` (trouvé au bloc B) | règle de l'unité, sans exception à la bascule | rien à écrire ; le texte affiché change d'une espace | idem | idem |
+| 5 | `briques::pourcent` écrit `42 %` avec l'espace insécable (C-98) | idem | rien à écrire ; si un test du logiciel compare ce texte, y mettre `\u{A0}` | idem | idem |
 
 Le doublon interne de `effets_d_animation` (dans `parametres`) disparaît au profit de
 `systeme::effets_d_animation` : il n'était pas public, aucun logiciel n'a rien à changer.
@@ -193,10 +191,13 @@ remplies, chacune vérifiée et notée dans `docs/ETAT.md` :
    chacune par son essai (110 automatiques sur le PC sans fenêtre, 4 en vérification GitHub, 2 à
    la main par le propriétaire) ; les images de référence passent, aux seuls écarts du §5 près ;
    `tests/compatibilite.rs` compile.
-2. **Les quatre logiciels compilent et passent leurs propres tests** sur une branche à eux qui
+2. **Les trois logiciels compilent et passent leurs propres tests** sur une branche à eux qui
    pointe sur la refonte, avant tout changement de `rev` sur leur `main`. Pour **PowerPeek**, cela
    comprend **ses images de référence** : il compare ses pages au pixel avant chaque dépôt, et
    elles passent sans être refaites (aux seuls écarts du §5 près, chacun montré à son Atelier).
+   **Essais du 26 nov.**, sur le rev `e750cb1` de `refonte` : **KVMSoft** passe sans aucun
+   changement de code (620 tests, clippy et deny au vert) ; **PowerPeek** passe aussi (849
+   tests ; les écarts d'images annoncés sont acceptés). Vocalis reste à essayer.
 3. **La reprise des réglages et des données** : sans objet pour la bibliothèque, qui n'écrit
    aucun fichier (principe 4) ; vérifié pour chaque logiciel par ses propres tests sur une copie
    inventée de chacun de ses formats (place retenue, réglages), comme sa fiche le demande.
@@ -208,8 +209,8 @@ remplies, chacune vérifiée et notée dans `docs/ETAT.md` :
 6. **L'ancienne version** n'a reçu que des corrections pendant la refonte, chacune reportée sur
    `refonte` ; elle reste installable jusqu'à la version suivante de chaque logiciel.
 
-L'ordre de bascule des logiciels : **Chat PDC** d'abord (il prend le moins), puis **Vocalis**, puis
-**KVMSoft**, puis **PowerPeek** (façon 2, la plus exposée). Un logiciel qui échoue garde l'ancien
+L'ordre de bascule des logiciels : **Vocalis** d'abord (il prend le moins), puis **KVMSoft**, puis
+**PowerPeek** (façon 2, la plus exposée). Un logiciel qui échoue garde l'ancien
 `rev` ; les autres continuent.
 
 ## 7. Le retour en arrière

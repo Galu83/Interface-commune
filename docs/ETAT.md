@@ -64,6 +64,75 @@
     GitHub ;
   - **sous-agents** : aucun.
 
+## Bloc Transversal — verrou, états globaux, documentation, Chat PDC retiré
+
+(26 nov., branche `refonte-transversal`, partie de `refonte` à 00d42bf, à intégrer par
+l'Atelier Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
+
+- **Un seul verrou** (ORGANIGRAMME §6) : `src/bords/verrou.rs` (nouveau) tient `verrou`
+  (`Mutex`), `lecture` et `ecriture` (`RwLock`) et `sans_poison` (une attente sur une
+  `Condvar`) ; un verrou empoisonné est repris tel quel. La fonction de `fenetres.rs` et les
+  reprises à la main de la sonde (bloc O), du guichet, du canal et des polices passent toutes
+  par lui ; plus aucun doublon. 3 essais.
+- **Changement de conduite, voulu** : `poste.rs` (`deposer`) **refusait** une demande quand
+  son verrou était empoisonné ; il la dépose maintenant comme les autres. Aucune panique ne
+  doit faire perdre une demande au guichet.
+- **`reprise` rangée dans les bords** (`src/reprise.rs` → `src/bords/reprise.rs`) : module
+  privé, aucun changement d'API.
+- **États globaux** (ORGANIGRAMME §7) : chacun des `static` qui change, `OnceLock` et
+  `thread_local` porte `// ÉTAT GLOBAL : <pourquoi>` (27), tous dans les bords ou dans les
+  essais. Un a disparu : `OUVERTURES` du dessin des Paramètres, remplacé par un numéro tiré au
+  hasard (`RandomState`) ; le dessin n'a donc plus d'état global.
+- **Documentation** : `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace` est vert.
+  Les `<logiciel>` des commentaires sont entre guillemets de code, les liens cassés réparés ;
+  dans `crates/ic-coeur/src/lib.rs`, les commentaires `///` des modules deviennent des `//`
+  (ils se mêlaient à la documentation `//!` de chaque module et cassaient ses liens). Une
+  seule tolérance, `#[allow(rustdoc::invalid_html_tags)]` sur `textes` : la ligne fautive est
+  dans `textes.rs`, que ce bloc ne touche pas ; à retirer quand le bloc des textes l'aura
+  corrigée.
+- **README et CARTE** : la nouvelle arborescence par étage (cœur, bords, dessin, façades) ;
+  la commande de documentation entre dans les vérifications.
+- **Chat PDC retiré** (arrêté par le propriétaire) : `mod chat_pdc` de
+  `tests/compatibilite.rs`, et `IDEAL`, `ANALYSE`, `MIGRATION`, `ORGANIGRAMME`,
+  `PLAN-REFONTE` (§4 et §6) et `COMPORTEMENTS` (C-82) ne nomment plus que KVMSoft, PowerPeek
+  et Vocalis. Une seule note d'histoire, dans `ANALYSE.md` : ses usages étaient compris dans
+  ceux des autres, les chiffres ne changent pas. **L'ordre de bascule** devient Vocalis (il
+  prend le moins), KVMSoft, PowerPeek.
+- **Plan, §4 et §6** (ajouté par l'Atelier Master) : KVMSoft épingle `d9d56da`, pas `e077572`
+  (relevé dans son `Cargo.toml` et son `Cargo.lock`). Condition 2 de la bascule, essais du
+  26 nov. sur le rev `e750cb1` : KVMSoft passe sans aucun changement de code (620 tests, clippy,
+  deny) ; PowerPeek passe aussi (849 tests ; les écarts d'images annoncés sont acceptés).
+- **Trois défauts trouvés par l'essai de compatibilité de PowerPeek** (ajoutés au bloc par
+  l'Atelier Master) :
+  - **carte « Journal », journal effaçable** : la place réservée à droite se mesure sur les
+    boutons montrés (`place_des_boutons`, interne, dans `dessin/controles/cartes.rs` ;
+    `largeur_bouton` reprend le calcul de `bouton`) au lieu des 200 points d'un contrôle
+    simple ; « Effacer le journal » ne recouvre plus la fin de l'explication, qui passe à la
+    ligne. Essai : `boutons_du_journal_ne_recouvrent_pas_l_explication` ;
+  - **titre seul** (`carte_avec`) : sans explication, le titre se centre sur la hauteur de la
+    carte (48 points), comme l'icône et l'interrupteur. Essai : `titre_seul_centre_dans_sa_carte` ;
+  - les deux essais **échouent** sans les corrections (vérifié en les retirant un instant) ;
+  - **`MIGRATION.md`** : la redite retirée est décrite de façon générale (la phrase qui redit
+    le chemin des installateurs), avec la forme de KVMSoft et celle de PowerPeek ; les deux
+    corrections du dessin y sont notées ;
+  - **12 images de référence refaites** (`REFERENCES=refaire`, puis comparaison verte ;
+    empreinte des polices inchangée) : `parametres-general-clair`, `parametres-general-sombre`,
+    `parametres-general-clair-150`, `parametres-conserver-clair`, `parametres-mise-a-jour-clair`,
+    `parametres-mise-a-jour-sombre`, `mise-a-jour-coupee-clair`, `mise-a-jour-erreur-clair`,
+    `mise-a-jour-inconnu-clair`, `mise-a-jour-information-clair`, `mise-a-jour-prete-clair`,
+    `mise-a-jour-recherche-clair`. Chaque écart a été regardé : rien d'autre ne bouge.
+- **API publique** : aucun changement (les deux fonctions nouvelles sont internes) ;
+  `MIGRATION.md` change son exemple (« Mon logiciel ») et la note ci-dessus.
+- **Résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, cible hors de la copie) :
+  `cargo fmt --check`, `clippy --workspace --all-targets -D warnings`, `cargo deny check`,
+  `cargo doc --no-deps --workspace` avec `-D warnings` et `cargo build --examples` à 0 ;
+  `cargo test --workspace` : 420 essais passés, 0 échec, 1 ignoré (comme avant), images de
+  référence comprises. Contrôle de la règle n° 1 sur l'index exporté : rien trouvé.
+- **Fichiers partagés touchés** : `src/lib.rs` (`mod reprise` retiré), `src/bords/mod.rs`,
+  `crates/ic-coeur/src/lib.rs` (commentaires seulement), `README.md`, tous les documents de
+  `docs/`.
+- **Sous-agents** : aucun.
+
 ## Correctif lisible — symboles séparés par une espace
 
 (26 nov., branche `refonte-correctif-lisible`, partie de `refonte` à e750cb1, à intégrer par

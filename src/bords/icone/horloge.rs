@@ -90,9 +90,9 @@ unsafe fn signaler_l_alimentation(wp: usize, lp: isize) {
         None
     };
     match alimentation(pbt, ecran) {
-        Some(Alimentation::Veille) => crate::reprise::veille(),
-        Some(Alimentation::Reprise) => crate::reprise::reveil(),
-        Some(Alimentation::Ecran { allume }) => crate::reprise::ecran(allume),
+        Some(Alimentation::Veille) => crate::bords::reprise::veille(),
+        Some(Alimentation::Reprise) => crate::bords::reprise::reveil(),
+        Some(Alimentation::Ecran { allume }) => crate::bords::reprise::ecran(allume),
         None => {}
     }
 }
@@ -447,7 +447,7 @@ impl Principal {
 
     /// Le menu gris de Windows : seulement en secours, si le menu moderne ne peut pas
     /// s'ouvrir (carte graphique sans OpenGL, polices absentes). Les mêmes lignes, dans le
-    /// même ordre ; « Ouvrir <logiciel> » en gras (la ligne par défaut).
+    /// même ordre ; « Ouvrir `<logiciel>` » en gras (la ligne par défaut).
     fn menu_de_secours(&mut self, x: i32, y: i32) {
         let l = &self.logiciel;
         let nom = l.fenetre_principale().map(|_| l.identite().nom.clone());

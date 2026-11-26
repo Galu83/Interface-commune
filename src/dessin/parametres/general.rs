@@ -3,7 +3,9 @@
 //! réglages par défaut ».
 
 use super::Parametres;
-use crate::dessin::{Genre, bouton, carte, carte_large, interrupteur_ecrit, titre_section};
+use crate::dessin::{
+    Genre, bouton, carte, carte_large, interrupteur_ecrit, place_des_boutons, titre_section,
+};
 use crate::parametres::modele::Valeur;
 use crate::theme::Palette;
 use crate::{Communs, Reglages, cles, icones};
@@ -133,14 +135,31 @@ impl Parametres {
                 },
             );
         } else {
-            carte(ui, p, icones::JOURNAL, t.journal, t.journal_explication, |ui| {
-                if bouton(ui, p, None, t.ouvrir_le_journal, Genre::Normal).clicked() {
-                    l.action(cles::JOURNAL);
-                }
-                if c.journal_effacable && bouton(ui, p, None, t.effacer_le_journal, Genre::Danger).clicked() {
-                    self.confirmer_effacer = true;
-                }
-            });
+            // La place se mesure sur les boutons montrés : « Effacer le journal » en plus ne tient
+            // pas dans celle d'un contrôle simple, et recouvrirait la fin de l'explication.
+            let mut boutons = vec![(None, t.ouvrir_le_journal)];
+            if c.journal_effacable {
+                boutons.push((None, t.effacer_le_journal));
+            }
+            let place = place_des_boutons(ui, &boutons);
+            carte_large(
+                ui,
+                p,
+                icones::JOURNAL,
+                t.journal,
+                t.journal_explication,
+                place,
+                |ui| {
+                    if bouton(ui, p, None, t.ouvrir_le_journal, Genre::Normal).clicked() {
+                        l.action(cles::JOURNAL);
+                    }
+                    if c.journal_effacable
+                        && bouton(ui, p, None, t.effacer_le_journal, Genre::Danger).clicked()
+                    {
+                        self.confirmer_effacer = true;
+                    }
+                },
+            );
         }
     }
 

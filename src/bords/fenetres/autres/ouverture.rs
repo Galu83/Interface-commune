@@ -131,7 +131,7 @@ impl Ouverture {
 /// dessinent ce que le logiciel a déjà en mémoire, sans disque, réseau ni attente.
 pub trait Contenu: Send + 'static {
     /// Dessine la fenêtre, à chaque image. `ui` n'a ni marge ni fond : un
-    /// `egui::CentralPanel` (ou [`crate::dessin::fond`]) les donne.
+    /// `egui::CentralPanel` les donne.
     fn dessiner(&mut self, ui: &mut egui::Ui, cadre: &mut Cadre<'_>);
 
     /// La fenêtre va se fermer : le contenu enregistre ce qui attend, et peut **refuser**

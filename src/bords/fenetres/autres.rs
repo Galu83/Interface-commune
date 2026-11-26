@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use super::verrou;
+use crate::bords::verrou::verrou;
 
 use egui::{ViewportBuilder, ViewportClass, ViewportCommand, ViewportId};
 
@@ -302,13 +302,13 @@ impl AutresFenetres {
     /// elle ne répond pas à une simple demande de dessin venue d'un autre fil : elle est
     /// montrée voilée (rien n'apparaît), dessine, puis se recache.
     ///
-    /// Pendant un réveil de Windows ([`crate::reprise`]), elle n'est pas montrée : le réveil
+    /// Pendant un réveil de Windows (`bords::reprise`), elle n'est pas montrée : le réveil
     /// est remis à plus tard.
     pub fn reveiller(&self) {
         if let Some(c) = verrou(&self.contexte).as_ref() {
             c.request_repaint_of(ViewportId::ROOT);
         }
-        if let Some(d) = crate::reprise::attente_avant_dessin() {
+        if let Some(d) = crate::bords::reprise::attente_avant_dessin() {
             self.reveiller_dans(d);
             return;
         }
@@ -412,7 +412,7 @@ impl AutresFenetres {
 
     /// Dans combien de temps la fenêtre principale doit faire une image complète, même
     /// cachée (`None` : rien à faire). `Some(0)` : tout de suite ; plus : une fenêtre dont la
-    /// création a raté attend son nouvel essai ([`NOUVEL_ESSAI`]) au lieu de le refaire à
+    /// création a raté attend son nouvel essai (`NOUVEL_ESSAI`) au lieu de le refaire à
     /// chaque image.
     pub fn prochaine_image(&self) -> Option<std::time::Duration> {
         let maintenant = std::time::Instant::now();
