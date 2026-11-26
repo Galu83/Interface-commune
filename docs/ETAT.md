@@ -63,6 +63,30 @@
     cachée vivante) ; il reste couvert par `tests/comportements.rs` (C-17, C-18) et par
     GitHub ;
   - **sous-agents** : aucun.
+
+## Correctif lisible — symboles séparés par une espace
+
+(26 nov., branche `refonte-correctif-lisible`, partie de `refonte` à e750cb1, à intégrer par
+l'Atelier Master ; rien n'est commité, le message est dans `MESSAGE-COMMIT.txt`.)
+
+- **Le défaut** (trouvé au hasard par `lisible_ne_change_pas_deux_fois`, entrée
+  `["⌃", " ", "⌃"]`, séparateur vide, donc « ⌃ ⌃ ») : `lisible` détachait les symboles collés
+  mais s'arrêtait à l'espace ; le second « ⌃ » devenait une touche. Premier appel :
+  « Ctrl+⌃ » ; relu : « Ctrl ». La faute est donc au premier appel, pas au second.
+- **Le correctif** (`crates/ic-coeur/src/textes/raccourcis.rs`, une ligne) : après chaque
+  symbole, les espaces qui suivent sont sautées ; « ⌃ ⌃ » donne « Ctrl », « ⌃ ⇧ K » donne
+  « Ctrl+Maj+K ». Rien d'autre ne change (les écritures déjà comprises donnent le même
+  résultat).
+- **Essais** : un essai nommé, `textes::essais::lisible_symboles_separes_d_une_espace` (5
+  vérifications) ; le dossier `crates/ic-coeur/proptest-regressions/` entre à l'index : le cas
+  trouvé est rejoué à chaque passage. `COMPORTEMENTS.md` (C-46) suit.
+- **Résultats sur le PC** (`CARGO_BUILD_JOBS=2`, `--test-threads=2`, cible hors de la copie) :
+  tous les essais du dépôt verts ; `fmt`, `clippy -D warnings`, `cargo deny` propres ;
+  contrôle de la règle n° 1 sur la copie de l'index : rien.
+- **Fichiers partagés touchés** : aucun (seulement `raccourcis.rs`, `textes/essais.rs`, le
+  fichier de `proptest`, `COMPORTEMENTS.md` et ce fichier).
+- **Sous-agents** : aucun.
+
 ## Bloc I — les captures
 
 (26 nov., branche `refonte-bloc-i-captures`, partie de `refonte` à c4fd163, à intégrer par

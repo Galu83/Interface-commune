@@ -343,6 +343,17 @@ fn insecables_suit_la_typographie_francaise() {
     assert_eq!(insecables(&une), une, "la rappeler ne change rien");
 }
 
+/// Le cas trouvé au hasard (« ⌃ ⌃ », séparateur vide) : l'espace entre deux symboles ne fait
+/// pas du second une touche ; `lisible` rend « Ctrl » du premier coup, plus « Ctrl+⌃ ».
+#[test]
+fn lisible_symboles_separes_d_une_espace() {
+    assert_eq!(lisible("⌃ ⌃"), "Ctrl");
+    assert_eq!(lisible("Ctrl"), "Ctrl");
+    assert_eq!(lisible("⌃ ⇧ K"), "Ctrl+Maj+K");
+    assert_eq!(lisible("⌃  ⇧K"), "Ctrl+Maj+K");
+    assert_eq!(lisible("⌥ + ⌃ ⌘"), "Ctrl+Alt");
+}
+
 proptest::proptest! {
     /// `lisible` ne change pas deux fois : sa sortie, relue, reste la même (ORGANIGRAMME §3.1, B).
     #[test]
