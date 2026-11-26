@@ -235,8 +235,8 @@ fn le_dessin_n_appelle_pas_windows() {
 
 /// Les modules qui appellent Windows aujourd'hui, hors de `src/bords/`. Chacun sort de cette
 /// liste quand son bloc (M, J) le range dans les bords ; la liste finit vide. `echelle` et
-/// `systeme` en sont sortis au bloc L.
-const UNSAFE_EN_ATTENDANT: [&str; 2] = ["horloge.rs", "zone.rs"];
+/// `systeme` en sont sortis au bloc L, `horloge` et `zone` au bloc M.
+const UNSAFE_EN_ATTENDANT: [&str; 0] = [];
 
 #[test]
 fn unsafe_seulement_dans_les_bords() {
