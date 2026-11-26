@@ -27,29 +27,26 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM};
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::HiDpi::{
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForSystem, GetSystemMetricsForDpi,
-    SetProcessDpiAwarenessContext,
-};
+use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi};
 use windows::Win32::UI::Shell::{
     NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_ERROR, NIIF_INFO, NIIF_RESPECT_QUIET_TIME,
     NIIF_WARNING, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW,
     NOTIFYICONIDENTIFIER, Shell_NotifyIconGetRect, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyIcon,
-    DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW,
-    GetWindowLongPtrW, HICON, KillTimer, MF_SEPARATOR, MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC,
-    PBT_APMRESUMESUSPEND, PBT_APMSUSPEND, PBT_POWERSETTINGCHANGE, PostMessageW, PostQuitMessage,
-    RegisterClassW, RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetMenuDefaultItem, SetTimer,
-    SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage,
-    WINDOW_EX_STYLE, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL,
-    WM_POWERBROADCAST, WM_QUERYENDSESSION, WM_SETTINGCHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    AppendMenuW, CreatePopupMenu, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyIcon, DestroyMenu,
+    DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW, HICON,
+    KillTimer, MF_SEPARATOR, MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PBT_APMSUSPEND,
+    PBT_POWERSETTINGCHANGE, PostMessageW, PostQuitMessage, RegisterWindowMessageW, SM_CXSMICON,
+    SetForegroundWindow, SetMenuDefaultItem, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
+    TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE, WM_COPYDATA, WM_DESTROY,
+    WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL, WM_POWERBROADCAST, WM_QUERYENDSESSION, WM_SETTINGCHANGE,
+    WM_TIMER,
 };
 use windows::core::{HSTRING, PCWSTR};
 
 use crate::Logiciel;
+use crate::bords::systeme::cachee::{ClasseDejaLa, fenetre_cachee};
 use crate::clics::{Clics, evenement};
 use crate::fenetres::{self, Aiguillage, Demande, Liens, Ouvreur, Reception};
 use crate::menu::{self, Choix};
@@ -96,11 +93,9 @@ fn message_permis(msg: u32, wp: usize) -> bool {
     }
 }
 
-/// Avant toute fenêtre : chaque écran à sa propre échelle (sinon Windows étire tout).
-pub fn reglage_dpi() {
-    // SAFETY: simple appel sans pointeur ; un échec (déjà réglé) est sans conséquence.
-    let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-}
+/// Avant toute fenêtre : chaque écran à sa propre échelle (sinon Windows étire tout). Écrit
+/// dans `src/bords/systeme/echelle.rs` (bloc L), repris ici à son chemin d'aujourd'hui.
+pub use crate::bords::systeme::echelle::reglage_dpi;
 
 // Le contrat (bloc A), repris du cœur à ce chemin.
 pub use ic_coeur::contrat::{Niveau, Reveil};
@@ -960,36 +955,8 @@ fn boucle(
 ) -> Result<(), String> {
     let c = classe(nom);
     let titre = HSTRING::from(nom);
-    // SAFETY: module de ce programme ; classe décrite par une structure locale dont les
-    // chaînes vivent jusqu'à la fin de la fonction ; sa procédure vit tout le programme ;
-    // fenêtre de style simple, jamais montrée.
-    let fenetre = unsafe {
-        let instance = GetModuleHandleW(PCWSTR::null()).map_err(|e| e.to_string())?;
-        let wc = WNDCLASSW {
-            lpfnWndProc: Some(procedure),
-            hInstance: instance.into(),
-            lpszClassName: PCWSTR(c.as_ptr()),
-            ..Default::default()
-        };
-        if RegisterClassW(&wc) == 0 {
-            return Err("classe de fenêtre refusée".into());
-        }
-        CreateWindowExW(
-            WINDOW_EX_STYLE(0),
-            &c,
-            &titre,
-            WS_OVERLAPPED,
-            0,
-            0,
-            0,
-            0,
-            None,
-            None,
-            Some(instance.into()),
-            None,
-        )
-        .map_err(|e| e.to_string())?
-    };
+    // La seule de sa classe : une deuxième instance la retrouve par ce nom.
+    let fenetre = fenetre_cachee(&c, &titre, procedure, ClasseDejaLa::Refuser)?;
     poste.liens().fenetre.store(fenetre.0 as isize, Ordering::Release);
     // L'écran allumé ou éteint, par WM_POWERBROADCAST (Windows envoie l'état tout de suite,
     // puis à chaque changement) : pendant un écran éteint, les fenêtres ne dessinent pas

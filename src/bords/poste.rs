@@ -21,9 +21,9 @@ use std::sync::{Arc, Mutex};
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
+use crate::bords::systeme::fenetre::hwnd;
 use crate::fenetres::{Demandes, Liens};
 use crate::horloge::Niveau;
-use crate::systeme::hwnd;
 
 /// Le nombre de messages qui peuvent attendre le fil de l'icône : au-delà, les nouveaux sont
 /// refusés (un logiciel qui enverrait sans fin ne remplit pas la mémoire).

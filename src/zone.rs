@@ -59,19 +59,17 @@ use windows::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateBitmap, CreateDIBSection, DIB_RGB_COLORS, DeleteObject,
     HGDIOBJ,
 };
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::{
     NIF_GUID, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_ERROR, NIIF_INFO,
     NIIF_RESPECT_QUIET_TIME, NIIF_WARNING, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
     NOTIFYICON_VERSION_4, NOTIFYICONDATAW, NOTIFYICONIDENTIFIER, Shell_NotifyIconGetRect, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon,
-    DestroyMenu, DestroyWindow, GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON, HMENU, ICONINFO,
-    MENU_ITEM_FLAGS, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterClassW,
-    RegisterWindowMessageW, SetForegroundWindow, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, TrackPopupMenu, WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL,
-    WNDCLASSW, WS_OVERLAPPED,
+    AppendMenuW, CreateIconIndirect, CreatePopupMenu, DefWindowProcW, DestroyIcon, DestroyMenu,
+    DestroyWindow, GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON, HMENU, ICONINFO, MENU_ITEM_FLAGS,
+    MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterWindowMessageW,
+    SetForegroundWindow, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+    WM_APP, WM_DISPLAYCHANGE, WM_ENDSESSION, WM_NULL,
 };
 use windows::core::{GUID, HSTRING, PCWSTR};
 
@@ -80,6 +78,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use crate::Logiciel;
+use crate::bords::systeme::cachee::{ClasseDejaLa, fenetre_cachee};
 use crate::clics;
 use crate::fenetres::{self, Aiguillage, Demande, Demandes, Liens, envoyer_le_clic};
 use crate::horloge::{Niveau, Secours};
@@ -449,36 +448,10 @@ impl Zone {
         let programme = std::env::current_exe()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_default();
-        // SAFETY: module de ce programme ; classe décrite par une structure locale dont les
-        // chaînes vivent pendant les appels ; sa procédure vit tout le programme ; fenêtre de
-        // style simple, jamais montrée (pas `HWND_MESSAGE` : elle doit recevoir
-        // « TaskbarCreated », diffusé aux seules fenêtres ordinaires).
-        let fenetre = unsafe {
-            let instance = GetModuleHandleW(PCWSTR::null()).map_err(|e| e.to_string())?;
-            let wc = WNDCLASSW {
-                lpfnWndProc: Some(procedure),
-                hInstance: instance.into(),
-                lpszClassName: PCWSTR(classe.as_ptr()),
-                ..Default::default()
-            };
-            // Déjà enregistrée (une deuxième zone dans le même programme) : sans conséquence.
-            let _ = RegisterClassW(&wc);
-            CreateWindowExW(
-                WINDOW_EX_STYLE(0),
-                &classe,
-                &classe,
-                WS_OVERLAPPED,
-                0,
-                0,
-                0,
-                0,
-                None,
-                None,
-                Some(instance.into()),
-                None,
-            )
-            .map_err(|e| e.to_string())?
-        };
+        // Pas `HWND_MESSAGE` : elle doit recevoir « TaskbarCreated », diffusé aux seules
+        // fenêtres ordinaires. Déjà enregistrée (une deuxième zone dans le même programme) :
+        // sans conséquence.
+        let fenetre = fenetre_cachee(&classe, &classe, procedure, ClasseDejaLa::Reprendre)?;
         let partage = Box::new(RefCell::new(Partage {
             // SAFETY: nom constant ; « TaskbarCreated » est diffusé quand l'Explorateur
             // redémarre.

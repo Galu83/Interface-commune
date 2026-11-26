@@ -1,13 +1,13 @@
-//! Le contrôle des polices, côté bords (bloc O) : lire les polices de Windows sur le disque
-//! (`crate::polices`) et dire, pour chaque icône et chaque caractère affiché, s'il y est.
-//! Repris tel quel à `interface_commune::verification` (`src/verification.rs`), qui garde la
-//! documentation pour les logiciels.
+//! Le contrôle des polices (règles : interface Windows 11, point 4) : chaque icône et chaque
+//! caractère affiché existent dans les polices de Windows (bloc L de la refonte ; le mode
+//! d'emploi, avec un exemple, est sur son chemin public : `interface_commune::verification`).
+//! Lit les fichiers de polices du PC, sans `unsafe`.
 //!
 //! Hors de Windows (polices absentes), les contrôles rendent `Err` : le test le dit et saute.
 
 use skrifa::{FontRef, MetadataProvider};
 
-use crate::polices;
+use crate::bords::systeme::polices;
 
 /// Un caractère absent d'une police.
 #[derive(Debug, Clone, PartialEq, Eq)]

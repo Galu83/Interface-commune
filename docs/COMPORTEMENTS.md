@@ -121,7 +121,7 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 | C-54 | Les Paramètres s'ouvrent au premier essai, juste après le démarrage. | auto, GitHub : `tests/premiere_creation` |
 | C-55 | Des fenêtres ouvertes et fermées sans pause ne bloquent jamais la boucle. | auto, GitHub : `tests/fenetres_en_rafale` |
 | C-56 | Les fenêtres répondent aux vrais clics et au vrai clavier de Windows. | auto, GitHub : `tests/entrees_fabriquees` (seulement avec `ESSAI_SENDINPUT=oui`) |
-| C-57 | Seules les fenêtres de winit du fil sont reprises par la bibliothèque, jamais celles d'un autre. | auto : `systeme::fenetre_du_fil_ne_rend_que_les_fenetres_de_winit_pas_prises` |
+| C-57 | Seules les fenêtres de winit du fil sont reprises par la bibliothèque, jamais celles d'un autre. | auto : `bords::systeme::essais::fenetre_du_fil_ne_rend_que_les_fenetres_de_winit_pas_prises` |
 
 ## 8. Les autres fenêtres du logiciel (`autres_fenetres`)
 
@@ -174,9 +174,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto : `ic_coeur::theme::essais::la_palette_de_windows_est_suivie`, `…::accent_par_defaut_et_accent_seul`, `…::relecture_toutes_les_deux_secondes`, `…::le_theme_de_windows_est_suivi`, `…::un_theme_impose_l_emporte` (horloge inventée), `tests/comportements::c90_le_theme_de_windows_est_relu` |
+| C-90 | Clair ou sombre comme Windows, et l'accent de Windows, relus toutes les 2 s et appliqués dès qu'ils changent. | auto : `ic_coeur::theme::essais::la_palette_de_windows_est_suivie`, `…::accent_par_defaut_et_accent_seul`, `…::relecture_toutes_les_deux_secondes`, `…::le_theme_de_windows_est_suivi`, `…::un_theme_impose_l_emporte` (horloge inventée), `ic_coeur::theme::registre::essais::*` (les valeurs du registre), `bords::systeme::apparence::essais::*` (thème imposé, relecture), `dessin::apparence::essais::*` (la palette donnée à egui), `tests/comportements::c90_le_theme_de_windows_est_relu` |
 | C-91 | Les contrastes des couleurs du thème sont suffisants. | auto : `ic_coeur::theme::essais::contrastes_suffisants` |
-| C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `bords::verification::*`, `tests/polices_windows10::c92_repli_des_polices_de_windows_10` |
+| C-92 | Segoe UI Variable (repli Segoe UI / Semibold) et Segoe Fluent Icons (repli Segoe MDL2 Assets), lues sur le PC une seule fois, jamais livrées. | auto : `tests/polices::chaque_icone_existe`, `tests/polices::chaque_caractere_existe`, `bords::verification::*`, `ic_coeur::theme::polices::essais::*` (le plan et ses replis), `bords::systeme::polices::essais::*` (les familles sur ce PC), `tests/polices_windows10::c92_repli_des_polices_de_windows_10` |
 | C-93 | Chaque icône commune existe dans les deux polices d'icônes ; un glyphe absent redonne la lettre. | auto : `tests/polices::chaque_icone_existe`, `bords::verification::glyphe_absent_redonne_la_lettre` |
 | C-94 | La palette des pastilles : couleurs distinctes et lisibles (ΔE 2000), les six premiers rangs ne changent jamais. | auto : `ic_coeur::theme::essais_pastilles::*` (4 tests ; avant le bloc C : `tests/palette_pastilles.rs`) |
 | C-95 | Le choix de couleur (carte) : même palette que les pastilles, clic, clavier, colonnes selon la place, « Annuler » remet l'ancienne. | auto : `tests/couleurs::*` (10 tests) |
@@ -210,9 +210,9 @@ propriétaire pendant les essais) ; ils tournent sur GitHub.
 
 | N° | Comportement | Essai |
 |---|---|---|
-| C-111 | Un disque réseau ou redirigé n'est jamais pris pour un disque local ; la réponse est rapide. | auto : `systeme::chemins_reseau_reconnus`, `systeme::redirection_jamais_locale`, `systeme::disque_local_repond_vite` |
-| C-112 | L'écran autour d'un point, la position de la souris, les effets d'animation de Windows. | auto : `ic_coeur::placement::essais::ecran_d_un_rectangle`, `ic_coeur::placement::essais::ecran_a_gauche_en_4k`, `tests/comportements::c112_ce_que_la_bibliotheque_lit_dans_windows` |
-| C-113 | Le réglage d'échelle (DPI) du processus est posé au démarrage. | auto : `tests/comportements::c113_reglage_d_echelle_par_ecran` |
+| C-111 | Un disque réseau ou redirigé n'est jamais pris pour un disque local ; la réponse est rapide. | auto : `bords::systeme::essais::chemins_reseau_reconnus`, `…::redirection_jamais_locale`, `…::disque_local_repond_vite` |
+| C-112 | L'écran autour d'un point, la position de la souris, les effets d'animation de Windows. | auto : `ic_coeur::placement::essais::ecran_d_un_rectangle`, `ic_coeur::placement::essais::ecran_a_gauche_en_4k`, `ic_coeur::gestes::clics::temps_double_clic_borne`, `bords::systeme::essais::fenetre_du_fil_ne_rend_que_les_fenetres_de_winit_pas_prises`, `tests/comportements::c112_ce_que_la_bibliotheque_lit_dans_windows` |
+| C-113 | Le réglage d'échelle (DPI) du processus est posé au démarrage. | auto : `tests/comportements::c113_reglage_d_echelle_par_ecran`, `bords::systeme::essais::le_changement_d_echelle_suit_windows` (le rectangle de Windows quoi que winit demande, fenêtres cachées) |
 
 ## 15. Promesses de l'API
 

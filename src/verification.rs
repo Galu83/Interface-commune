@@ -13,7 +13,7 @@
 //!
 //! Hors de Windows (polices absentes), les contrôles rendent `Err` : le test le dit et saute.
 //!
-//! Écrit dans les bords (`src/bords/verification.rs`, bloc O) : il lit les polices du disque.
-//! Ce module le reprend à son chemin d'avant.
+//! Écrit dans `src/bords/verification.rs` (bloc L de la refonte), repris ici à son chemin
+//! d'aujourd'hui.
 
 pub use crate::bords::verification::{Absent, caracteres_absents, contient, icones_absentes, logos_absents};
